@@ -1,0 +1,31 @@
+:root {
+  --primary-color: #007bff;
+  --background-color: #ffffff;
+}
+[data-theme="dark"] {
+  --primary-color: #1e1e1e;
+  --background-color: #121212;
+}
+
+.achievements {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 20px;
+  background-color: var(--background-color);
+  color: var(--primary-color);
+  border-radius: 8px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.achievement {
+  padding: 10px;
+  border: 1px solid var(--primary-color);
+  border-radius: 4px;
+  background-color: #f9f9f9;
+  transition: transform 0.3s ease;
+}
+
+.achievement:hover {
+  transform: scale(1.05);
+} 
