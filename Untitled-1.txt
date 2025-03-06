@@ -1,0 +1,36 @@
+quero que adicione essa api para ajudar obter dados dos ativos principalmente de ações pois a alpha vantage não está dando conta essa é a api ela também fornece informações do mercado que devem ser analisadas cuidadosamente uma por uma e devem também ser ultilizadas para parâmetros e definir os melhores sinais além de ser ultlizadas para gerar as notícas para a aba notícias recentes ; @https://api.dadosdemercado.com.br/v1  agora vou te dizer como é ultilizada:  A API do Dados de Mercado oferece um conjunto de recursos para acessar dados financeiros de empresas e mercados (bolsa de valores) brasileiros, bem como indicadores financeiros, de risco, técnicos, e de mercado. A API também disponibiliza dados de fundos de investimento e do Tesouro Direto, além de dados macroeconômicos divulgados pelos principais orgãos públicos.
+
+Introdução
+Nessa documentação você vai encontrar uma descrição dos conjuntos de dados disponíveis e exemplos de como utilizar a API do Dados de Mercado.
+
+O acesso é feito através dos métodos HTTP padrões, conforme os exemplos de chamadas nessa documentação. Um token de autenticação é necessário em todas as requisições. Todas as respostas, incluindo erros, são codificadas em JSON.
+
+Versão atual: 1
+
+URL base: https://api.dadosdemercado.com.br/v1
+
+Autenticação
+Todas as chamadas feitas para os recursos da API, devem incluir uma chave (token) de API como forma de autenticação. Para acesso completo aos recursos da API e ajuste dos limites de requisição, entre em contato conosco, através do e-mail api@dadosdemercado.com.br
+
+Exemplo de utilização
+Em todas as chamadas, inclua a chave em um cabeçalho HTTP no seguinte formato:
+
+Authorization: Bearer token
+Por exemplo,
+
+Authorization: Bearer 8cb7a3a5529cec195ed3adc5cd994e66
+Códigos de resposta
+Veja abaixo os códigos de resposta HTTP que utilizamos para indicar sucesso ou falha em uma requisição.
+
+200
+OK: tudo certo com a requisição
+400
+Requisição inválida: possivelmente por um parâmetro inválido ou faltante
+401
+Não autorizado: token inválido
+403
+Proibido: o usuário não tem acesso ao recurso solicitado
+404
+Não encontrado: o recurso solicitado não existe
+429
+Requisições em excesso: muitas solicitações em pouco tempo

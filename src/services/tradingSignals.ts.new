@@ -1,0 +1,1930 @@
+import { supabase } from "@/integrations/supabase/client";
+import { TradingSignal, MarketData, SignalType, SignalStrength, MarketNews } from './types';
+import { getBinancePrice, getBinanceHistoricalData } from "./binanceApi";
+import { fetchStockQuote, fetchHistoricalData, fetchTechnicalIndicator, fetchCompanyOverview } from "./alphaVantageApi";
+import { fetchPriceTarget, fetchAnalystRecommendations } from "./finnhubApi";
+import { 
+  fetchAllMarketNews, 
+  fetchCompanyNews, 
+  analyzeSentiment 
+} from './newsApi';
+import { 
+  getLatestPrices, 
+  getHistoricalKlines, 
+  getMarketDepth 
+} from './binanceApi';
+
+// Array de símbolos para monitorar
+const MONITORED_SYMBOLS = [
+  'BTCUSDT', 'ETHUSDT', 'BNBUSDT', // Crypto
+  'AAPL', 'MSFT', 'AMZN', 'GOOGL', 'META', // Tech stocks
+  'JPM', 'BAC', 'GS', // Banking
+  'XOM', 'CVX', // Energy
+  'PFE', 'JNJ', // Healthcare
+];
+
+// Cache para sinais (evita recálculos frequentes)
+const signalsCache: { 
+  data: TradingSignal[], 
+  timestamp: number 
+} = { data: [], timestamp: 0 };
+
+const CACHE_DURATION = 5 * 60 * 1000; // 5 minutos
+
+// Função principal para buscar sinais de trading
+export async function fetchTradingSignals(): Promise<TradingSignal[]> {
+  try {
+    const now = Date.now();
+    
+    // Verificar cache
+    if (signalsCache.data.length > 0 && (now - signalsCache.timestamp) < CACHE_DURATION) {
+      console.log('Usando sinais em cache');
+      return signalsCache.data;
+    }
+    
+    console.log('Gerando novos sinais de trading...');
+    
+    // Buscando dados de mercado para cada símbolo monitorado
+    const marketDataPromises = MONITORED_SYMBOLS.map(async (symbol) => {
+      // Determinar se é cripto ou ação
+      const isCrypto = symbol.endsWith('USDT');
+      
+      try {
+        let price, change, volume, high, low;
+        
+        if (isCrypto) {
+          // Dados de cripto via Binance
+          const latestPrices = await getLatestPrices([symbol]);
+          const priceData = latestPrices.find(p => p.symbol === symbol);
+          
+          if (priceData) {
+            price = parseFloat(priceData.price);
+            
+            // Obter histórico para calcular variação
+            const klines = await getHistoricalKlines(symbol, '1d', 2);
+            
+            if (klines.length >= 2) {
+              const todayClose = parseFloat(klines[1][4]); // Último fechamento
+              const yesterdayClose = parseFloat(klines[0][4]); // Fechamento anterior
+              
+              change = todayClose - yesterdayClose;
+              const changePercent = (change / yesterdayClose) * 100;
+              
+              high = parseFloat(klines[1][2]); // High do dia
+              low = parseFloat(klines[1][3]); // Low do dia
+              volume = parseFloat(klines[1][5]); // Volume do dia
+              
+              // Dados de mercado para processamento dos sinais
+              return {
+                symbol,
+                price,
+                change,
+                changePercent,
+                volume,
+                high,
+                low,
+                isCrypto
+              } as MarketData;
+            }
+          }
+        } else {
+          // Dados de ações via Alpha Vantage
+          const historicalData = await fetchHistoricalData(symbol, 'daily', 'compact');
+          
+          if (historicalData && historicalData.prices.length > 0) {
+            price = historicalData.prices[historicalData.prices.length - 1];
+            
+            if (historicalData.prices.length >= 2) {
+              const lastPrice = historicalData.prices[historicalData.prices.length - 1];
+              const prevPrice = historicalData.prices[historicalData.prices.length - 2];
+              
+              change = lastPrice - prevPrice;
+              const changePercent = (change / prevPrice) * 100;
+              
+              high = historicalData.highs[historicalData.highs.length - 1];
+              low = historicalData.lows[historicalData.lows.length - 1];
+              volume = historicalData.volumes[historicalData.volumes.length - 1];
+              
+              // Dados de mercado para processamento dos sinais
+              return {
+                symbol,
+                price,
+                change,
+                changePercent,
+                volume,
+                high,
+                low,
+                isCrypto
+              } as MarketData;
+            }
+          }
+        }
+        
+        // Se não conseguimos obter todos os dados necessários
+        console.warn(`Dados insuficientes para ${symbol}`);
+        return null;
+        
+  } catch (error) {
+        console.error(`Erro ao buscar dados para ${symbol}:`, error);
+        return null;
+      }
+    });
+    
+    // Aguardar todas as promessas e filtrar nulos
+    const marketDataList = (await Promise.all(marketDataPromises)).filter(data => data !== null) as MarketData[];
+    
+    // Buscar notícias de mercado para análise de sentimento
+    const marketNews = await fetchAllMarketNews();
+    
+    // Gerar sinais técnicos e fundamentais para cada ativo
+    const technicalSignalsPromises = marketDataList.map(marketData => 
+      generateTechnicalSignals(marketData)
+    );
+    
+    const newsSignalsPromises = marketDataList.map(marketData => 
+      generateNewsSignals(marketData, marketNews)
+    );
+    
+    const fundamentalSignalsPromises = marketDataList
+      .filter(data => !data.isCrypto) // Dados fundamentais apenas para ações
+      .map(marketData => 
+        generateFundamentalSignals(marketData)
+      );
+    
+    // Aguardar todas as promessas
+    const technicalSignals = (await Promise.all(technicalSignalsPromises)).flat();
+    const newsSignals = (await Promise.all(newsSignalsPromises)).flat();
+    const fundamentalSignals = (await Promise.all(fundamentalSignalsPromises)).flat();
+    
+    // Combinar todos os sinais
+    const allSignals = [...technicalSignals, ...newsSignals, ...fundamentalSignals];
+    
+    // Atualizar cache
+    signalsCache.data = allSignals;
+    signalsCache.timestamp = now;
+    
+    return allSignals;
+  } catch (error) {
+    console.error('Erro ao gerar sinais de trading:', error);
+    // Retornar cache antigo se houver erro
+    if (signalsCache.data.length > 0) {
+      console.log('Usando sinais em cache devido ao erro');
+      return signalsCache.data;
+    }
+    throw error;
+  }
+}
+
+// Função para gerar sinais técnicos
+async function generateTechnicalSignals(marketData: MarketData): Promise<TradingSignal[]> {
+  const signals: TradingSignal[] = [];
+  const { symbol, isCrypto, price } = marketData;
+  
+  try {
+    if (isCrypto) {
+      // Para crypto, usar dados do Binance
+      const klines = await getHistoricalKlines(symbol, '1d', 100); // 100 dias para análise mais robusta
+      
+      if (klines.length >= 100) {
+        // Extrair dados históricos
+        const closePrices = klines.map(k => parseFloat(k[4])); // Preços de fechamento
+        const highPrices = klines.map(k => parseFloat(k[2])); // Preços máximos
+        const lowPrices = klines.map(k => parseFloat(k[3])); // Preços mínimos
+        const volumes = klines.map(k => parseFloat(k[5])); // Volumes
+        
+        // Médias móveis de vários períodos para confirmação cruzada
+        const sma8 = calculateSMA(closePrices, 8);
+        const sma20 = calculateSMA(closePrices, 20);
+        const sma50 = calculateSMA(closePrices, 50);
+        const sma200 = calculateSMA(closePrices, 100); // SMA longo prazo
+        
+        // Indicador RSI (14 períodos)
+        const rsi = calculateRSI(closePrices, 14);
+        
+        // ATR para cálculo de stop loss e take profit baseado na volatilidade
+        const atr = calculaATR(highPrices, lowPrices, closePrices, 14);
+        
+        // Análise de volume
+        const averageVolume = calculateSMA(volumes, 20);
+        const latestVolume = volumes[volumes.length - 1];
+        const volumeRatio = latestVolume / averageVolume;
+        
+        // Tendência de curto e médio prazo
+        const shortTermTrend = sma8 > sma20 ? 'bullish' : 'bearish';
+        const mediumTermTrend = sma20 > sma50 ? 'bullish' : 'bearish';
+        const longTermTrend = sma50 > sma200 ? 'bullish' : 'bearish';
+        
+        // Suporte e resistência (simplificado)
+        const lastNLows = lowPrices.slice(lowPrices.length - 20);
+        const lastNHighs = highPrices.slice(highPrices.length - 20);
+        
+        const currentPrice = price || closePrices[closePrices.length - 1];
+        const supports = findKeyLevels(lastNLows, 'support', 3);
+        const resistances = findKeyLevels(lastNHighs, 'resistance', 3);
+        
+        // Último suporte relevante abaixo do preço atual
+        const closestSupport = Math.max(...supports.filter(s => s < currentPrice), Math.min(...lastNLows));
+        // Última resistência relevante acima do preço atual
+        const closestResistance = Math.min(...resistances.filter(r => r > currentPrice), Math.max(...lastNHighs));
+        
+        // Geração de sinais baseados em uma combinação de indicadores para maior precisão
+        
+        // ==== SINAIS DE COMPRA ====
+        
+        // Sinal de compra forte: Tendência de alta em todos os prazos + RSI recuperando-se de sobrevendido
+        if (shortTermTrend === 'bullish' && mediumTermTrend === 'bullish' && longTermTrend === 'bullish' && 
+            rsi > 30 && rsi < 50 && volumeRatio > 1.2) {
+          
+          // Calcular entry, stop e target com base em ATR e níveis de suporte/resistência
+          const entryPrice = currentPrice; // Entrada no preço atual
+          const stopLoss = Math.max(entryPrice - (atr * 2), closestSupport * 0.99); // Stop loss baseado em ATR ou suporte
+          const targetPrice = entryPrice + (atr * 4); // Alvo baseado em risk/reward de 1:2
+          
+          // Cálculo da taxa de sucesso baseado no histórico recente de movimentos
+          const successRate = calculateSuccessRate(closePrices, 'BUY', 10);
+          
+          signals.push({
+            symbol,
+            type: SignalType.TECHNICAL,
+            signal: 'BUY',
+            reason: 'Tendência de alta confirmada em múltiplos prazos com volume crescente e RSI recuperando de região sobrevendida',
+            strength: SignalStrength.STRONG,
+            timestamp: Date.now(),
+            price: currentPrice,
+            entry_price: entryPrice,
+            stop_loss: stopLoss,
+            target_price: targetPrice,
+            success_rate: successRate,
+            timeframe: '1d',
+            expiry: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString(), // 5 dias
+            risk_reward: ((targetPrice - entryPrice) / (entryPrice - stopLoss)).toFixed(2),
+            status: 'active'
+          });
+        }
+        
+        // Sinal de compra médio: Cruzamento de médias de curto e médio prazo
+        else if (shortTermTrend === 'bullish' && 
+                (sma8 > sma20 && closePrices[closePrices.length-2] <= calculateSMA(closePrices.slice(0, -1), 20)) && 
+                rsi < 70) {
+          
+          // Calcular entry, stop e target
+          const entryPrice = currentPrice; // Entrada no preço atual
+          const stopLoss = Math.max(entryPrice - (atr * 1.5), closestSupport * 0.98); // Stop loss baseado em ATR ou suporte
+          const targetPrice = entryPrice + (entryPrice - stopLoss) * 2; // Alvo com RR 1:2
+          
+          // Cálculo da taxa de sucesso baseado no histórico recente de movimentos
+          const successRate = calculateSuccessRate(closePrices, 'BUY', 10);
+          
+          signals.push({
+            symbol,
+            type: SignalType.TECHNICAL,
+            signal: 'BUY',
+            reason: 'Cruzamento de média móvel de curto prazo acima da média de médio prazo, indicando início de tendência de alta',
+            strength: SignalStrength.MODERATE,
+            timestamp: Date.now(),
+            price: currentPrice,
+            entry_price: entryPrice,
+            stop_loss: stopLoss,
+            target_price: targetPrice,
+            success_rate: successRate,
+            timeframe: '1d',
+            expiry: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(), // 3 dias
+            risk_reward: ((targetPrice - entryPrice) / (entryPrice - stopLoss)).toFixed(2),
+            status: 'active'
+          });
+        }
+        
+        // Sinal de compra baseado em RSI + Suporte
+        else if (rsi < 35 && currentPrice <= closestSupport * 1.01 && volumeRatio > 1) {
+          // Calcular entry, stop e target
+          const entryPrice = currentPrice; // Entrada no preço atual
+          const stopLoss = entryPrice - (atr * 1.2); // Stop loss baseado em ATR 
+          const targetPrice = entryPrice + (atr * 3); // Alvo baseado em ATR
+          
+          // Cálculo da taxa de sucesso baseado no histórico recente de movimentos
+          const successRate = calculateSuccessRate(closePrices, 'BUY', 10) * 0.95; // Ajuste mais conservador
+          
+          signals.push({
+            symbol,
+            type: SignalType.TECHNICAL,
+            signal: 'BUY',
+            reason: 'RSI em região sobrevendida próximo a suporte importante',
+            strength: SignalStrength.MODERATE,
+            timestamp: Date.now(),
+            price: currentPrice,
+            entry_price: entryPrice,
+            stop_loss: stopLoss,
+            target_price: targetPrice,
+            success_rate: successRate,
+            timeframe: '1d',
+            expiry: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(), // 3 dias
+            risk_reward: ((targetPrice - entryPrice) / (entryPrice - stopLoss)).toFixed(2),
+            status: 'active'
+          });
+        }
+        
+        // ==== SINAIS DE VENDA ====
+        
+        // Sinal de venda forte: Tendência de baixa em todos os prazos + RSI caindo de sobrecomprado
+        if (shortTermTrend === 'bearish' && mediumTermTrend === 'bearish' && longTermTrend === 'bearish' && 
+            rsi < 70 && rsi > 50 && volumeRatio > 1.2) {
+          
+          // Calcular entry, stop e target
+          const entryPrice = currentPrice; // Entrada no preço atual
+          const stopLoss = Math.min(entryPrice + (atr * 2), closestResistance * 1.01); // Stop loss baseado em ATR ou resistência
+          const targetPrice = entryPrice - (atr * 4); // Alvo baseado em risk/reward de 1:2
+          
+          // Cálculo da taxa de sucesso baseado no histórico recente de movimentos
+          const successRate = calculateSuccessRate(closePrices, 'SELL', 10);
+          
+          signals.push({
+            symbol,
+            type: SignalType.TECHNICAL,
+            signal: 'SELL',
+            reason: 'Tendência de baixa confirmada em múltiplos prazos com volume crescente e RSI caindo de região sobrecomprada',
+            strength: SignalStrength.STRONG,
+            timestamp: Date.now(),
+            price: currentPrice,
+            entry_price: entryPrice,
+            stop_loss: stopLoss,
+            target_price: targetPrice,
+            success_rate: successRate,
+            timeframe: '1d',
+            expiry: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString(), // 5 dias
+            risk_reward: ((entryPrice - targetPrice) / (stopLoss - entryPrice)).toFixed(2),
+            status: 'active'
+          });
+        }
+        
+        // Sinal de venda médio: Cruzamento de médias de curto e médio prazo para baixo
+        else if (shortTermTrend === 'bearish' && 
+                (sma8 < sma20 && closePrices[closePrices.length-2] >= calculateSMA(closePrices.slice(0, -1), 20)) && 
+                rsi > 30) {
+          
+          // Calcular entry, stop e target
+          const entryPrice = currentPrice; // Entrada no preço atual
+          const stopLoss = Math.min(entryPrice + (atr * 1.5), closestResistance * 1.02); // Stop loss baseado em ATR ou resistência
+          const targetPrice = entryPrice - (stopLoss - entryPrice) * 2; // Alvo com RR 1:2
+          
+          // Cálculo da taxa de sucesso baseado no histórico recente de movimentos
+          const successRate = calculateSuccessRate(closePrices, 'SELL', 10);
+          
+          signals.push({
+            symbol,
+            type: SignalType.TECHNICAL,
+            signal: 'SELL',
+            reason: 'Cruzamento de média móvel de curto prazo abaixo da média de médio prazo, indicando início de tendência de baixa',
+            strength: SignalStrength.MODERATE,
+            timestamp: Date.now(),
+            price: currentPrice,
+            entry_price: entryPrice,
+            stop_loss: stopLoss,
+            target_price: targetPrice,
+            success_rate: successRate,
+            timeframe: '1d',
+            expiry: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(), // 3 dias
+            risk_reward: ((entryPrice - targetPrice) / (stopLoss - entryPrice)).toFixed(2),
+            status: 'active'
+          });
+        }
+        
+        // Sinal de venda baseado em RSI + Resistência
+        else if (rsi > 70 && currentPrice >= closestResistance * 0.99 && volumeRatio > 1) {
+          // Calcular entry, stop e target
+          const entryPrice = currentPrice; // Entrada no preço atual
+          const stopLoss = entryPrice + (atr * 1.2); // Stop loss baseado em ATR
+          const targetPrice = entryPrice - (atr * 3); // Alvo baseado em ATR
+          
+          // Cálculo da taxa de sucesso baseado no histórico recente de movimentos
+          const successRate = calculateSuccessRate(closePrices, 'SELL', 10) * 0.95; // Ajuste mais conservador
+          
+          signals.push({
+            symbol,
+            type: SignalType.TECHNICAL,
+            signal: 'SELL',
+            reason: 'RSI em região sobrecomprada próximo a resistência importante',
+            strength: SignalStrength.MODERATE,
+            timestamp: Date.now(),
+            price: currentPrice,
+            entry_price: entryPrice,
+            stop_loss: stopLoss,
+            target_price: targetPrice,
+            success_rate: successRate,
+            timeframe: '1d',
+            expiry: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(), // 3 dias
+            risk_reward: ((entryPrice - targetPrice) / (stopLoss - entryPrice)).toFixed(2),
+            status: 'active'
+          });
+        }
+      }
+    } else {
+      // Para ações, usar dados do Alpha Vantage
+      const dailyData = await fetchHistoricalData(symbol, 'daily', 'full');
+      const weeklyData = await fetchHistoricalData(symbol, 'weekly', 'compact');
+      
+      if (dailyData && dailyData.prices.length >= 100) {
+        // Extrair dados históricos
+        const closePrices = dailyData.prices.slice(-100);
+        const highPrices = dailyData.highs.slice(-100);
+        const lowPrices = dailyData.lows.slice(-100);
+        const volumes = dailyData.volumes.slice(-100);
+        
+        // Dados para tendências de longo prazo
+        const weeklyClosePrices = weeklyData?.prices || [];
+        
+        // Médias móveis de vários períodos para confirmação cruzada
+        const sma8 = calculateSMA(closePrices, 8);
+        const sma20 = calculateSMA(closePrices, 20);
+        const sma50 = calculateSMA(closePrices, 50);
+        const sma200 = calculateSMA(closePrices, 100); // SMA longo prazo
+        
+        // Weekly SMA para tendência de longo prazo
+        const weeklySMA10 = weeklyClosePrices.length >= 10 ? 
+                           calculateSMA(weeklyClosePrices.slice(-10), 10) : null;
+        
+        // Indicador RSI (14 períodos)
+        const rsi = calculateRSI(closePrices, 14);
+        
+        // ATR para cálculo de stop loss e take profit baseado na volatilidade
+        const atr = calculaATR(highPrices, lowPrices, closePrices, 14);
+        
+        // Análise de volume
+        const averageVolume = calculateSMA(volumes, 20);
+        const latestVolume = volumes[volumes.length - 1];
+        const volumeRatio = latestVolume / averageVolume;
+        
+        // Tendência de curto e médio prazo
+        const shortTermTrend = sma8 > sma20 ? 'bullish' : 'bearish';
+        const mediumTermTrend = sma20 > sma50 ? 'bullish' : 'bearish';
+        const longTermTrend = sma50 > sma200 ? 'bullish' : 'bearish';
+        
+        // Tendência de longo prazo baseada em dados semanais
+        const weeklyTrend = weeklySMA10 && closePrices[closePrices.length - 1] > weeklySMA10 ? 'bullish' : 'bearish';
+        
+        // Suporte e resistência (simplificado)
+        const lastNLows = lowPrices.slice(-20);
+        const lastNHighs = highPrices.slice(-20);
+        
+        const currentPrice = price || closePrices[closePrices.length - 1];
+        const supports = findKeyLevels(lastNLows, 'support', 3);
+        const resistances = findKeyLevels(lastNHighs, 'resistance', 3);
+        
+        // Último suporte relevante abaixo do preço atual
+        const closestSupport = Math.max(...supports.filter(s => s < currentPrice), Math.min(...lastNLows));
+        // Última resistência relevante acima do preço atual
+        const closestResistance = Math.min(...resistances.filter(r => r > currentPrice), Math.max(...lastNHighs));
+        
+        // Buscar indicadores técnicos adicionais do Alpha Vantage
+        const macdData = await fetchTechnicalIndicator(symbol, 'MACD', 'daily');
+        const hasValidMACD = macdData && macdData.MACD && macdData.MACD.length > 0;
+        
+        const macdValue = hasValidMACD ? parseFloat(macdData.MACD[macdData.MACD.length - 1]) : null;
+        const macdSignal = hasValidMACD ? parseFloat(macdData.MACD_Signal[macdData.MACD_Signal.length - 1]) : null;
+        const macdHist = hasValidMACD ? parseFloat(macdData.MACD_Hist[macdData.MACD_Hist.length - 1]) : null;
+        
+        const macdCrossover = hasValidMACD && macdData.MACD.length > 1 && macdData.MACD_Signal.length > 1 ? 
+                            (parseFloat(macdData.MACD[macdData.MACD.length - 2]) < parseFloat(macdData.MACD_Signal[macdData.MACD_Signal.length - 2]) && 
+                             macdValue > macdSignal) : false;
+        
+        const macdCrossunder = hasValidMACD && macdData.MACD.length > 1 && macdData.MACD_Signal.length > 1 ? 
+                             (parseFloat(macdData.MACD[macdData.MACD.length - 2]) > parseFloat(macdData.MACD_Signal[macdData.MACD_Signal.length - 2]) && 
+                              macdValue < macdSignal) : false;
+        
+        // ==== SINAIS DE COMPRA PARA AÇÕES ====
+        
+        // Sinal de compra forte: Tendência de alta em todos os prazos + MACD crossover
+        if (shortTermTrend === 'bullish' && mediumTermTrend === 'bullish' && longTermTrend === 'bullish' &&
+            macdCrossover && rsi > 40 && rsi < 70 && volumeRatio > 1.2) {
+          
+          // Calcular entry, stop e target com base em ATR e níveis de suporte/resistência
+          const entryPrice = currentPrice; // Entrada no preço atual
+          const stopLoss = Math.max(entryPrice - (atr * 2), closestSupport * 0.98); // Stop loss baseado em ATR ou suporte
+          const targetPrice = entryPrice + (entryPrice - stopLoss) * 2.5; // Alvo com RR 1:2.5
+          
+          // Cálculo da taxa de sucesso baseado no histórico recente de movimentos
+          const successRate = calculateSuccessRate(closePrices, 'BUY', 15);
+          
+          signals.push({
+            symbol,
+            type: SignalType.TECHNICAL,
+            signal: 'BUY',
+            reason: 'Tendência de alta confirmada em múltiplos prazos com cruzamento de MACD e volume crescente',
+            strength: SignalStrength.STRONG,
+            timestamp: Date.now(),
+            price: currentPrice,
+            entry_price: entryPrice,
+            stop_loss: stopLoss,
+            target_price: targetPrice,
+            success_rate: successRate,
+            timeframe: '1d',
+            expiry: new Date(Date.now() + 20 * 24 * 60 * 60 * 1000).toISOString(), // 20 dias
+            risk_reward: ((targetPrice - entryPrice) / (entryPrice - stopLoss)).toFixed(2),
+            status: 'active'
+          });
+        }
+        
+        // Sinal de compra em suporte com RSI baixo
+        else if (shortTermTrend === 'bullish' && currentPrice <= closestSupport * 1.02 && rsi < 40 &&
+                volumeRatio > 1.1 && (!hasValidMACD || macdHist > 0)) {
+          
+          // Calcular entry, stop e target
+          const entryPrice = currentPrice; // Entrada no preço atual
+          const stopLoss = Math.max(entryPrice - (atr * 1.5), closestSupport * 0.95); // Stop loss baseado em ATR ou abaixo do suporte
+          const targetPrice = entryPrice + (entryPrice - stopLoss) * 2; // Alvo com RR 1:2
+          
+          // Cálculo da taxa de sucesso
+          const successRate = calculateSuccessRate(closePrices, 'BUY', 10);
+          
+          signals.push({
+            symbol,
+            type: SignalType.TECHNICAL,
+            signal: 'BUY',
+            reason: 'Preço testando suporte importante com RSI mostrando condição sobrevendida',
+            strength: SignalStrength.MODERATE,
+            timestamp: Date.now(),
+            price: currentPrice,
+            entry_price: entryPrice,
+            stop_loss: stopLoss,
+            target_price: targetPrice,
+            success_rate: successRate,
+            timeframe: '1d',
+            expiry: new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toISOString(), // 15 dias
+            risk_reward: ((targetPrice - entryPrice) / (entryPrice - stopLoss)).toFixed(2),
+            status: 'active'
+          });
+        }
+        
+        // ==== SINAIS DE VENDA PARA AÇÕES ====
+        
+        // Sinal de venda forte: Tendência de baixa em todos os prazos + MACD crossunder
+        if (shortTermTrend === 'bearish' && mediumTermTrend === 'bearish' && longTermTrend === 'bearish' &&
+            macdCrossunder && rsi < 60 && rsi > 30 && volumeRatio > 1.2) {
+          
+          // Calcular entry, stop e target
+          const entryPrice = currentPrice; // Entrada no preço atual
+          const stopLoss = Math.min(entryPrice + (atr * 2), closestResistance * 1.02); // Stop loss baseado em ATR ou resistência
+          const targetPrice = entryPrice - (stopLoss - entryPrice) * 2.5; // Alvo com RR 1:2.5
+          
+          // Cálculo da taxa de sucesso
+          const successRate = calculateSuccessRate(closePrices, 'SELL', 15);
+          
+          signals.push({
+            symbol,
+            type: SignalType.TECHNICAL,
+            signal: 'SELL',
+            reason: 'Tendência de baixa confirmada em múltiplos prazos com cruzamento negativo de MACD e volume crescente',
+            strength: SignalStrength.STRONG,
+            timestamp: Date.now(),
+            price: currentPrice,
+            entry_price: entryPrice,
+            stop_loss: stopLoss,
+            target_price: targetPrice,
+            success_rate: successRate,
+            timeframe: '1d',
+            expiry: new Date(Date.now() + 20 * 24 * 60 * 60 * 1000).toISOString(), // 20 dias
+            risk_reward: ((entryPrice - targetPrice) / (stopLoss - entryPrice)).toFixed(2),
+            status: 'active'
+          });
+        }
+        
+        // Sinal de venda em resistência com RSI alto
+        else if (shortTermTrend === 'bearish' && currentPrice >= closestResistance * 0.98 && rsi > 60 &&
+                volumeRatio > 1.1 && (!hasValidMACD || macdHist < 0)) {
+          
+          // Calcular entry, stop e target
+          const entryPrice = currentPrice; // Entrada no preço atual 
+          const stopLoss = Math.min(entryPrice + (atr * 1.5), closestResistance * 1.05); // Stop loss baseado em ATR ou acima da resistência
+          const targetPrice = entryPrice - (stopLoss - entryPrice) * 2; // Alvo com RR 1:2
+          
+          // Cálculo da taxa de sucesso
+          const successRate = calculateSuccessRate(closePrices, 'SELL', 10);
+          
+          signals.push({
+            symbol,
+            type: SignalType.TECHNICAL,
+            signal: 'SELL',
+            reason: 'Preço testando resistência importante com RSI mostrando condição sobrecomprada',
+            strength: SignalStrength.MODERATE,
+            timestamp: Date.now(),
+            price: currentPrice,
+            entry_price: entryPrice,
+            stop_loss: stopLoss,
+            target_price: targetPrice,
+            success_rate: successRate,
+            timeframe: '1d',
+            expiry: new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toISOString(), // 15 dias
+            risk_reward: ((entryPrice - targetPrice) / (stopLoss - entryPrice)).toFixed(2),
+            status: 'active'
+          });
+        }
+      }
+    }
+    
+    return signals;
+  } catch (error) {
+    console.error(`Erro ao gerar sinais técnicos para ${symbol}:`, error);
+    return [];
+  }
+}
+
+// Função para encontrar níveis de suporte e resistência
+function findKeyLevels(prices: number[], type: 'support' | 'resistance', count: number = 3): number[] {
+  // Ordenar preços
+  const sortedPrices = [...prices].sort((a, b) => type === 'support' ? a - b : b - a);
+  
+  // Agrupar preços similares (dentro de 1% um do outro)
+  const groupedLevels: number[][] = [];
+  
+  sortedPrices.forEach(price => {
+    // Verificar se o preço se encaixa em algum grupo existente
+    const existingGroup = groupedLevels.find(group => 
+      Math.abs(group[0] - price) / group[0] < 0.01 // Dentro de 1%
+    );
+    
+    if (existingGroup) {
+      existingGroup.push(price);
+    } else {
+      groupedLevels.push([price]);
+    }
+  });
+  
+  // Ordenar grupos por tamanho (mais frequentes primeiro)
+  groupedLevels.sort((a, b) => b.length - a.length);
+  
+  // Retornar a média de cada um dos principais grupos
+  return groupedLevels.slice(0, count).map(group => 
+    group.reduce((sum, price) => sum + price, 0) / group.length
+  );
+}
+
+// Função para calcular a taxa de sucesso de um sinal com base no histórico
+function calculateSuccessRate(prices: number[], signalType: 'BUY' | 'SELL', lookbackPeriods: number): number {
+  try {
+    // Não temos dados históricos suficientes
+    if (prices.length < lookbackPeriods * 2) {
+      return signalType === 'BUY' ? 0.65 : 0.65; // Taxa padrão conservadora
+    }
+    
+    let successCount = 0;
+    let totalCount = 0;
+    
+    // Analisar os últimos N períodos
+    for (let i = lookbackPeriods; i < prices.length - 10; i++) {
+      const priceWindow = prices.slice(i - lookbackPeriods, i);
+      
+      // Calcular os mesmos indicadores que usamos para gerar sinais
+      const sma8 = calculateSMA(priceWindow, 8 > priceWindow.length ? priceWindow.length - 1 : 8);
+      const sma20 = calculateSMA(priceWindow, 20 > priceWindow.length ? priceWindow.length - 1 : 20);
+      
+      // Simplificação: verificar cruzamentos de médias móveis
+      const crossover = sma8 > sma20 && 
+                       calculateSMA(priceWindow.slice(0, -1), 8 > priceWindow.length ? priceWindow.length - 1 : 8) <= 
+                       calculateSMA(priceWindow.slice(0, -1), 20 > priceWindow.length ? priceWindow.length - 1 : 20);
+      
+      const crossunder = sma8 < sma20 && 
+                        calculateSMA(priceWindow.slice(0, -1), 8 > priceWindow.length ? priceWindow.length - 1 : 8) >= 
+                        calculateSMA(priceWindow.slice(0, -1), 20 > priceWindow.length ? priceWindow.length - 1 : 20);
+      
+      // Verificar se teríamos gerado um sinal neste ponto
+      if ((signalType === 'BUY' && crossover) || (signalType === 'SELL' && crossunder)) {
+        totalCount++;
+        
+        // Verificar se o sinal teria sido bem-sucedido
+        // Para BUY: Verificar se o preço subiu pelo menos 2% nos próximos 10 períodos
+        // Para SELL: Verificar se o preço caiu pelo menos 2% nos próximos 10 períodos
+        const futurePrices = prices.slice(i, i + 10);
+        
+        if (signalType === 'BUY') {
+          const maxGain = Math.max(...futurePrices) / prices[i] - 1;
+          if (maxGain >= 0.02) {
+            successCount++;
+          }
+        } else {
+          const maxDrop = 1 - Math.min(...futurePrices) / prices[i];
+          if (maxDrop >= 0.02) {
+            successCount++;
+          }
+        }
+      }
+    }
+    
+    // Calcular taxa de sucesso
+    const successRate = totalCount > 0 ? successCount / totalCount : 0.5;
+    
+    // Normalizar entre 0.5 e 0.95 para evitar valores extremos
+    return 0.5 + (successRate * 0.45);
+  } catch (error) {
+    console.error('Erro ao calcular taxa de sucesso:', error);
+    return 0.65; // Taxa padrão em caso de erro
+  }
+}
+
+// Função para gerar sinais baseados em notícias
+async function generateNewsSignals(marketData: MarketData, allNews: MarketNews[]): Promise<TradingSignal[]> {
+  const signals: TradingSignal[] = [];
+  const { symbol, price, name, isCrypto } = marketData;
+  
+  try {
+    // Filtrar apenas notícias relevantes para este ativo
+    const relevantNews = allNews.filter(news => {
+      // Para crypto, verificamos se o ticker ou o nome completo está mencionado
+      if (isCrypto) {
+        const symbolPattern = new RegExp(`\\b${symbol.replace('USDT', '')}\\b`, 'i');
+        const namePattern = new RegExp(`\\b${name}\\b`, 'i');
+        return symbolPattern.test(news.title) || 
+               namePattern.test(news.title) || 
+               symbolPattern.test(news.summary || '') || 
+               namePattern.test(news.summary || '');
+      } else {
+        // Para ações, verificamos se o ticker está mencionado
+        const symbolPattern = new RegExp(`\\b${symbol}\\b`, 'i');
+        return symbolPattern.test(news.title) || symbolPattern.test(news.summary || '');
+      }
+    });
+    
+    if (relevantNews.length === 0) {
+      return [];
+    }
+    
+    // Ordenar notícias por data (mais recentes primeiro)
+    const recentNews = relevantNews
+      .sort((a, b) => new Date(b.time || b.datetime || b.published_at || Date.now())
+                        .getTime() - 
+                      new Date(a.time || a.datetime || a.published_at || Date.now())
+                        .getTime())
+      .slice(0, 5); // Considerar apenas as 5 notícias mais recentes
+    
+    // Buscar dados históricos para calcular volatilidade típica (para stop loss e target)
+    let atr = 0;
+    let closePrices: number[] = [];
+    
+    if (isCrypto) {
+      const klines = await getHistoricalKlines(symbol, '1d', 20);
+      if (klines.length >= 14) {
+        const highPrices = klines.map(k => parseFloat(k[2]));
+        const lowPrices = klines.map(k => parseFloat(k[3]));
+        closePrices = klines.map(k => parseFloat(k[4]));
+        atr = calculaATR(highPrices, lowPrices, closePrices, 14);
+      }
+    } else {
+      const dailyData = await fetchHistoricalData(symbol, 'daily', 'compact');
+      if (dailyData && dailyData.prices.length >= 14) {
+        const highPrices = dailyData.highs.slice(-20);
+        const lowPrices = dailyData.lows.slice(-20);
+        closePrices = dailyData.prices.slice(-20);
+        atr = calculaATR(highPrices, lowPrices, closePrices, 14);
+      }
+    }
+    
+    // Se não conseguimos obter ATR, usar um valor padrão baseado na volatilidade média
+    if (atr === 0 && closePrices.length > 0) {
+      // Calcular volatilidade média diária (em %)
+      const dailyReturns = [];
+      for (let i = 1; i < closePrices.length; i++) {
+        dailyReturns.push(Math.abs(closePrices[i] / closePrices[i-1] - 1));
+      }
+      
+      const avgVolatility = dailyReturns.reduce((sum, val) => sum + val, 0) / dailyReturns.length;
+      atr = price * avgVolatility;
+    }
+    
+    // Se ainda não temos ATR, usar uma porcentagem padrão
+    if (atr === 0) {
+      atr = price * (isCrypto ? 0.05 : 0.02); // 5% para cripto, 2% para ações
+    }
+    
+    // Analisar o sentimento de cada notícia e agregá-lo
+    let totalSentiment = 0;
+    let sentimentMagnitude = 0;
+    let strongestSignal: { sentiment: number; news: MarketNews } | null = null;
+    
+    for (const news of recentNews) {
+      // Analisar o sentimento da notícia
+      let sentiment: number;
+      
+      try {
+        // Usar função de análise de sentimento avançada
+        const sentimentResult = await analyzeSentiment(news.title + ' ' + (news.summary || ''));
+        sentiment = sentimentResult.score;
+        
+        // Ajustar a magnitude com base na fonte de notícias e relevância
+        let magnitude = sentimentResult.magnitude || 1;
+        
+        // Aumentar a relevância para fontes de notícias confiáveis
+        const reliableSources = ['Bloomberg', 'Reuters', 'Financial Times', 'Wall Street Journal', 'CNBC', 'CoinDesk', 'Cointelegraph'];
+        const source = news.source || news.publisher || '';
+        
+        if (reliableSources.some(s => source.includes(s))) {
+          magnitude *= 1.5;
+        }
+        
+        // Aumentar a relevância para notícias focadas especificamente no ativo
+        if (news.title.includes(symbol) || news.title.includes(name)) {
+          magnitude *= 1.2;
+        }
+        
+        // Aumentar a magnitude para notícias muito recentes (menos de 12 horas)
+        const newsTime = new Date(news.time || news.datetime || news.published_at || Date.now()).getTime();
+        const hoursAgo = (Date.now() - newsTime) / (1000 * 60 * 60);
+        
+        if (hoursAgo < 12) {
+          magnitude *= 1 + (12 - hoursAgo) / 12; // Quanto mais recente, maior o impacto
+        }
+        
+        // Verificar palavras-chave de alto impacto no título
+        const highImpactKeywords = [
+          'aquisição', 'fusão', 'falência', 'investigação', 'SEC', 'regulação', 'proibição',
+          'hackeado', 'brecha', 'parceria', 'lançamento', 'aprovação', 'FDA', 'listagem',
+          'deslistagem', 'recalls', 'processo', 'patente', 'lucro recorde', 'prejuízo recorde'
+        ];
+        
+        if (highImpactKeywords.some(keyword => 
+            news.title.toLowerCase().includes(keyword.toLowerCase()) || 
+            (news.summary || '').toLowerCase().includes(keyword.toLowerCase()))) {
+          magnitude *= 1.5;
+        }
+        
+        totalSentiment += sentiment * magnitude;
+        sentimentMagnitude += magnitude;
+        
+        // Acompanhar o sinal mais forte
+        if (!strongestSignal || Math.abs(sentiment * magnitude) > Math.abs(strongestSignal.sentiment)) {
+          strongestSignal = { sentiment: sentiment * magnitude, news };
+        }
+      } catch (error) {
+        console.warn('Erro ao analisar sentimento:', error);
+        // Fallback: análise simples de palavras-chave
+        sentiment = simpleKeywordSentimentAnalysis(news.title + ' ' + (news.summary || ''));
+        totalSentiment += sentiment;
+        sentimentMagnitude += 1;
+      }
+    }
+    
+    // Se não conseguimos analisar nenhuma notícia, retornar vazio
+    if (sentimentMagnitude === 0) {
+      return [];
+    }
+    
+    // Calcular sentimento médio ponderado
+    const averageSentiment = totalSentiment / sentimentMagnitude;
+    
+    // Determinar a intensidade do sentimento (threshold para gerar sinais)
+    const sentimentStrength = Math.abs(averageSentiment);
+    
+    // Gerar sinais apenas para sentimentos significativos
+    if (sentimentStrength >= 0.3) {
+      // Determinar o tipo de sinal
+      const signal = averageSentiment > 0 ? 'BUY' : 'SELL';
+      
+      // Determinar força do sinal
+      let strength = SignalStrength.MODERATE;
+      if (sentimentStrength >= 0.6) {
+        strength = SignalStrength.STRONG;
+      } else if (sentimentStrength < 0.4) {
+        strength = SignalStrength.WEAK;
+      }
+      
+      // Calcular preço de entrada, stop loss e target com base no ATR e no sentimento
+      const entryPrice = price;
+      
+      let stopMultiplier = 1.5;
+      let targetMultiplier = 2.5;
+      
+      // Ajustar multiplicadores com base na força do sentimento
+      if (sentimentStrength >= 0.6) {
+        stopMultiplier = 2;
+        targetMultiplier = 3.5;
+      } else if (sentimentStrength < 0.4) {
+        stopMultiplier = 1;
+        targetMultiplier = 2;
+      }
+      
+      // Calcular stop loss e target
+      let stopLoss: number;
+      let targetPrice: number;
+      
+      if (signal === 'BUY') {
+        stopLoss = Math.max(entryPrice - (atr * stopMultiplier), entryPrice * 0.9); // No mínimo 10% abaixo
+        targetPrice = entryPrice + (atr * targetMultiplier);
+      } else {
+        stopLoss = Math.min(entryPrice + (atr * stopMultiplier), entryPrice * 1.1); // No máximo 10% acima
+        targetPrice = entryPrice - (atr * targetMultiplier);
+      }
+      
+      // Calcular taxa de sucesso com base na qualidade das notícias
+      const successRateBase = 0.6; // Base de 60%
+      const successRateBonus = sentimentStrength * 0.3; // Até 30% adicional baseado na força do sentimento
+      const successRate = Math.min(0.95, successRateBase + successRateBonus); // Máximo de 95%
+      
+      // Calcular tempo de expiração com base no tipo de ativo e força do sentimento
+      const expiryDays = isCrypto ? 
+                       (strength === SignalStrength.STRONG ? 3 : (strength === SignalStrength.MODERATE ? 2 : 1)) :
+                       (strength === SignalStrength.STRONG ? 14 : (strength === SignalStrength.MODERATE ? 7 : 3));
+      
+      // Montar a razão do sinal com base na notícia mais forte
+      let reason = '';
+      if (strongestSignal) {
+        // Limitar a 100 caracteres para evitar textos muito longos
+        const title = strongestSignal.news.title.length > 100 ? 
+                       strongestSignal.news.title.substring(0, 97) + '...' : 
+                       strongestSignal.news.title;
+        
+        reason = `${signal === 'BUY' ? 'Notícia positiva' : 'Notícia negativa'}: ${title}`;
+      } else {
+        reason = `Sentimento de notícias recentes: ${signal === 'BUY' ? 'Positivo' : 'Negativo'}`;
+      }
+      
+      // Calcular risk/reward
+      const riskReward = signal === 'BUY' ? 
+                       ((targetPrice - entryPrice) / (entryPrice - stopLoss)).toFixed(2) :
+                       ((entryPrice - targetPrice) / (stopLoss - entryPrice)).toFixed(2);
+      
+      signals.push({
+        symbol,
+        type: SignalType.NEWS,
+        signal,
+        reason,
+        strength,
+        timestamp: Date.now(),
+        price: entryPrice,
+        entry_price: entryPrice,
+        stop_loss: stopLoss,
+        target_price: targetPrice,
+        success_rate: successRate,
+        timeframe: isCrypto ? '4h' : '1d',
+        expiry: new Date(Date.now() + expiryDays * 24 * 60 * 60 * 1000).toISOString(),
+        risk_reward: riskReward,
+        status: 'active',
+        source: strongestSignal?.news.url || recentNews[0]?.url
+      });
+    }
+    
+    return signals;
+  } catch (error) {
+    console.error(`Erro ao gerar sinais baseados em notícias para ${symbol}:`, error);
+    return [];
+  }
+}
+
+// Análise de sentimento simples baseada em palavras-chave (fallback)
+function simpleKeywordSentimentAnalysis(text: string): number {
+  const positiveKeywords = [
+    'bullish', 'rally', 'surge', 'gain', 'rise', 'soar', 'jump', 'positive', 'up', 'upside',
+    'grow', 'growing', 'growth', 'profit', 'profitable', 'beat', 'exceeds', 'exceeded',
+    'partnership', 'launch', 'success', 'successful', 'approval', 'approved', 'innovation',
+    'revolucionário', 'breakthrough', 'milestone', 'achievement', 'strong', 'strength',
+    'adoption', 'buy', 'buying', 'accumulate', 'accumulation', 'recover', 'recovery',
+    'opportunity', 'potential', 'promising', 'progress', 'progressive', 'advantage',
+    'aquisição', 'fusão', 'parceria', 'lançamento', 'aprovação', 'listagem', 'patente', 'lucro',
+    'recorde', 'alta', 'subir', 'subindo', 'crescimento', 'otimista', 'positivo'
+  ];
+  
+  const negativeKeywords = [
+    'bearish', 'crash', 'plunge', 'decline', 'drop', 'fall', 'sink', 'negative', 'down', 'downside',
+    'shrink', 'shrinking', 'loss', 'unprofitable', 'miss', 'misses', 'missed',
+    'investigation', 'lawsuit', 'legal', 'concern', 'concerns', 'concerned', 'warning', 'warn',
+    'fail', 'failed', 'failure', 'weak', 'weakness', 'vulnerability', 'vulnerable',
+    'sell', 'selling', 'distribute', 'distribution', 'correction', 'risk', 'risky',
+    'threat', 'threaten', 'challenging', 'challenge', 'difficulty', 'difficult', 'problem',
+    'falência', 'investigação', 'proibição', 'hackeado', 'brecha', 'deslistagem', 'recalls',
+    'processo', 'prejuízo', 'baixa', 'cair', 'caindo', 'perda', 'pessimista', 'negativo'
+  ];
+  
+  const lowerText = text.toLowerCase();
+  
+  let posCount = 0;
+  let negCount = 0;
+  
+  positiveKeywords.forEach(word => {
+    const pattern = new RegExp(`\\b${word}\\b`, 'gi');
+    const matches = lowerText.match(pattern);
+    if (matches) {
+      posCount += matches.length;
+    }
+  });
+  
+  negativeKeywords.forEach(word => {
+    const pattern = new RegExp(`\\b${word}\\b`, 'gi');
+    const matches = lowerText.match(pattern);
+    if (matches) {
+      negCount += matches.length;
+    }
+  });
+  
+  // Calcular score de -1 a 1
+  const total = posCount + negCount;
+  if (total === 0) return 0;
+  
+  return (posCount - negCount) / total;
+}
+
+// Função para gerar sinais fundamentais (aplicável apenas para ações)
+async function generateFundamentalSignals(marketData: MarketData): Promise<TradingSignal[]> {
+  const signals: TradingSignal[] = [];
+  const { symbol, price, isCrypto } = marketData;
+  
+  try {
+    if (!isCrypto) {
+      // Sinais fundamentais geralmente se aplicam apenas a ações
+      // Buscar dados fundamentais da empresa
+      const fundamentalData = await fetchFundamentalData(symbol);
+      
+      if (!fundamentalData) {
+        return [];
+      }
+      
+      // Extrair métricas principais
+      const {
+        peRatio,
+        forwardPE,
+        pbRatio,
+        priceToSales,
+        debtToEquity,
+        quickRatio,
+        currentRatio,
+        roe,
+        roa,
+        operatingMargin,
+        netMargin,
+        dividendYield,
+        beta,
+        epsGrowth1Y,
+        revenueGrowth1Y,
+        analystTargetPrice,
+        analystRating
+      } = fundamentalData;
+      
+      // Obter dados do setor para comparação
+      const sectorData = await fetchSectorAverages(fundamentalData.sector);
+      
+      // Verificar se temos dados técnicos recentes para volatilidade (ATR)
+      let atr = 0;
+      const dailyData = await fetchHistoricalData(symbol, 'daily', 'compact');
+      
+      if (dailyData && dailyData.prices.length >= 20) {
+        const highPrices = dailyData.highs.slice(-20);
+        const lowPrices = dailyData.lows.slice(-20);
+        const closePrices = dailyData.prices.slice(-20);
+        atr = calculaATR(highPrices, lowPrices, closePrices, 14);
+      }
+      
+      if (atr === 0) {
+        // Estimativa de ATR baseada na volatilidade típica das ações (usualmente 1-2%)
+        atr = price * 0.015; // 1.5% do preço como estimativa
+      }
+      
+      // === ANÁLISE DE VALOR ===
+      
+      // Subvalorização comparada ao setor
+      if (peRatio && sectorData.peRatio && peRatio < sectorData.peRatio * 0.7 && 
+          pbRatio && sectorData.pbRatio && pbRatio < sectorData.pbRatio * 0.8 &&
+          operatingMargin && sectorData.operatingMargin && operatingMargin > sectorData.operatingMargin * 0.9) {
+        
+        // Está significativamente subvalorizada com margens saudáveis
+        
+        // Calcular target price baseado no PE do setor
+        const fairPE = sectorData.peRatio * 0.9; // 90% do PE médio do setor
+        const ttmEPS = price / peRatio;
+        const targetPrice = fairPE * ttmEPS;
+        
+        // Calcular stop loss baseado em ATR e suporte técnico
+        const stopLoss = Math.max(price - (atr * 3), price * 0.85); // Máx entre 3 ATR ou -15%
+        
+        // Calcular taxa de sucesso baseada em métricas fundamentais e técnicas
+        let successRate = 0.7; // Base para valor
+        
+        // Ajustar com base em saúde financeira
+        if (debtToEquity && debtToEquity < sectorData.debtToEquity * 0.8) successRate += 0.05;
+        if (currentRatio && currentRatio > 1.5) successRate += 0.05;
+        if (roe && roe > sectorData.roe * 1.1) successRate += 0.05;
+        if (dividendYield && dividendYield > sectorData.dividendYield * 1.2) successRate += 0.05;
+        
+        // Limite máximo de 90%
+        successRate = Math.min(successRate, 0.9);
+        
+        signals.push({
+          symbol,
+          type: SignalType.FUNDAMENTAL,
+          signal: 'BUY',
+          reason: `Subvalorização: P/E ${peRatio.toFixed(2)} vs. setor ${sectorData.peRatio.toFixed(2)}, com margens operacionais saudáveis`,
+          strength: SignalStrength.STRONG,
+          timestamp: Date.now(),
+          price,
+          entry_price: price,
+          stop_loss: stopLoss,
+          target_price: targetPrice,
+          success_rate: successRate,
+          timeframe: '1w', // Sinais fundamentais são de prazo mais longo
+          expiry: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString(), // 60 dias
+          risk_reward: ((targetPrice - price) / (price - stopLoss)).toFixed(2),
+          status: 'active'
+        });
+      }
+      
+      // === ANÁLISE DE CRESCIMENTO ===
+      
+      // Empresa de crescimento com momentum
+      if (epsGrowth1Y && epsGrowth1Y > 20 && 
+          revenueGrowth1Y && revenueGrowth1Y > 15 &&
+          operatingMargin && operatingMargin > 15) {
+        
+        // É uma empresa de crescimento saudável
+        
+        // Calcular target price baseado em crescimento
+        const growthPremium = 1 + (epsGrowth1Y / 100); // Premium baseado no crescimento
+        const targetPrice = price * growthPremium;
+        
+        // Stop loss mais apertado para ações de crescimento (mais voláteis)
+        const stopLoss = Math.max(price - (atr * 4), price * 0.8);
+        
+        // Calcular taxa de sucesso
+        let successRate = 0.65; // Base para crescimento (mais volátil)
+        
+        // Ajustar com base em métricas de crescimento
+        if (epsGrowth1Y > 30) successRate += 0.05;
+        if (revenueGrowth1Y > 25) successRate += 0.05;
+        if (operatingMargin > 20) successRate += 0.05;
+        if (netMargin && netMargin > 15) successRate += 0.05;
+        if (debtToEquity && debtToEquity < 1) successRate += 0.05;
+        
+        // Limite máximo de 90%
+        successRate = Math.min(successRate, 0.9);
+        
+        signals.push({
+          symbol,
+          type: SignalType.FUNDAMENTAL,
+          signal: 'BUY',
+          reason: `Alto crescimento: EPS +${epsGrowth1Y.toFixed(1)}%, Receita +${revenueGrowth1Y.toFixed(1)}% com margens saudáveis`,
+          strength: SignalStrength.STRONG,
+          timestamp: Date.now(),
+          price,
+          entry_price: price,
+          stop_loss: stopLoss,
+          target_price: targetPrice,
+          success_rate: successRate,
+          timeframe: '1w',
+          expiry: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString(), // 90 dias
+          risk_reward: ((targetPrice - price) / (price - stopLoss)).toFixed(2),
+          status: 'active'
+        });
+      }
+      
+      // === ANÁLISE DE DIVIDENDOS ===
+      
+      // Oportunidade de dividendos
+      if (dividendYield && dividendYield > 4 && 
+          operatingMargin && operatingMargin > 10 &&
+          debtToEquity && debtToEquity < 1.2) {
+        
+        // Empresa com bom dividendo e situação financeira estável
+        
+        // Target menor para empresas de dividendos (valorização menor, foco em renda)
+        const targetPrice = price * 1.15; // 15% de valorização
+        
+        // Stop loss mais amplo para empresas de dividendos (menor volatilidade)
+        const stopLoss = Math.max(price - (atr * 3), price * 0.85);
+        
+        // Calcular taxa de sucesso
+        let successRate = 0.75; // Alta para empresas de dividendos (mais estáveis)
+        
+        // Ajustar com base em métricas de dividendos e saúde financeira
+        if (dividendYield > 6) successRate += 0.05;
+        if (currentRatio && currentRatio > 1.5) successRate += 0.05;
+        if (debtToEquity < 0.8) successRate += 0.05;
+        
+        // Limite máximo de 95% para empresas de dividendos (mais previsíveis)
+        successRate = Math.min(successRate, 0.95);
+        
+        signals.push({
+          symbol,
+          type: SignalType.FUNDAMENTAL,
+          signal: 'BUY',
+          reason: `Oportunidade de dividendos: Yield de ${dividendYield.toFixed(2)}% com finanças saudáveis`,
+          strength: SignalStrength.MODERATE,
+          timestamp: Date.now(),
+          price,
+          entry_price: price,
+          stop_loss: stopLoss,
+          target_price: targetPrice,
+          success_rate: successRate,
+          timeframe: '1w',
+          expiry: new Date(Date.now() + 180 * 24 * 60 * 60 * 1000).toISOString(), // 180 dias
+          risk_reward: ((targetPrice - price) / (price - stopLoss)).toFixed(2),
+          status: 'active'
+        });
+      }
+      
+      // === ANÁLISES DE VENDA ===
+      
+      // Sobrevalorização extrema
+      if (peRatio && sectorData.peRatio && peRatio > sectorData.peRatio * 2 &&
+          pbRatio && sectorData.pbRatio && pbRatio > sectorData.pbRatio * 2 &&
+          (operatingMargin && operatingMargin < sectorData.operatingMargin * 0.8 || 
+           revenueGrowth1Y && revenueGrowth1Y < 0)) {
+        
+        // Empresa significativamente sobrevalorizada com deterioração operacional
+        
+        // Target price baseado em justa valorização
+        const fairPE = sectorData.peRatio * 1.2; // 120% do PE médio do setor
+        const ttmEPS = price / peRatio;
+        const targetPrice = fairPE * ttmEPS;
+        
+        // Stop loss acima do preço atual
+        const stopLoss = price * 1.1; // 10% acima
+        
+        // Calcular taxa de sucesso
+        let successRate = 0.7;
+        
+        // Ajustar com base em fragilidades
+        if (revenueGrowth1Y && revenueGrowth1Y < -5) successRate += 0.05;
+        if (epsGrowth1Y && epsGrowth1Y < -10) successRate += 0.05;
+        if (debtToEquity && debtToEquity > sectorData.debtToEquity * 1.5) successRate += 0.05;
+        if (currentRatio && currentRatio < 1) successRate += 0.05;
+        
+        // Limite máximo
+        successRate = Math.min(successRate, 0.9);
+        
+        signals.push({
+          symbol,
+          type: SignalType.FUNDAMENTAL,
+          signal: 'SELL',
+          reason: `Sobrevalorização: P/E ${peRatio.toFixed(2)} vs. setor ${sectorData.peRatio.toFixed(2)}, com deterioração operacional`,
+          strength: SignalStrength.STRONG,
+          timestamp: Date.now(),
+          price,
+          entry_price: price,
+          stop_loss: stopLoss,
+          target_price: targetPrice,
+          success_rate: successRate,
+          timeframe: '1w',
+          expiry: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString(), // 60 dias
+          risk_reward: ((price - targetPrice) / (stopLoss - price)).toFixed(2),
+          status: 'active'
+        });
+      }
+      
+      // Recomendação de analistas significativamente negativa
+      if (analystRating && analystRating < 2.5 && // Escala 1-5, abaixo de 2.5 é negativo
+          analystTargetPrice && analystTargetPrice < price * 0.9) { // Target 10% abaixo
+        
+        // Analistas estão negativos sobre a empresa
+        
+        // Usar target price dos analistas
+        const targetPrice = analystTargetPrice;
+        
+        // Stop loss acima do preço atual
+        const stopLoss = Math.min(price * 1.08, price + (atr * 2));
+        
+        // Taxa de sucesso baseada no consenso
+        const successRate = Math.min(0.6 + ((5 - analystRating) / 10), 0.85);
+        
+        signals.push({
+          symbol,
+          type: SignalType.FUNDAMENTAL,
+          signal: 'SELL',
+          reason: `Classificação negativa de analistas: ${analystRating.toFixed(1)}/5, preço-alvo ${(analystTargetPrice/price*100-100).toFixed(1)}% abaixo do atual`,
+          strength: SignalStrength.MODERATE,
+          timestamp: Date.now(),
+          price,
+          entry_price: price,
+          stop_loss: stopLoss,
+          target_price: targetPrice,
+          success_rate: successRate,
+          timeframe: '1w',
+          expiry: new Date(Date.now() + 45 * 24 * 60 * 60 * 1000).toISOString(), // 45 dias
+          risk_reward: ((price - targetPrice) / (stopLoss - price)).toFixed(2),
+          status: 'active'
+        });
+      }
+      
+    } else {
+      // Para crypto, podemos utilizar análise on-chain e métricas específicas de criptomoedas
+      // Isso requer uma abordagem diferente, pois métricas fundamentais tradicionais não se aplicam
+      
+      try {
+        // Buscar dados on-chain e métricas específicas para crypto
+        const cryptoMetrics = await fetchCryptoFundamentals(symbol.replace('USDT', ''));
+        
+        if (!cryptoMetrics) {
+          return [];
+        }
+        
+        const {
+          marketCap,
+          volume24h,
+          circulatingSupply,
+          totalSupply,
+          maxSupply,
+          activeAddresses,
+          transactionCount,
+          hashRate,
+          networkValue,
+          nvtRatio,
+          devActivity,
+          socialVolume
+        } = cryptoMetrics;
+        
+        // Calcular ATR para volatilidade
+        let atr = 0;
+        const klines = await getHistoricalKlines(symbol, '1d', 20);
+        
+        if (klines.length >= 14) {
+          const highPrices = klines.map(k => parseFloat(k[2]));
+          const lowPrices = klines.map(k => parseFloat(k[3]));
+          const closePrices = klines.map(k => parseFloat(k[4]));
+          atr = calculaATR(highPrices, lowPrices, closePrices, 14);
+        }
+        
+        if (atr === 0) {
+          atr = price * 0.05; // 5% para criptomoedas como estimativa
+        }
+        
+        // === ANÁLISE DE VALOR PARA CRYPTO ===
+        
+        // Forte atividade on-chain com preço deprimido
+        if (nvtRatio && nvtRatio < 50 && // NVT baixo indica alta atividade relativa ao preço
+            volume24h && volume24h > marketCap * 0.08 && // Volume saudável
+            (activeAddresses && activeAddresses > 10000)) {
+          
+          // Calcular target baseado no NVT histórico
+          const targetPrice = price * 1.5; // 50% de valorização potencial
+          
+          // Stop loss baseado em volatilidade
+          const stopLoss = price - (atr * 2);
+          
+          // Calcular taxa de sucesso
+          let successRate = 0.65; // Base para crypto (mais volátil)
+          
+          // Ajustes com base em métricas on-chain
+          if (nvtRatio < 30) successRate += 0.05;
+          if (volume24h > marketCap * 0.15) successRate += 0.05;
+          if (devActivity && devActivity > 20) successRate += 0.05; // Atividade de desenvolvimento saudável
+          if (socialVolume && socialVolume > 1000) successRate += 0.05; // Forte interesse social
+          
+          successRate = Math.min(successRate, 0.85); // Limite para crypto
+          
+          signals.push({
+            symbol,
+            type: SignalType.FUNDAMENTAL,
+            signal: 'BUY',
+            reason: `Forte adoção on-chain: NVT ratio baixo de ${nvtRatio.toFixed(2)} com ${activeAddresses} endereços ativos`,
+            strength: SignalStrength.STRONG,
+            timestamp: Date.now(),
+            price,
+            entry_price: price,
+            stop_loss: stopLoss,
+            target_price: targetPrice,
+            success_rate: successRate,
+            timeframe: '1d',
+            expiry: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(), // 14 dias
+            risk_reward: ((targetPrice - price) / (price - stopLoss)).toFixed(2),
+            status: 'active'
+          });
+        }
+        
+        // Fraca atividade on-chain com preço elevado
+        if (nvtRatio && nvtRatio > 150 && // NVT alto indica baixa atividade relativa ao preço
+            (volume24h && volume24h < marketCap * 0.03) && // Volume baixo
+            (socialVolume && socialVolume < 100)) { // Baixo interesse social
+          
+          // Calcular target baseado no NVT histórico
+          const targetPrice = price * 0.7; // 30% de queda potencial
+          
+          // Stop loss baseado em volatilidade
+          const stopLoss = price + (atr * 1.5);
+          
+          // Calcular taxa de sucesso
+          let successRate = 0.6; // Base para sinais de venda de crypto
+          
+          // Ajustes com base em métricas on-chain
+          if (nvtRatio > 200) successRate += 0.05;
+          if (volume24h < marketCap * 0.01) successRate += 0.05;
+          if (devActivity && devActivity < 5) successRate += 0.05; // Baixa atividade de desenvolvimento
+          
+          successRate = Math.min(successRate, 0.8); // Limite para crypto
+          
+          signals.push({
+            symbol,
+            type: SignalType.FUNDAMENTAL,
+            signal: 'SELL',
+            reason: `Baixa adoção on-chain: NVT ratio alto de ${nvtRatio.toFixed(2)} com volume fraco`,
+            strength: SignalStrength.MODERATE,
+            timestamp: Date.now(),
+            price,
+            entry_price: price,
+            stop_loss: stopLoss,
+            target_price: targetPrice,
+            success_rate: successRate,
+            timeframe: '1d',
+            expiry: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000).toISOString(), // 10 dias
+            risk_reward: ((price - targetPrice) / (stopLoss - price)).toFixed(2),
+            status: 'active'
+          });
+        }
+      } catch (error) {
+        console.warn(`Erro ao analisar fundamentos de crypto para ${symbol}:`, error);
+      }
+    }
+    
+    return signals;
+  } catch (error) {
+    console.error(`Erro ao gerar sinais fundamentais para ${symbol}:`, error);
+    return [];
+  }
+}
+
+// ... existing code ...
+
+// Função para atualizar status de sinal
+export async function updateSignalStatus(signal: TradingSignal): Promise<TradingSignal> {
+  try {
+    // Buscar preço atual
+    let currentPrice = 0;
+    
+    if (signal.pair.includes('USDT')) {
+      // Crypto
+      const priceData = await getBinancePrice(signal.pair);
+      currentPrice = parseFloat(priceData.price);
+    } else {
+      // Stock
+      const stockSymbol = signal.pair.includes('.SA') ? signal.pair : `${signal.pair}.SA`;
+      const quoteData = await fetchStockQuote(stockSymbol);
+      currentPrice = parseFloat(quoteData.price);
+    }
+    
+    // Verificar se o alvo ou stop loss foi atingido
+    let newStatus = signal.status;
+    
+    if (signal.type === 'COMPRA') {
+      if (currentPrice >= parseFloat(signal.target)) {
+        newStatus = 'CONCLUÍDO';
+      } else if (currentPrice <= parseFloat(signal.stopLoss)) {
+        newStatus = 'CANCELADO';
+      }
+    } else if (signal.type === 'VENDA') {
+      if (currentPrice <= parseFloat(signal.target)) {
+        newStatus = 'CONCLUÍDO';
+      } else if (currentPrice >= parseFloat(signal.stopLoss)) {
+        newStatus = 'CANCELADO';
+      }
+    }
+    
+    // Se o status mudou, atualizar no Supabase
+    if (newStatus !== signal.status) {
+      const { error } = await supabase
+        .from('trading_signals')
+        .update({ status: newStatus })
+        .eq('id', signal.id);
+        
+      if (error) {
+        console.error(`Erro ao atualizar status do sinal ${signal.id}:`, error);
+      } else {
+        console.log(`Status do sinal ${signal.id} atualizado para ${newStatus}`);
+        return { ...signal, status: newStatus };
+      }
+    }
+    
+    return signal;
+  } catch (error) {
+    console.error('Erro ao atualizar status do sinal:', error);
+    return signal;
+  }
+}
+
+// Função para substituir sinal concluído
+export async function replaceCompletedSignal(signal: TradingSignal): Promise<TradingSignal | null> {
+  try {
+    // Verificar se o sinal está concluído ou cancelado
+    if (signal.status !== 'CONCLUÍDO' && signal.status !== 'CANCELADO') {
+      return null;
+    }
+    
+    // Gerar um novo sinal para o mesmo par
+    const assets = [{ 
+      symbol: signal.pair, 
+      name: signal.pair.replace('USDT', '').replace('.SA', ''), 
+      isCrypto: signal.pair.includes('USDT') 
+    }];
+    
+    const newSignals = await Promise.all(
+      assets.map(async (asset, index) => {
+        try {
+          // Análise similar à da função generateTechnicalSignals
+          let historicalData;
+          let currentPrice = 0;
+          
+          if (asset.isCrypto) {
+            historicalData = await getBinanceHistoricalData(asset.symbol, '1d', 30);
+            const priceData = await getBinancePrice(asset.symbol);
+            currentPrice = parseFloat(priceData.price);
+          } else {
+            const avData = await fetchHistoricalData(asset.symbol, 'daily');
+            historicalData = {
+              prices: avData.prices,
+              highs: avData.highs,
+              lows: avData.lows,
+              volumes: avData.volumes,
+              timestamps: []
+            };
+            const quoteData = await fetchStockQuote(asset.symbol);
+            currentPrice = parseFloat(quoteData.price);
+          }
+          
+          // Calcular RSI
+          const rsiData = asset.isCrypto 
+            ? calculaRSI(historicalData.prices) 
+            : await fetchTechnicalIndicator(asset.symbol, 'RSI');
+          
+          const ultimoRSI = Array.isArray(rsiData) ? rsiData[rsiData.length - 1] : 50;
+          
+          // Determinar o tipo de sinal com base no RSI e também outros indicadores
+          // Para ter uma estratégia mais robusta
+          const ma20 = calcularMediaMovel(historicalData.prices, 20);
+          const ma50 = calcularMediaMovel(historicalData.prices, 50);
+          
+          const ultimaMA20 = ma20[ma20.length - 1];
+          const ultimaMA50 = ma50[ma50.length - 1];
+          
+          let signalType: 'COMPRA' | 'VENDA' | null = null;
+          
+          // Lógica de trading:
+          // - Se RSI < 30 e preço acima da MA50 = COMPRA (sobrevendido em tendência de alta)
+          // - Se RSI > 70 e preço abaixo da MA50 = VENDA (sobrecomprado em tendência de baixa)
+          // - Se MA20 cruzou acima da MA50 = COMPRA (golden cross)
+          // - Se MA20 cruzou abaixo da MA50 = VENDA (death cross)
+          
+          if (ultimoRSI < 30 && currentPrice > ultimaMA50) {
+            signalType = 'COMPRA';
+          } else if (ultimoRSI > 70 && currentPrice < ultimaMA50) {
+            signalType = 'VENDA';
+          } else if (ma20.length > 2 && ma50.length > 2) {
+            const penultimaMA20 = ma20[ma20.length - 2];
+            const penultimaMA50 = ma50[ma50.length - 2];
+            
+            if (ultimaMA20 > ultimaMA50 && penultimaMA20 <= penultimaMA50) {
+              signalType = 'COMPRA'; // Golden Cross
+            } else if (ultimaMA20 < ultimaMA50 && penultimaMA20 >= penultimaMA50) {
+              signalType = 'VENDA'; // Death Cross
+            }
+          }
+          
+          // Se não temos sinal claro, retornar null
+          if (!signalType) {
+            return null;
+          }
+          
+          // Calcular alvos de preço
+          const atr = calculaATR(historicalData.highs, historicalData.lows, historicalData.prices, 14);
+          
+          // Preço de entrada é o preço atual
+          const entry = currentPrice.toFixed(2);
+          
+          // Calcular alvo e stop
+          let target, stopLoss;
+          
+          if (signalType === 'COMPRA') {
+            target = (currentPrice + (atr * 3)).toFixed(2);
+            stopLoss = (currentPrice - (atr * 1.5)).toFixed(2);
+          } else {
+            target = (currentPrice - (atr * 3)).toFixed(2);
+            stopLoss = (currentPrice + (atr * 1.5)).toFixed(2);
+          }
+          
+          // Calcular outros campos
+          const score = signalType === 'COMPRA' 
+            ? Math.round(100 - ultimoRSI) 
+            : Math.round(ultimoRSI);
+          
+          const riskRewardRatio = signalType === 'COMPRA'
+            ? (parseFloat(target) - currentPrice) / (currentPrice - parseFloat(stopLoss))
+            : (currentPrice - parseFloat(target)) / (parseFloat(stopLoss) - currentPrice);
+          
+          const priceRange = Math.abs(parseFloat(target) - currentPrice) / currentPrice;
+          let timeframe: 'DAYTRADING' | 'CURTO' | 'MÉDIO' | 'LONGO' = 'CURTO';
+          
+          if (priceRange < 0.03) {
+            timeframe = 'DAYTRADING';
+          } else if (priceRange < 0.10) {
+            timeframe = 'CURTO';
+          } else if (priceRange < 0.25) {
+            timeframe = 'MÉDIO';
+          } else {
+            timeframe = 'LONGO';
+          }
+          
+          // Criar o novo sinal
+          const newSignal: TradingSignal = {
+            id: Date.now(), // ID temporário
+            pair: asset.symbol,
+            type: signalType,
+            entry: entry,
+            target: target,
+            stopLoss: stopLoss,
+            timestamp: new Date().toISOString(),
+            status: 'ATIVO',
+            successRate: signal.successRate, // Manter a mesma taxa de sucesso
+            timeframe: timeframe,
+            score: score,
+            riskRewardRatio: riskRewardRatio
+          };
+          
+          return newSignal;
+        } catch (error) {
+          console.error(`Erro ao analisar ${asset.symbol} para substituição:`, error);
+          return null;
+        }
+      })
+    );
+    
+    // Filtrar sinais nulos
+    const validNewSignals = newSignals.filter(signal => signal !== null) as TradingSignal[];
+    
+    if (validNewSignals.length === 0) {
+      return null;
+    }
+    
+    // Salvar o novo sinal no Supabase
+    try {
+      const signalToInsert = {
+        pair: validNewSignals[0].pair,
+        type: validNewSignals[0].type,
+        entry: validNewSignals[0].entry,
+        target: validNewSignals[0].target,
+        stop_loss: validNewSignals[0].stopLoss,
+        timestamp: validNewSignals[0].timestamp,
+        status: validNewSignals[0].status,
+        success_rate: validNewSignals[0].successRate,
+        timeframe: validNewSignals[0].timeframe,
+        score: validNewSignals[0].score,
+        risk_reward_ratio: validNewSignals[0].riskRewardRatio
+      };
+      
+      const { data, error } = await supabase
+        .from('trading_signals')
+        .insert([signalToInsert])
+        .select();
+        
+      if (error) {
+        console.error('Erro ao inserir novo sinal:', error);
+        return validNewSignals[0];
+      }
+      
+      if (data && data.length > 0) {
+        return {
+          ...validNewSignals[0],
+          id: data[0].id
+        };
+      }
+      
+      return validNewSignals[0];
+    } catch (saveError) {
+      console.error('Erro ao salvar novo sinal no Supabase:', saveError);
+      return validNewSignals[0];
+    }
+  } catch (error) {
+    console.error('Erro ao substituir sinal concluído:', error);
+    return null;
+  }
+}
+
+// Função para calcular média móvel
+function calcularMediaMovel(precos: number[], periodo: number): number[] {
+  if (precos.length < periodo) {
+    return [precos[precos.length - 1]];
+  }
+  
+  const medias: number[] = [];
+  
+  for (let i = periodo - 1; i < precos.length; i++) {
+    const slice = precos.slice(i - periodo + 1, i + 1);
+    const media = slice.reduce((sum, price) => sum + price, 0) / periodo;
+    medias.push(media);
+  }
+  
+  return medias;
+}
+
+// Função para substituir múltiplos sinais concluídos
+export async function replaceMultipleCompletedSignals(signals: TradingSignal[]): Promise<TradingSignal[]> {
+  try {
+    const novosSignals: TradingSignal[] = [];
+    
+    // Filtrar apenas sinais concluídos ou cancelados
+    const signalsConcluidos = signals.filter(
+      signal => signal.status === 'CONCLUÍDO' || signal.status === 'CANCELADO'
+    );
+    
+    // Substituir cada sinal concluído
+    for (const signal of signalsConcluidos) {
+      const novoSignal = await replaceCompletedSignal(signal);
+      if (novoSignal) {
+        novosSignals.push(novoSignal);
+      }
+    }
+    
+    return novosSignals;
+  } catch (error) {
+    console.error('Erro ao substituir múltiplos sinais concluídos:', error);
+    return [];
+  }
+}
+
+// Função para análise de ativos
+export async function comprehensiveAnalyzeAsset(symbol: string, isCrypto: boolean = false): Promise<any> {
+  try {
+    // Obter dados históricos
+    let historicalData;
+    let currentPrice;
+    let recomendacoes;
+    let alvoPreco;
+    
+    if (isCrypto) {
+      // Dados da Binance para cripto
+      historicalData = await getBinanceHistoricalData(symbol, '1d', 30);
+      const priceData = await getBinancePrice(symbol);
+      currentPrice = parseFloat(priceData.price);
+    } else {
+      // Dados da Alpha Vantage para ações
+      const avData = await fetchHistoricalData(symbol, 'daily');
+      historicalData = {
+        prices: avData.prices,
+        highs: avData.highs,
+        lows: avData.lows,
+        volumes: avData.volumes,
+        timestamps: []
+      };
+      const quoteData = await fetchStockQuote(symbol);
+      currentPrice = parseFloat(quoteData.price);
+      
+      // Dados adicionais do Finnhub para ações
+      try {
+        recomendacoes = await fetchAnalystRecommendations(symbol);
+        alvoPreco = await fetchPriceTarget(symbol);
+      } catch (e) {
+        console.log('Dados adicionais do Finnhub não disponíveis:', e);
+      }
+    }
+    
+    // Calcular indicadores técnicos
+    const rsi = calculaRSI(historicalData.prices);
+    const atr = calculaATR(historicalData.highs, historicalData.lows, historicalData.prices, 14);
+    
+    // Calcular médias móveis
+    const ma20 = calcularMediaMovel(historicalData.prices, 20);
+    const ma50 = calcularMediaMovel(historicalData.prices, 50);
+    
+    // Gerar sinal
+    const ultimoRSI = rsi[rsi.length - 1];
+    const ultimaMA20 = ma20[ma20.length - 1];
+    const ultimaMA50 = ma50[ma50.length - 1];
+    
+    let signalType = null;
+    let signalScore = 0;
+    let targetPrice = null;
+    let stopLossPrice = null;
+    
+    // Lógica de sinal
+    if (ultimoRSI < 30 && currentPrice > ultimaMA50) {
+      signalType = 'COMPRA';
+      signalScore = 70 + Math.round((30 - ultimoRSI) * 1.5);
+      targetPrice = (currentPrice + (atr * 3)).toFixed(2);
+      stopLossPrice = (currentPrice - (atr * 1.5)).toFixed(2);
+    } else if (ultimoRSI > 70 && currentPrice < ultimaMA50) {
+      signalType = 'VENDA';
+      signalScore = 70 + Math.round((ultimoRSI - 70) * 1.5);
+      targetPrice = (currentPrice - (atr * 3)).toFixed(2);
+      stopLossPrice = (currentPrice + (atr * 1.5)).toFixed(2);
+    } else if (ma20.length > 2 && ma50.length > 2) {
+      const penultimaMA20 = ma20[ma20.length - 2];
+      const penultimaMA50 = ma50[ma50.length - 2];
+      
+      if (ultimaMA20 > ultimaMA50 && penultimaMA20 <= penultimaMA50) {
+        signalType = 'COMPRA'; // Golden Cross
+        signalScore = 80;
+        targetPrice = (currentPrice + (atr * 4)).toFixed(2);
+        stopLossPrice = (currentPrice - (atr * 2)).toFixed(2);
+      } else if (ultimaMA20 < ultimaMA50 && penultimaMA20 >= penultimaMA50) {
+        signalType = 'VENDA'; // Death Cross
+        signalScore = 80;
+        targetPrice = (currentPrice - (atr * 4)).toFixed(2);
+        stopLossPrice = (currentPrice + (atr * 2)).toFixed(2);
+      }
+    }
+    
+    // Compilar resultado da análise
+    return {
+      symbol,
+      precoAtual: currentPrice,
+      indicadoresTecnicos: {
+        rsi: ultimoRSI,
+        atr,
+        ma20: ultimaMA20,
+        ma50: ultimaMA50
+      },
+      sinal: signalType ? {
+        tipo: signalType,
+        entrada: currentPrice.toFixed(2),
+        alvo: targetPrice,
+        stopLoss: stopLossPrice,
+        score: signalScore
+      } : null,
+      recomendacoesAnalistas: recomendacoes,
+      alvoPreco
+    };
+  } catch (error) {
+    console.error(`Erro ao analisar ${symbol}:`, error);
+    throw error;
+  }
+}
+
+// Função para calcular o RSI
+function calculaRSI(precos: number[], periodo: number = 14): number[] {
+  if (precos.length < periodo + 1) {
+    return [50]; // valor neutro
+  }
+  
+  // Calcular as variações
+  const variacoes: number[] = [];
+  for (let i = 1; i < precos.length; i++) {
+    variacoes.push(precos[i] - precos[i - 1]);
+  }
+  
+  // RSI = 100 - (100 / (1 + RS))
+  // RS = Média dos ganhos / Média das perdas
+  const rsi: number[] = [];
+  
+  // Calcular o primeiro RSI
+  let somaGanhos = 0;
+  let somaPerdas = 0;
+  
+  for (let i = 0; i < periodo; i++) {
+    if (variacoes[i] > 0) {
+      somaGanhos += variacoes[i];
+    } else {
+      somaPerdas += Math.abs(variacoes[i]);
+    }
+  }
+  
+  let mediaGanhos = somaGanhos / periodo;
+  let mediaPerdas = somaPerdas / periodo;
+  
+  // Evitar divisão por zero
+  if (mediaPerdas === 0) {
+    rsi.push(100);
+  } else {
+    const rs = mediaGanhos / mediaPerdas;
+    rsi.push(100 - (100 / (1 + rs)));
+  }
+  
+  // Calcular o restante dos RSIs usando média móvel
+  for (let i = periodo; i < variacoes.length; i++) {
+    const variacao = variacoes[i];
+    
+    if (variacao > 0) {
+      mediaGanhos = (mediaGanhos * (periodo - 1) + variacao) / periodo;
+      mediaPerdas = (mediaPerdas * (periodo - 1)) / periodo;
+    } else {
+      mediaGanhos = (mediaGanhos * (periodo - 1)) / periodo;
+      mediaPerdas = (mediaPerdas * (periodo - 1) + Math.abs(variacao)) / periodo;
+    }
+    
+    // Evitar divisão por zero
+    if (mediaPerdas === 0) {
+      rsi.push(100);
+    } else {
+      const rs = mediaGanhos / mediaPerdas;
+      rsi.push(100 - (100 / (1 + rs)));
+    }
+  }
+  
+  return rsi;
+}
+
+// Função para calcular o ATR (Average True Range)
+function calculaATR(highs: number[], lows: number[], closes: number[], periodo: number = 14): number {
+  // Verificar dados insuficientes
+  if (highs.length < periodo || lows.length < periodo || closes.length < periodo) {
+    return 0;
+  }
+  
+  // Calcular True Range para cada período
+  const trueRanges = [];
+  
+  for (let i = 1; i < closes.length; i++) {
+    // True Range é o maior entre:
+    // 1. Alta atual - Baixa atual
+    // 2. |Alta atual - Fechamento anterior|
+    // 3. |Baixa atual - Fechamento anterior|
+    const highLowRange = highs[i] - lows[i];
+    const highCloseRange = Math.abs(highs[i] - closes[i-1]);
+    const lowCloseRange = Math.abs(lows[i] - closes[i-1]);
+    
+    const trueRange = Math.max(highLowRange, highCloseRange, lowCloseRange);
+    trueRanges.push(trueRange);
+  }
+  
+  // Calcular média dos True Ranges para o período
+  const atr = trueRanges.slice(-periodo).reduce((sum, tr) => sum + tr, 0) / periodo;
+  
+  return atr;
+}

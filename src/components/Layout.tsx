@@ -3,6 +3,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Menu } from "lucide-react";
 import { useNavigate } from 'react-router-dom';
+import { Logo } from "@/components/ui/logo";
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -16,7 +17,7 @@ export default function Layout({ children }: LayoutProps) {
       <div className="min-h-screen flex w-full bg-background">
         <Sidebar className="border-r">
           <SidebarHeader className="flex items-center justify-between p-4">
-            <span className="font-semibold">TradingView Pro</span>
+            <Logo />
             <Avatar className="h-8 w-8">
               <AvatarImage src="/placeholder.svg" />
               <AvatarFallback>UV</AvatarFallback>

@@ -1,10 +1,29 @@
 :root {
   --primary-color: #007bff;
   --background-color: #ffffff;
+  --market-up-color: #22c55e;
+  --market-down-color: #ef4444;
+  --market-neutral-color: #a3a3a3;
 }
 [data-theme="dark"] {
   --primary-color: #1e1e1e;
   --background-color: #121212;
+  --market-up-color: #22c55e;
+  --market-down-color: #ef4444;
+  --market-neutral-color: #a3a3a3;
+}
+
+/* Estilos para cores de mercado */
+.text-market-up {
+  color: var(--market-up-color) !important;
+}
+
+.text-market-down {
+  color: var(--market-down-color) !important;
+}
+
+.text-market-neutral {
+  color: var(--market-neutral-color) !important;
 }
 
 .achievements {

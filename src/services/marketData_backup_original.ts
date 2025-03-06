@@ -147,33 +147,32 @@ async function getBinanceData(symbol: string): Promise<{ ticker: any; klines: an
             return { ticker, klines };
           }
         }
+      } catch (supabaseError) {
+        console.log(`Erro ao acessar cache do Supabase para ${symbol}, continuando com API direta`);
       }
-    } catch (supabaseError) {
-      console.log(`Erro ao acessar cache do Supabase para ${symbol}, continuando com API direta`);
-    }
-    
-    // Se não temos dados em cache ou estão desatualizados, buscar da API
-    try {
-      // Obter ticker atual
-      const tickerResponse = await fetch(`https://api.binance.com/api/v3/ticker/24hr?symbol=${symbol}`);
-      if (!tickerResponse.ok) {
-        throw new Error(`Erro ao buscar ticker para ${symbol}: ${tickerResponse.statusText}`);
-      }
-    const ticker = await tickerResponse.json();
       
-      // Obter klines (dados de candlestick)
-      // Intervalo de 1h para os últimos 500 candles
-      const klinesResponse = await fetch(`https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=1h&limit=500`);
-      if (!klinesResponse.ok) {
-        throw new Error(`Erro ao buscar klines para ${symbol}: ${klinesResponse.statusText}`);
-      }
-      const klinesData = await klinesResponse.json();
-      
-      // Processar klines
-      const klines = klinesData.map((kline: any[]) => {
-        try {
-          // Usar o timestamp diretamente do array da Binance (primeiro elemento)
-          const timestamp = new Date(kline[0]).toISOString();
+      // Se não temos dados em cache ou estão desatualizados, buscar da API
+      try {
+        // Obter ticker atual
+        const tickerResponse = await fetch(`https://api.binance.com/api/v3/ticker/24hr?symbol=${symbol}`);
+        if (!tickerResponse.ok) {
+          throw new Error(`Erro ao buscar ticker para ${symbol}: ${tickerResponse.statusText}`);
+        }
+      const ticker = await tickerResponse.json();
+        
+        // Obter klines (dados de candlestick)
+        // Intervalo de 1h para os últimos 500 candles
+        const klinesResponse = await fetch(`https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=1h&limit=500`);
+        if (!klinesResponse.ok) {
+          throw new Error(`Erro ao buscar klines para ${symbol}: ${klinesResponse.statusText}`);
+        }
+        const klinesData = await klinesResponse.json();
+        
+        // Processar klines
+        const klines = klinesData.map((kline: any[]) => {
+          try {
+            // Usar o timestamp diretamente do array da Binance (primeiro elemento)
+            const timestamp = new Date(kline[0]).toISOString();
 
     return {
             open: kline[1],
@@ -1645,8 +1644,8 @@ async function generateAlternativeSignals(count: number): Promise<TradingSignal[
   } catch (error) {
     console.error('Erro ao gerar sinais alternativos:', error);
     
-    // Em Ãºltimo caso, gerar sinais simulados
-    return await generateSimulatedSignals(count);
+    // Em caso de erro, retornar array vazio
+    return [];
   }
 }
 
