@@ -1,8 +1,8 @@
-
-import { createRoot } from 'react-dom/client';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import App from './App.tsx';
-import './index.css';
+import { createRoot } from 'react-dom/client'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import App from './App.tsx'
+import './index.css'
+import { NotificationProvider } from './contexts/NotificationContext.tsx'
 
 // Cria uma instância do QueryClient
 const queryClient = new QueryClient({
@@ -12,10 +12,12 @@ const queryClient = new QueryClient({
       retry: 1, // Número de tentativas em caso de erro
     },
   },
-});
+})
 
-createRoot(document.getElementById("root")!).render(
+createRoot(document.getElementById('root')!).render(
   <QueryClientProvider client={queryClient}>
-    <App />
+    <NotificationProvider>
+      <App />
+    </NotificationProvider>
   </QueryClientProvider>
-);
+)

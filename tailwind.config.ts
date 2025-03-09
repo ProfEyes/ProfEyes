@@ -77,20 +77,75 @@ export default {
           from: { height: "var(--radix-accordion-content-height)" },
           to: { height: "0" },
         },
-        fadeIn: {
-          from: { opacity: "0", transform: "translateY(10px)" },
-          to: { opacity: "1", transform: "translateY(0)" },
+        "fade": {
+          "0%": { 
+            opacity: "0"
+          },
+          "100%": {
+            opacity: "1"
+          }
         },
-        slideIn: {
-          from: { transform: "translateX(-100%)" },
-          to: { transform: "translateX(0)" },
+        "toast-in": {
+          "0%": { 
+            opacity: "0",
+            transform: "translateY(25px) scale(0.9)",
+            filter: "blur(8px)"
+          },
+          "20%": {
+            opacity: "0.5",
+            transform: "translateY(-15px) scale(1.02)",
+            filter: "blur(0px)"
+          },
+          "35%": {
+            opacity: "0.75",
+            transform: "translateY(5px) scale(0.98)"
+          },
+          "100%": {
+            opacity: "1",
+            transform: "translateY(0) scale(1)"
+          }
         },
+        "toast-out": {
+          "0%": {
+            opacity: "1",
+            transform: "translateX(0) scale(1)",
+            filter: "blur(0px)"
+          },
+          "100%": {
+            opacity: "0",
+            transform: "translateX(100%) scale(0.9)",
+            filter: "blur(8px)"
+          }
+        },
+        "shimmer": {
+          "0%": {
+            backgroundPosition: "-500px 0",
+          },
+          "100%": {
+            backgroundPosition: "500px 0",
+          },
+        },
+        "glow": {
+          "0%, 100%": {
+            opacity: "1",
+            boxShadow: "0 0 20px rgba(255, 255, 255, 0.1)"
+          },
+          "50%": {
+            opacity: "0.8",
+            boxShadow: "0 0 30px rgba(255, 255, 255, 0.2)"
+          }
+        }
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
-        fadeIn: "fadeIn 0.5s ease-out",
-        slideIn: "slideIn 0.3s ease-out",
+        "fade": "fade 0.4s ease-in-out",
+        "toast-in": "toast-in 0.7s cubic-bezier(0.34, 1.56, 0.64, 1)",
+        "toast-out": "toast-out 0.5s cubic-bezier(0.4, 0, 0.2, 1)",
+        "shimmer": "shimmer 2.5s linear infinite",
+        "glow": "glow 3s ease-in-out infinite",
+        "fade-up": "fade-up 0.3s ease-out",
+        "slide-in-from-bottom-full": "slide-in-from-bottom-full 0.3s cubic-bezier(0.4, 0, 0.2, 1)"
       },
     },
   },

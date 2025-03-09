@@ -273,7 +273,7 @@ const Index = () => {
 
   return (
     <Layout>
-      <div className="fade-in space-y-8">
+      <div className="animate-fade space-y-8">
         <div className="flex items-center justify-between">
           <div className="space-y-1">
             <h1 className="text-3xl font-bold tracking-tight bg-gradient-to-r from-white to-white/60 bg-clip-text text-transparent">

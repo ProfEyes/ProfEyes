@@ -16,8 +16,6 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { ProfileSettings } from "@/components/settings/ProfileSettings";
 import { NotificationSettings } from "@/components/settings/NotificationSettings";
 import { AppearanceSettings } from "@/components/settings/AppearanceSettings";
-import { AccountLoginSection } from "@/components/settings/AccountLoginSection";
-import { TradingPreferences } from "@/components/settings/TradingPreferences";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   Settings as SettingsIcon, 
@@ -44,7 +42,7 @@ import {
   Mail,
   Globe,
   Clock,
-  Users
+  CheckCircle
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -60,22 +58,25 @@ const SettingsSection = ({ title, description, icon, children, className }: {
 }) => {
   return (
     <Card className={cn(
-      "border-[0.5px] border-white/[0.03] bg-black/20 backdrop-blur-xl overflow-hidden relative transition-all duration-300 group",
+      "border-white/5 bg-gradient-to-br from-black/40 via-black/30 to-black/20 backdrop-blur-sm overflow-hidden relative transition-all duration-300 hover:shadow-lg group",
       className
     )}>
+      <div 
+        className="absolute inset-0 bg-gradient-to-r from-blue-500/5 via-purple-500/5 to-pink-500/5 opacity-30 group-hover:opacity-50 transition-opacity duration-700"
+      />
       <div className="relative z-10">
         <CardHeader className="pb-2">
           <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-black/30 text-white/70 border-[0.5px] border-white/[0.03]">
+            <div className="p-2 rounded-lg bg-white/5 text-white border border-white/10 shadow-inner shadow-white/5">
               {icon}
             </div>
             <div>
-              <CardTitle className="text-[15px] font-light tracking-wide text-white/80">{title}</CardTitle>
-              <CardDescription className="text-white/40 text-xs">{description}</CardDescription>
+              <CardTitle className="text-lg font-semibold text-white/90">{title}</CardTitle>
+              <CardDescription className="text-white/60">{description}</CardDescription>
             </div>
           </div>
         </CardHeader>
-        <Separator className="bg-white/[0.03]" />
+        <Separator className="bg-gradient-to-r from-white/5 via-white/10 to-white/5" />
         <CardContent className="pt-5">{children}</CardContent>
       </div>
     </Card>
@@ -219,6 +220,12 @@ const Settings = () => {
 
   return (
     <Layout>
+      {/* Background decorativo */}
+      <div className="fixed inset-0 pointer-events-none">
+        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-blue-500/10 rounded-full filter blur-[100px]" />
+        <div className="absolute bottom-1/4 right-1/3 w-80 h-80 bg-purple-500/10 rounded-full filter blur-[120px]" />
+      </div>
+      
       <motion.div 
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
@@ -232,17 +239,17 @@ const Settings = () => {
             animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 0.5 }}
           >
-            <h1 className="text-3xl font-light tracking-wide flex items-center gap-2 text-white/90">
+            <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2 bg-gradient-to-r from-white to-white/60 bg-clip-text text-transparent">
               <motion.div
                 initial={{ rotate: -10, scale: 0.8 }}
                 animate={{ rotate: 0, scale: 1 }}
                 transition={{ duration: 0.5, delay: 0.2 }}
               >
-                <SettingsIcon className="h-8 w-8 text-white/60" />
+                <SettingsIcon className="h-8 w-8 text-white/80" />
               </motion.div>
               Configurações
             </h1>
-            <p className="text-white/40 text-sm tracking-wide">
+            <p className="text-white/60">
               Personalize sua experiência e gerencie suas preferências
             </p>
           </motion.div>
@@ -254,17 +261,17 @@ const Settings = () => {
           >
             <Button 
               className={cn(
-                "gap-2 transition-all duration-500",
-                saveStatus === "idle" && "bg-black/20 border-[0.5px] border-white/[0.03] hover:bg-black/30",
-                saveStatus === "saving" && "bg-black/30",
-                saveStatus === "saved" && "bg-emerald-500/20 text-emerald-300/90"
+                "gap-2 transition-all duration-500 shadow-lg",
+                saveStatus === "idle" && "bg-gradient-to-r from-white/10 to-white/5 border border-white/10 hover:bg-white/20",
+                saveStatus === "saving" && "bg-gradient-to-r from-white/20 to-white/10",
+                saveStatus === "saved" && "bg-gradient-to-r from-emerald-500/80 to-emerald-600/80"
               )}
               onClick={saveSettings}
               disabled={saveStatus !== "idle"}
             >
               {saveStatus === "idle" && (
                 <>
-                  <Save className="h-4 w-4 opacity-70" />
+                  <Save className="h-4 w-4" />
                   Salvar Preferências
                 </>
               )}
@@ -298,73 +305,79 @@ const Settings = () => {
         {/* Sistema de abas simplificado */}
         <div className="space-y-6">
           <div className="relative">
+            <motion.div 
+              className="absolute inset-0 bg-gradient-to-r from-white/5 to-white/0 rounded-lg pointer-events-none"
+              style={{ height: "calc(100% + 4px)", top: "-2px" }}
+              layoutId="tabHighlight"
+            />
+            
             <ScrollArea className="w-full">
               <div className="border-b border-white/5 pb-1">
-                <div className="inline-flex h-12 w-auto gap-1 p-1 bg-black/20 backdrop-blur-sm rounded-xl border-[0.5px] border-white/[0.03]">
+                <div className="inline-flex h-12 w-auto gap-1 p-1 bg-black/40 backdrop-blur-md rounded-xl border border-white/5 shadow-xl">
                   <button 
                     className={`flex items-center px-4 py-2 rounded-lg transition-all duration-300 ${
                       activeTab === "geral" 
-                        ? "bg-black/30 text-white/90" 
-                        : "text-white/40 hover:text-white/60 hover:bg-black/30"
+                        ? "bg-gradient-to-br from-white/10 to-white/5 text-white shadow-md" 
+                        : "text-white/70 hover:text-white hover:bg-white/5"
                     }`}
                     onClick={() => handleTabChange("geral")}
                   >
-                    <User className="h-4 w-4 mr-2 opacity-70" />
+                    <User className="h-4 w-4 mr-2" />
                     Perfil
                   </button>
                   <button 
                     className={`flex items-center px-4 py-2 rounded-lg transition-all duration-300 ${
                       activeTab === "seguranca" 
-                        ? "bg-black/30 text-white/90" 
-                        : "text-white/40 hover:text-white/60 hover:bg-black/30"
+                        ? "bg-gradient-to-br from-white/10 to-white/5 text-white shadow-md" 
+                        : "text-white/70 hover:text-white hover:bg-white/5"
                     }`}
                     onClick={() => handleTabChange("seguranca")}
                   >
-                    <Shield className="h-4 w-4 mr-2 opacity-70" />
+                    <Shield className="h-4 w-4 mr-2" />
                     Segurança
                   </button>
                   <button 
                     className={`flex items-center px-4 py-2 rounded-lg transition-all duration-300 ${
                       activeTab === "aparencia" 
-                        ? "bg-black/30 text-white/90" 
-                        : "text-white/40 hover:text-white/60 hover:bg-black/30"
+                        ? "bg-gradient-to-br from-white/10 to-white/5 text-white shadow-md" 
+                        : "text-white/70 hover:text-white hover:bg-white/5"
                     }`}
                     onClick={() => handleTabChange("aparencia")}
                   >
-                    <Palette className="h-4 w-4 mr-2 opacity-70" />
+                    <Palette className="h-4 w-4 mr-2" />
                     Aparência
                   </button>
                   <button 
                     className={`flex items-center px-4 py-2 rounded-lg transition-all duration-300 ${
                       activeTab === "notificacoes" 
-                        ? "bg-black/30 text-white/90" 
-                        : "text-white/40 hover:text-white/60 hover:bg-black/30"
+                        ? "bg-gradient-to-br from-white/10 to-white/5 text-white shadow-md" 
+                        : "text-white/70 hover:text-white hover:bg-white/5"
                     }`}
                     onClick={() => handleTabChange("notificacoes")}
                   >
-                    <Bell className="h-4 w-4 mr-2 opacity-70" />
+                    <Bell className="h-4 w-4 mr-2" />
                     Notificações
                   </button>
                   <button 
                     className={`flex items-center px-4 py-2 rounded-lg transition-all duration-300 ${
                       activeTab === "trading" 
-                        ? "bg-black/30 text-white/90" 
-                        : "text-white/40 hover:text-white/60 hover:bg-black/30"
+                        ? "bg-gradient-to-br from-white/10 to-white/5 text-white shadow-md" 
+                        : "text-white/70 hover:text-white hover:bg-white/5"
                     }`}
                     onClick={() => handleTabChange("trading")}
                   >
-                    <LineChart className="h-4 w-4 mr-2 opacity-70" />
+                    <LineChart className="h-4 w-4 mr-2" />
                     Trading
                   </button>
                   <button 
                     className={`flex items-center px-4 py-2 rounded-lg transition-all duration-300 ${
                       activeTab === "avancado" 
-                        ? "bg-black/30 text-white/90" 
-                        : "text-white/40 hover:text-white/60 hover:bg-black/30"
+                        ? "bg-gradient-to-br from-white/10 to-white/5 text-white shadow-md" 
+                        : "text-white/70 hover:text-white hover:bg-white/5"
                     }`}
                     onClick={() => handleTabChange("avancado")}
                   >
-                    <Wrench className="h-4 w-4 mr-2 opacity-70" />
+                    <Wrench className="h-4 w-4 mr-2" />
                     Avançado
                   </button>
                 </div>
@@ -382,60 +395,240 @@ const Settings = () => {
                 exit="exit"
                 className="space-y-6"
               >
-                <motion.div 
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.7, ease: "easeOut" }}
-                  className="grid gap-10 md:grid-cols-2 h-full"
-                >
-                  <motion.div 
-                    variants={itemVariants} 
-                    className="h-full relative group"
-                  >
-                    <Card className="border-[0.5px] border-white/10 relative h-full bg-black/30 backdrop-blur-xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] backdrop-saturate-150 overflow-hidden rounded-2xl">
-                      <CardHeader className="pb-5 border-b border-white/[0.03] relative z-10">
-                        <div className="flex items-center gap-3">
-                          <div className="bg-gradient-to-b from-white/10 to-white/5 p-2.5 rounded-full shadow-inner backdrop-blur-sm">
-                            <User className="h-4 w-4 text-white/70" />
+                <div className="grid gap-6 md:grid-cols-2">
+                  <motion.div variants={itemVariants} className="space-y-6">
+                    <ProfileSettings />
+
+                    {/* Informações adicionais de perfil */}
+                    <SettingsSection
+                      title="Dados Pessoais"
+                      description="Informações básicas do seu perfil"
+                      icon={<User className="h-4 w-4 text-indigo-400" />}
+                    >
+                      <div className="space-y-4">
+                        <div className="grid gap-3">
+                          <Label htmlFor="display-name" className="text-white/90">Nome de exibição</Label>
+                          <div className="relative">
+                            <Input
+                              id="display-name"
+                              placeholder="Seu nome"
+                              defaultValue=""
+                              className="bg-white/5 border-white/10 focus:border-indigo-500/50 pl-9"
+                              suggestions={["Carlos Oliveira", "Ana Silva", "Roberto Santos", "Maria Pereira"]}
+                            />
+                            <User className="absolute left-3 top-2.5 h-4 w-4 text-white/40" />
                           </div>
-                          <div>
-                            <CardTitle className="text-[15px] font-normal tracking-wide text-white/90">Perfil do Usuário</CardTitle>
-                            <CardDescription className="text-white/40 text-xs tracking-wide">
-                              Informações pessoais e preferências
-                            </CardDescription>
+                          <p className="text-sm text-white/50">Comece a digitar para ver sugestões. Pressione Tab para completar.</p>
+                        </div>
+                        
+                        <div className="grid gap-3">
+                          <Label htmlFor="email" className="text-white/90">E-mail</Label>
+                          <div className="relative">
+                            <Input
+                              id="email"
+                              type="email"
+                              placeholder="seu-email@exemplo.com"
+                              defaultValue=""
+                              className="bg-white/5 border-white/10 focus:border-indigo-500/50 pl-9"
+                              suggestions={["usuario@exemplo.com", "contato@profeyes.com", "info@profeyes.com"]}
+                            />
+                            <Mail className="absolute left-3 top-2.5 h-4 w-4 text-white/40" />
                           </div>
-              </div>
-                      </CardHeader>
-                      <CardContent className="p-6 h-[calc(100%-5rem)] overflow-auto pb-6 relative z-10">
-                        <ProfileSettings />
-            </CardContent>
-          </Card>
+                          <p className="text-sm text-white/50">Digite algumas letras para ver sugestões de email.</p>
+                        </div>
+                      </div>
+                    </SettingsSection>
+                    
+                    <SettingsSection
+                      title="Localização e Idioma"
+                      description="Configure suas preferências regionais"
+                      icon={<Globe className="h-4 w-4 text-teal-400" />}
+                    >
+                      <div className="space-y-4">
+                        <div className="grid gap-3">
+                          <Label htmlFor="language" className="text-white/90">Idioma</Label>
+                          <Select defaultValue="pt-BR">
+                            <SelectTrigger id="language" className="w-full bg-white/5 border-white/10">
+                              <SelectValue placeholder="Selecione um idioma" />
+                            </SelectTrigger>
+                            <SelectContent className="bg-black/90 backdrop-blur-md border-white/10">
+                              <SelectItem value="pt-BR" className="focus:bg-white/10">Português (Brasil)</SelectItem>
+                              <SelectItem value="en-US" className="focus:bg-white/10">English (US)</SelectItem>
+                              <SelectItem value="es" className="focus:bg-white/10">Español</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        
+                        <div className="grid gap-3">
+                          <Label htmlFor="timezone" className="text-white/90">Fuso Horário</Label>
+                          <Select defaultValue="america-sao_paulo">
+                            <SelectTrigger id="timezone" className="w-full bg-white/5 border-white/10">
+                              <SelectValue placeholder="Selecione um fuso horário" />
+                            </SelectTrigger>
+                            <SelectContent className="bg-black/90 backdrop-blur-md border-white/10 max-h-[200px]">
+                              <SelectItem value="america-sao_paulo" className="focus:bg-white/10">
+                                <div className="flex items-center gap-2">
+                                  <Clock className="h-3.5 w-3.5" />
+                                  <span>América/São Paulo (GMT-3)</span>
+                                </div>
+                              </SelectItem>
+                              <SelectItem value="america-new_york" className="focus:bg-white/10">
+                                <div className="flex items-center gap-2">
+                                  <Clock className="h-3.5 w-3.5" />
+                                  <span>América/New York (GMT-4)</span>
+                                </div>
+                              </SelectItem>
+                              <SelectItem value="europe-london" className="focus:bg-white/10">
+                                <div className="flex items-center gap-2">
+                                  <Clock className="h-3.5 w-3.5" />
+                                  <span>Europa/Londres (GMT+1)</span>
+                                </div>
+                              </SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                    </SettingsSection>
                   </motion.div>
 
-                  <motion.div 
-                    variants={itemVariants} 
-                    className="h-full relative group"
-                  >
-                    <Card className="border-[0.5px] border-white/10 relative h-full bg-black/30 backdrop-blur-xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] backdrop-saturate-150 overflow-hidden rounded-2xl">
-                      <CardHeader className="pb-5 border-b border-white/[0.03] relative z-10">
-                        <div className="flex items-center gap-3">
-                          <div className="bg-gradient-to-b from-white/10 to-white/5 p-2.5 rounded-full shadow-inner backdrop-blur-sm">
-                            <Users className="h-4 w-4 text-white/70" />
-                          </div>
-                          <div>
-                            <CardTitle className="text-[15px] font-normal tracking-wide text-white/90">Conta e Login</CardTitle>
-                            <CardDescription className="text-white/40 text-xs tracking-wide">
-                              Gerenciamento de credenciais e acesso
-                            </CardDescription>
+                  <motion.div variants={itemVariants}>
+                    <SettingsSection
+                      title="Preferências de Trading"
+                      description="Configure suas preferências gerais de trading"
+                      icon={<LineChart className="h-4 w-4 text-emerald-400" />}
+                      className="mt-6"
+                    >
+                      <div className="space-y-6">
+                        <div className="space-y-3">
+                          <Label className="text-white/90">Nível de Risco</Label>
+                          <RadioGroup defaultValue="moderado" className="grid gap-3">
+                            <div className="flex items-center space-x-2 rounded-md border border-white/10 bg-white/5 p-3 transition-colors hover:bg-white/[0.075]">
+                              <RadioGroupItem value="conservador" id="conservador" />
+                              <Label htmlFor="conservador" className="flex flex-col cursor-pointer">
+                                <span className="font-medium">Conservador</span>
+                                <span className="text-xs text-white/60">Prioriza segurança, retornos menores</span>
+                              </Label>
+                            </div>
+                            <div className="flex items-center space-x-2 rounded-md border border-white/10 bg-white/5 p-3 transition-colors hover:bg-white/[0.075]">
+                              <RadioGroupItem value="moderado" id="moderado" />
+                              <Label htmlFor="moderado" className="flex flex-col cursor-pointer">
+                                <span className="font-medium">Moderado</span>
+                                <span className="text-xs text-white/60">Equilíbrio entre segurança e retorno</span>
+                              </Label>
+                            </div>
+                            <div className="flex items-center space-x-2 rounded-md border border-white/10 bg-white/5 p-3 transition-colors hover:bg-white/[0.075]">
+                              <RadioGroupItem value="agressivo" id="agressivo" />
+                              <Label htmlFor="agressivo" className="flex flex-col cursor-pointer">
+                                <span className="font-medium">Agressivo</span>
+                                <span className="text-xs text-white/60">Prioriza retornos maiores, riscos elevados</span>
+                              </Label>
+                            </div>
+                          </RadioGroup>
+                        </div>
+
+                        <div className="space-y-3">
+                          <Label className="text-white/90">Moeda Padrão</Label>
+                          <Select defaultValue="usd">
+                            <SelectTrigger className="bg-white/5 border-white/10 w-full">
+                              <SelectValue placeholder="Selecione a moeda padrão" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="usd">
+                                <div className="flex items-center">
+                                  <span className="mr-2">$</span>
+                                  <span>USD (Dólar)</span>
+                                </div>
+                              </SelectItem>
+                              <SelectItem value="eur">
+                                <div className="flex items-center">
+                                  <span className="mr-2">€</span>
+                                  <span>EUR (Euro)</span>
+                                </div>
+                              </SelectItem>
+                              <SelectItem value="brl">
+                                <div className="flex items-center">
+                                  <span className="mr-2">R$</span>
+                                  <span>BRL (Real)</span>
+                                </div>
+                              </SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                    </SettingsSection>
+                  </motion.div>
+
+                  <motion.div variants={itemVariants}>
+                    <SettingsSection
+                      title="Conta e Segurança"
+                      description="Gerencie seu acesso à plataforma"
+                      icon={<Shield className="h-4 w-4 text-purple-400" />}
+                      className="mt-6"
+                    >
+                      <div className="space-y-6">
+                        <div className="rounded-md border border-white/10 bg-white/5 p-4">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <h4 className="text-sm font-medium">Status da Conta</h4>
+                              <p className="text-xs text-white/60 mt-1">Você está usando a versão de convidado</p>
+                            </div>
+                            <Badge variant="outline" className="text-yellow-400 border-yellow-400/50">
+                              Limitado
+                            </Badge>
                           </div>
                         </div>
-            </CardHeader>
-                      <CardContent className="p-6 h-[calc(100%-5rem)] overflow-auto pb-6 relative z-10">
-                        <AccountLoginSection />
-                      </CardContent>
-                    </Card>
+
+                        <div className="space-y-3">
+                          <Button variant="default" className="w-full bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700">
+                            Criar Conta ou Fazer Login
+                          </Button>
+                          
+                          <div className="relative flex justify-center text-xs uppercase">
+                            <span className="bg-card px-2 text-muted-foreground">
+                              Ou continue com
+                            </span>
+                          </div>
+                          
+                          <div className="flex gap-2">
+                            <Button variant="outline" className="w-full bg-white/5 border-white/10 hover:bg-white/10">
+                              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className="h-5 w-5 mr-2">
+                                <path fill="#EA4335" d="M5.26620003,9.76452941 C6.19878754,6.93863203 8.85444915,4.90909091 12,4.90909091 C13.6909091,4.90909091 15.2181818,5.50909091 16.4181818,6.49090909 L19.9090909,3 C17.7818182,1.14545455 15.0545455,0 12,0 C7.27006974,0 3.1977497,2.69829785 1.23999023,6.65002441 L5.26620003,9.76452941 Z"/>
+                                <path fill="#34A853" d="M16.0407269,18.0125889 C14.9509167,18.7163016 13.5660892,19.0909091 12,19.0909091 C8.86648613,19.0909091 6.21911939,17.076871 5.27698177,14.2678769 L1.23746264,17.3349879 C3.19279051,21.2970142 7.26500293,24 12,24 C14.9328362,24 17.7353462,22.9573905 19.834192,20.9995801 L16.0407269,18.0125889 Z"/>
+                                <path fill="#4A90E2" d="M19.834192,20.9995801 C22.0291676,18.9520994 23.4545455,15.903663 23.4545455,12 C23.4545455,11.2909091 23.3454545,10.5272727 23.1818182,9.81818182 L12,9.81818182 L12,14.4545455 L18.4363636,14.4545455 C18.1187732,16.013626 17.2662994,17.2212117 16.0407269,18.0125889 L19.834192,20.9995801 Z"/>
+                                <path fill="#FBBC05" d="M5.27698177,14.2678769 C5.03832634,13.556323 4.90909091,12.7937589 4.90909091,12 C4.90909091,11.2182781 5.03443647,10.4668121 5.26620003,9.76452941 L1.23999023,6.65002441 C0.43658717,8.26043162 0,10.0753848 0,12 C0,13.9195484 0.444780743,15.7301709 1.23746264,17.3349879 L5.27698177,14.2678769 Z"/>
+                              </svg>
+                              Google
+                            </Button>
+                            <Button variant="outline" className="w-full bg-white/5 border-white/10 hover:bg-white/10">
+                              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className="h-5 w-5 mr-2 fill-current">
+                                <path d="M22.675 0h-21.35c-.732 0-1.325.593-1.325 1.325v21.351c0 .731.593 1.324 1.325 1.324h11.495v-9.294h-3.128v-3.622h3.128v-2.671c0-3.1 1.893-4.788 4.659-4.788 1.325 0 2.463.099 2.795.143v3.24l-1.918.001c-1.504 0-1.795.715-1.795 1.763v2.313h3.587l-.467 3.622h-3.12v9.293h6.116c.73 0 1.323-.593 1.323-1.325v-21.35c0-.732-.593-1.325-1.325-1.325z" />
+                              </svg>
+                              Facebook
+                            </Button>
+                          </div>
+                        </div>
+                        
+                        <div className="space-y-3">
+                          <h4 className="text-sm font-medium">Benefícios da conta completa</h4>
+                          <ul className="space-y-2 text-sm">
+                            <li className="flex items-center">
+                              <CheckCircle className="h-4 w-4 text-emerald-400 mr-2" />
+                              <span>Sincronização entre dispositivos</span>
+                            </li>
+                            <li className="flex items-center">
+                              <CheckCircle className="h-4 w-4 text-emerald-400 mr-2" />
+                              <span>Alertas personalizados</span>
+                            </li>
+                            <li className="flex items-center">
+                              <CheckCircle className="h-4 w-4 text-emerald-400 mr-2" />
+                              <span>Histórico completo de sinais</span>
+                            </li>
+                          </ul>
+                        </div>
+                      </div>
+                    </SettingsSection>
                   </motion.div>
-                </motion.div>
+                </div>
               </motion.div>
             )}
 
@@ -499,7 +692,7 @@ const Settings = () => {
                     icon={<CreditCard className="h-4 w-4 text-purple-400" />}
                   >
                     <div className="space-y-4">
-              <div className="grid gap-2">
+                      <div className="grid gap-2">
                         <Label htmlFor="api-key" className="text-white/90">Chave de API</Label>
                         <div className="relative">
                           <Input
@@ -512,8 +705,8 @@ const Settings = () => {
                           />
                           <Lock className="absolute left-3 top-2.5 h-4 w-4 text-white/40" />
                         </div>
-              </div>
-              <div className="grid gap-2">
+                      </div>
+                      <div className="grid gap-2">
                         <Label htmlFor="secret-key" className="text-white/90">Chave Secreta</Label>
                         <div className="relative">
                           <Input
@@ -652,15 +845,6 @@ const Settings = () => {
                 className="space-y-6"
               >
                 <motion.div variants={itemVariants}>
-                  <TradingPreferences 
-                    defaultRiskLevel={riskLevel}
-                    defaultCurrency={currency}
-                    onRiskLevelChange={setRiskLevel}
-                    onCurrencyChange={setCurrency}
-                  />
-                </motion.div>
-                
-                <motion.div variants={itemVariants}>
                   <SettingsSection
                     title="Configurações de Trading"
                     description="Configure parâmetros para suas operações de trading"
@@ -706,7 +890,7 @@ const Settings = () => {
                               <ArrowDownIcon className="h-4 w-4 text-rose-400" />
                             </div>
                           </div>
-              </div>
+                        </div>
                         
                         <div className="space-y-2">
                           <Label htmlFor="take-profit" className="text-white/90">Take Profit padrão (%)</Label>
@@ -722,7 +906,7 @@ const Settings = () => {
                             </div>
                           </div>
                         </div>
-              </div>
+                      </div>
                       
                       <div className="space-y-3">
                         <div className="flex items-center space-x-2 p-3 rounded-lg bg-white/5">
@@ -745,9 +929,9 @@ const Settings = () => {
                               Permite criar e utilizar indicadores técnicos customizados
                             </p>
                           </div>
-          </div>
-        </div>
-      </div>
+                        </div>
+                      </div>
+                    </div>
                   </SettingsSection>
                 </motion.div>
               </motion.div>

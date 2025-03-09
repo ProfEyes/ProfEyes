@@ -156,28 +156,8 @@ interface TickerAsset {
   isCurrency?: boolean;
 }
 
-// Função para verificar se um símbolo é de uma ação brasileira
-const isBrazilianStock = (symbol: string): boolean => {
-  // Padrão típico de ações brasileiras: 4 letras seguidas de um número
-  const brazilianPattern = /^[A-Z]{4}\d$/;
-  
-  // Lista de ações brasileiras conhecidas (pode ser expandida conforme necessário)
-  const knownBrazilianStocks = [
-    'PETR4', 'PETR3', 'VALE3', 'ITUB4', 'BBDC4', 'ABEV3', 'WEGE3', 'RENT3', 
-    'EQTL3', 'RADL3', 'EGIE3', 'BBAS3', 'MGLU3', 'PRIO3', 'VBBR3', 'RAIL3',
-    'HYPE3', 'ENEV3', 'GOAU4', 'TOTS3', 'LREN3', 'CSAN3', 'NTCO3', 'CIEL3', 
-    'SBSP3', 'CCRO3', 'B3SA3', 'ELET3', 'SUZB3', 'KLBN11', 'EMBR3', 'BRML3',
-    'MULT3', 'IGTI11', 'HGRE11'
-  ];
-  
-  return brazilianPattern.test(symbol) || knownBrazilianStocks.includes(symbol);
-};
-
 // Constantes para os ativos a serem exibidos no ticker
-const CRYPTO_ASSETS = ['BTC', 'ETH', 'BNB', 'SOL', 'ADA'];
-const BR_STOCKS = ['PETR4', 'VALE3', 'ITUB4', 'BBDC4', 'WEGE3'];
-const INDICES = ['^BVSP', '^GSPC', '^IXIC', '^DJI'];
-const CURRENCIES = ['USD-BRL', 'EUR-BRL'];
+const CRYPTO_ASSETS = ['BTC', 'ETH', 'BNB', 'SOL', 'ADA', 'XRP', 'DOT', 'AVAX', 'MATIC', 'LINK', 'DOGE', 'ATOM', 'UNI', 'LTC', 'AAVE', 'NEAR'];
 
 // Componente do rodapé com ticker usando Portal
 const TickerFooter = ({ tickerAssets }: { tickerAssets: any[] }) => {
@@ -212,14 +192,10 @@ const TickerFooter = ({ tickerAssets }: { tickerAssets: any[] }) => {
               <div key={`${asset.symbol}-${index}`} className="flex items-center space-x-1">
                 <span className="font-medium">{asset.symbol}</span>
                 <span className="font-mono">
-                  {asset.isIndex 
-                    ? asset.price.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-                    : asset.price.toLocaleString('pt-BR', { 
-                        style: 'currency', 
-                        currency: asset.isCurrency || isBrazilianStock(asset.symbol)
-                          ? 'BRL' 
-                          : 'USD'
-                      })}
+                  {asset.price.toLocaleString('pt-BR', { 
+                    style: 'currency', 
+                    currency: 'USD'
+                  })}
                 </span>
                 <span 
                   className={`text-xs ${asset.change >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}
@@ -273,17 +249,17 @@ export default function Portfolio() {
     { symbol: 'BNB', price: 564.21, change: -0.7, isCrypto: true },
     { symbol: 'SOL', price: 143.68, change: 3.2, isCrypto: true },
     { symbol: 'ADA', price: 0.45, change: -1.3, isCrypto: true },
-    { symbol: 'PETR4', price: 35.78, change: 0.8 },
-    { symbol: 'VALE3', price: 69.42, change: 1.1 },
-    { symbol: 'ITUB4', price: 32.57, change: -0.5 },
-    { symbol: 'BBDC4', price: 18.92, change: 0.3 },
-    { symbol: 'WEGE3', price: 42.15, change: 2.2 },
-    { symbol: 'IBOV', price: 127895.42, change: 0.9, isIndex: true },
-    { symbol: 'S&P500', price: 5234.87, change: 0.6, isIndex: true },
-    { symbol: 'NASDAQ', price: 16423.58, change: 1.2, isIndex: true },
-    { symbol: 'DJIA', price: 38756.32, change: 0.4, isIndex: true },
-    { symbol: 'EURO', price: 5.62, change: -0.2, isCurrency: true },
-    { symbol: 'USD', price: 5.18, change: -0.3, isCurrency: true },
+    { symbol: 'XRP', price: 0.58, change: 1.5, isCrypto: true },
+    { symbol: 'DOT', price: 7.85, change: -0.8, isCrypto: true },
+    { symbol: 'AVAX', price: 35.42, change: 2.7, isCrypto: true },
+    { symbol: 'MATIC', price: 0.89, change: 1.2, isCrypto: true },
+    { symbol: 'LINK', price: 15.63, change: -1.1, isCrypto: true },
+    { symbol: 'DOGE', price: 0.12, change: 4.2, isCrypto: true },
+    { symbol: 'ATOM', price: 8.95, change: 0.9, isCrypto: true },
+    { symbol: 'UNI', price: 9.75, change: -0.5, isCrypto: true },
+    { symbol: 'LTC', price: 85.30, change: 1.7, isCrypto: true },
+    { symbol: 'AAVE', price: 92.45, change: -1.8, isCrypto: true },
+    { symbol: 'NEAR', price: 5.67, change: 2.1, isCrypto: true }
   ]);
 
   const handleGeneratePortfolio = async () => {
@@ -412,6 +388,7 @@ export default function Portfolio() {
       if (selectedPortfolio?.id === portfolioToDelete) {
         setSelectedPortfolio(null);
         setCurrentView('manage');
+        setStep(1);
       }
 
       toast({
@@ -499,7 +476,7 @@ export default function Portfolio() {
         
         // Buscar dados de criptomoedas da CoinGecko
         try {
-          const cryptoResponse = await fetch('https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&ids=bitcoin,ethereum,binancecoin,solana,cardano&sparkline=false&price_change_percentage=24h');
+          const cryptoResponse = await fetch('https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&ids=bitcoin,ethereum,binancecoin,solana,cardano,ripple,polkadot,avalanche,matic-network,chainlink,dogecoin,cosmos,uniswap,litecoin,aave,near&sparkline=false&price_change_percentage=24h');
           const cryptoData = await cryptoResponse.json();
           
           if (Array.isArray(cryptoData)) {
@@ -508,7 +485,18 @@ export default function Portfolio() {
               'ethereum': 'ETH',
               'binancecoin': 'BNB',
               'solana': 'SOL',
-              'cardano': 'ADA'
+              'cardano': 'ADA',
+              'ripple': 'XRP',
+              'polkadot': 'DOT',
+              'avalanche': 'AVAX',
+              'matic-network': 'MATIC',
+              'chainlink': 'LINK',
+              'dogecoin': 'DOGE',
+              'cosmos': 'ATOM',
+              'uniswap': 'UNI',
+              'litecoin': 'LTC',
+              'aave': 'AAVE',
+              'near': 'NEAR'
             };
             
             cryptoData.forEach(crypto => {
@@ -527,108 +515,10 @@ export default function Portfolio() {
           console.error('Erro ao buscar dados de criptomoedas:', error);
         }
         
-        // Buscar dados de ações brasileiras da brapi
-        try {
-          const brStocksString = BR_STOCKS.join(',');
-          const brStocksResponse = await fetch(`https://brapi.dev/api/quote/${brStocksString}?range=1d&interval=1d`);
-          const brStocksData = await brStocksResponse.json();
-          
-          if (brStocksData && brStocksData.results) {
-            brStocksData.results.forEach((stock: any) => {
-              updatedAssets.push({
-                symbol: stock.symbol,
-                price: stock.regularMarketPrice,
-                change: stock.regularMarketChangePercent,
-              });
-            });
-          }
-        } catch (error) {
-          console.error('Erro ao buscar dados de ações brasileiras:', error);
-        }
-        
-        // Buscar dados de índices da brapi
-        try {
-          const indicesString = '^BVSP,^GSPC,^IXIC,^DJI';
-          const indicesResponse = await fetch(`https://brapi.dev/api/quote/${indicesString}?range=1d&interval=1d`);
-          const indicesData = await indicesResponse.json();
-          
-          if (indicesData && indicesData.results) {
-            const indicesMap: {[key: string]: string} = {
-              '^BVSP': 'IBOV',
-              '^GSPC': 'S&P500',
-              '^IXIC': 'NASDAQ',
-              '^DJI': 'DJIA'
-            };
-            
-            indicesData.results.forEach((index: any) => {
-              const displaySymbol = indicesMap[index.symbol] || index.symbol;
-              updatedAssets.push({
-                symbol: displaySymbol,
-                price: index.regularMarketPrice,
-                change: index.regularMarketChangePercent,
-                isIndex: true
-              });
-            });
-          }
-        } catch (error) {
-          console.error('Erro ao buscar dados de índices:', error);
-        }
-        
-        // Buscar dados de moedas da brapi
-        try {
-          const currenciesString = 'USD-BRL,EUR-BRL';
-          const currenciesResponse = await fetch(`https://brapi.dev/api/v2/currency/?currency=${currenciesString}`);
-          const currenciesData = await currenciesResponse.json();
-          
-          if (currenciesData && currenciesData.currencies) {
-            const currenciesMap: {[key: string]: string} = {
-              'USD-BRL': 'USD',
-              'EUR-BRL': 'EURO'
-            };
-            
-            Object.keys(currenciesData.currencies).forEach(key => {
-              const currency = currenciesData.currencies[key];
-              const displaySymbol = currenciesMap[key] || key;
-              updatedAssets.push({
-                symbol: displaySymbol,
-                price: currency.bidPrice,
-                change: currency.pctChange,
-                isCurrency: true
-              });
-            });
-          }
-        } catch (error) {
-          console.error('Erro ao buscar dados de moedas:', error);
-        }
-        
-        // Se alguma categoria falhar completamente, mantenha os dados anteriores
-        const categories = ['isCrypto', 'isIndex', 'isCurrency'];
-        const existingByCategory = categories.map(category => 
-          tickerAssets.filter(asset => asset[category as keyof TickerAsset])
-        );
-        
-        const newByCategory = categories.map(category => 
-          updatedAssets.filter(asset => asset[category as keyof TickerAsset])
-        );
-        
-        // Para cada categoria, se não houver novos dados, use os existentes
-        for (let i = 0; i < categories.length; i++) {
-          if (newByCategory[i].length === 0 && existingByCategory[i].length > 0) {
-            updatedAssets.push(...existingByCategory[i]);
-          }
-        }
-        
-        // Para ações brasileiras (sem categoria específica)
-        const existingBrStocks = tickerAssets.filter(asset => 
-          !asset.isCrypto && !asset.isIndex && !asset.isCurrency && isBrazilianStock(asset.symbol)
-        );
-        
-        const newBrStocks = updatedAssets.filter(asset => 
-          !asset.isCrypto && !asset.isIndex && !asset.isCurrency && isBrazilianStock(asset.symbol)
-        );
-        
-        if (newBrStocks.length === 0 && existingBrStocks.length > 0) {
-          updatedAssets.push(...existingBrStocks);
+        // Se não houver dados novos, manter os dados anteriores de criptomoedas
+        if (updatedAssets.length === 0) {
+          const existingCryptos = tickerAssets.filter(asset => asset.isCrypto);
+          updatedAssets.push(...existingCryptos);
         }
         
         // Atualizar o estado apenas se houver dados novos
@@ -648,7 +538,7 @@ export default function Portfolio() {
 
   return (
     <>
-    <Layout>
+      <Layout>
         <div className="min-h-screen bg-gradient-to-b from-background to-background/95">
           <div className="container px-4 py-8 mx-auto pb-16">
             <div className="flex items-center justify-between mb-8">
@@ -658,7 +548,10 @@ export default function Portfolio() {
               <div className="flex space-x-2">
                 <Button 
                   variant={currentView === 'generate' ? "default" : "outline"} 
-                  onClick={() => setCurrentView('generate')}
+                  onClick={() => {
+                    setCurrentView('generate');
+                    setStep(1);
+                  }}
                   className="flex items-center"
                 >
                   <FolderPlus className="w-4 h-4 mr-2" />
@@ -1159,8 +1052,12 @@ export default function Portfolio() {
                                         </Badge>
                                       </div>
                                       <div className="flex justify-between">
+                                        <span className="text-muted-foreground">Valor Inicial</span>
+                                        <span>R$ {formData.initialAmount.toLocaleString()}</span>
+                                      </div>
+                                      <div className="flex justify-between">
                                         <span className="text-muted-foreground">Objetivo</span>
-                                        <span>{formData.investmentGoal || 'Não definido'}</span>
+                                        <span>{formData.investmentGoal || 'Não especificado'}</span>
                                       </div>
                                       <div className="flex justify-between">
                                         <span className="text-muted-foreground">Prazo</span>
@@ -1168,23 +1065,7 @@ export default function Portfolio() {
                                       </div>
                                     </div>
                                   </div>
-
-                                  <div>
-                                    <h3 className="font-medium mb-2">Parâmetros Financeiros</h3>
-                                    <div className="space-y-2">
-                                      <div className="flex justify-between">
-                                        <span className="text-muted-foreground">Valor Inicial</span>
-                                        <span>R$ {formData.initialAmount.toLocaleString()}</span>
-                                      </div>
-                                      <div className="flex justify-between">
-                                        <span className="text-muted-foreground">Drawdown Máximo</span>
-                                        <span>{formData.maxDrawdown}%</span>
-                                      </div>
-                                    </div>
-                                  </div>
-                                </div>
-
-                                <div className="space-y-4">
+                                  
                                   <div>
                                     <h3 className="font-medium mb-2">Alocação</h3>
                                     <div className="space-y-2">
@@ -1198,11 +1079,13 @@ export default function Portfolio() {
                                       </div>
                                       <div className="flex justify-between">
                                         <span className="text-muted-foreground">Outros</span>
-                                        <span>{100 - formData.cryptoAllocation - formData.stocksAllocation}%</span>
+                                        <span>{100 - (formData.cryptoAllocation + formData.stocksAllocation)}%</span>
                                       </div>
                                     </div>
                                   </div>
-
+                                </div>
+                                
+                                <div className="space-y-4">
                                   <div>
                                     <h3 className="font-medium mb-2">Configurações Avançadas</h3>
                                     <div className="space-y-2">
@@ -1226,10 +1109,10 @@ export default function Portfolio() {
                                       </div>
                                     </div>
                                   </div>
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
+                                </div>
+                              </div>
+                            </CardContent>
+                          </Card>
                         </motion.div>
                       )}
 
@@ -1298,7 +1181,10 @@ export default function Portfolio() {
                             Você ainda não possui carteiras salvas. Gere uma nova carteira para começar.
                           </p>
                           <Button 
-                            onClick={() => setCurrentView('generate')}
+                            onClick={() => {
+                              setCurrentView('generate');
+                              setStep(1);
+                            }}
                             className="flex items-center"
                           >
                             <FolderPlus className="w-4 h-4 mr-2" />
@@ -1649,41 +1535,41 @@ export default function Portfolio() {
 
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6">
                               <Card className="bg-background/50">
-                      <CardContent className="pt-6">
-                        <div className="flex items-center justify-between">
+                                <CardContent className="pt-6">
+                                  <div className="flex items-center justify-between">
                                     <p className="text-sm text-muted-foreground">Retorno Total</p>
                                     <ArrowUpIcon className="h-4 w-4 text-emerald-500" />
-                          </div>
+                                  </div>
                                   <p className="text-2xl font-bold text-emerald-500 mt-2">+12.5%</p>
                                   <p className="text-sm text-muted-foreground">+R$ 1.750,25</p>
-                                </CardContent>
-                              </Card>
+              </CardContent>
+            </Card>
 
                               <Card className="bg-background/50">
                                 <CardContent className="pt-6">
                                   <div className="flex items-center justify-between">
                                     <p className="text-sm text-muted-foreground">Melhor Ativo</p>
                                     <TrendingUpIcon className="h-4 w-4 text-emerald-500" />
-                        </div>
+                                  </div>
                                   <p className="text-2xl font-bold mt-2">BTC</p>
                                   <p className="text-sm text-emerald-500">+15.3%</p>
-                      </CardContent>
-                    </Card>
+                                </CardContent>
+                              </Card>
 
                               <Card className="bg-background/50">
-                      <CardContent className="pt-6">
-                        <div className="flex items-center justify-between">
+                                <CardContent className="pt-6">
+                                  <div className="flex items-center justify-between">
                                     <p className="text-sm text-muted-foreground">Volatilidade</p>
                                     <PercentIcon className="h-4 w-4 text-blue-500" />
-                          </div>
+                                  </div>
                                     <p className="text-2xl font-bold text-blue-500 mt-2">5.2%</p>
                                     <p className="text-sm text-muted-foreground">30 dias</p>
                                 </CardContent>
                               </Card>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  </div>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      </div>
                     </TabsContent>
 
                     <TabsContent value="ativos">
