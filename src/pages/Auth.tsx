@@ -341,33 +341,104 @@ export default function Auth() {
           <DialogTitle className="text-xl font-light tracking-wide text-white/90 mb-4">Termos e Condições</DialogTitle>
         </DialogHeader>
         <div className="space-y-4 text-sm text-white/70">
+          <p className="text-rose-400/90 font-medium text-center border border-rose-900/30 bg-rose-950/20 p-3 rounded-lg">AVISO LEGAL IMPORTANTE: ESTE É UM CONTRATO VINCULANTE. LEIA ATENTAMENTE ANTES DE UTILIZAR O SERVIÇO.</p>
+          
+          <p className="text-white/90">Ao acessar ou utilizar o ProfEyes, você concorda expressamente em renunciar a determinados direitos legais e aceitar limitações de responsabilidade conforme detalhado abaixo. Se você não concorda com qualquer parte destes termos, não utilize nossos serviços.</p>
+          
           <p>Última atualização: {new Date().toLocaleDateString()}</p>
           
-          <h3 className="text-white/90 font-medium">1. ISENÇÃO DE RESPONSABILIDADE SOBRE INVESTIMENTOS</h3>
-          <p><strong>NÃO SOMOS CONSULTORES DE INVESTIMENTOS:</strong> O ProfEyes NÃO é uma plataforma de consultoria de investimentos registrada na Comissão de Valores Mobiliários (CVM) ou qualquer outro órgão regulador. Não oferecemos recomendações personalizadas de investimentos.</p>
-          <p><strong>CONTEÚDO INFORMATIVO:</strong> Todo o conteúdo disponibilizado em nossa plataforma, incluindo análises, gráficos, sinais e indicadores, tem caráter EXCLUSIVAMENTE INFORMATIVO e EDUCACIONAL.</p>
-          <p><strong>AUSÊNCIA DE GARANTIA DE RESULTADOS:</strong> Não garantimos rentabilidade, retorno ou resultado específico de qualquer natureza. Resultados passados NÃO são garantia de resultados futuros.</p>
-          <p><strong>RISCOS INERENTES:</strong> Investimentos em mercados financeiros envolvem riscos significativos, incluindo a possibilidade de perda parcial ou total do capital investido. O usuário reconhece e aceita estes riscos ao utilizar nossa plataforma.</p>
+          <h3 className="text-white/90 font-medium">1. ISENÇÃO TOTAL DE RESPONSABILIDADE SOBRE INVESTIMENTOS</h3>
+          <p><strong>NÃO SOMOS CONSULTORES DE INVESTIMENTOS:</strong> O ProfEyes NÃO é uma plataforma de consultoria de investimentos registrada na Comissão de Valores Mobiliários (CVM) ou qualquer outro órgão regulador nacional ou internacional. Não oferecemos, sob nenhuma circunstância, recomendações personalizadas de investimentos, aconselhamento financeiro ou qualquer tipo de orientação que possa ser interpretada como consultoria de investimentos.</p>
           
-          <h3 className="text-white/90 font-medium">2. LIMITAÇÃO DE RESPONSABILIDADE</h3>
-          <p><strong>FALHAS TÉCNICAS:</strong> Não nos responsabilizamos por falhas, interrupções ou atrasos no funcionamento da plataforma, incluindo, mas não se limitando a: problemas de conexão, indisponibilidade do serviço, atrasos na transmissão de dados ou imprecisões nas informações fornecidas.</p>
-          <p><strong>PRECISÃO DAS INFORMAÇÕES:</strong> Embora nos esforcemos para fornecer informações precisas e atualizadas, não garantimos a exatidão, integridade ou atualidade das informações disponibilizadas.</p>
-          <p><strong>PERDAS FINANCEIRAS:</strong> Em nenhuma circunstância seremos responsáveis por quaisquer perdas ou danos diretos, indiretos, incidentais, consequenciais, especiais ou punitivos resultantes do uso ou incapacidade de uso de nossa plataforma, incluindo perdas financeiras decorrentes de decisões de investimento.</p>
+          <p><strong>CONTEÚDO EXCLUSIVAMENTE INFORMATIVO:</strong> Todo o conteúdo disponibilizado em nossa plataforma, incluindo, mas não se limitando a: análises técnicas, gráficos, indicadores, sinais de mercado, notícias, relatórios, projeções, simulações, ferramentas de cálculo, e quaisquer outros materiais, tem caráter EXCLUSIVAMENTE INFORMATIVO e EDUCACIONAL. Nenhuma informação disponibilizada deve ser interpretada como recomendação de compra, venda ou manutenção de ativos financeiros.</p>
           
-          <h3 className="text-white/90 font-medium">3. CONFORMIDADE LEGAL</h3>
-          <p><strong>LEGISLAÇÃO APLICÁVEL:</strong> Nossa plataforma opera em conformidade com a legislação brasileira, incluindo a Lei nº 6.385/76 (que regula o mercado de valores mobiliários) e as Instruções da CVM.</p>
-          <p><strong>NÃO CARACTERIZAÇÃO DE CONSULTORIA:</strong> De acordo com a Instrução CVM nº 592/2017, a atividade de consultoria de valores mobiliários consiste na prestação de serviços de orientação, recomendação e aconselhamento personalizado. Reiteramos que NÃO realizamos tais atividades.</p>
+          <p><strong>AUSÊNCIA ABSOLUTA DE GARANTIA DE RESULTADOS:</strong> Não garantimos, sob nenhuma hipótese, rentabilidade, retorno ou resultado específico de qualquer natureza. Resultados passados NÃO são, em nenhuma circunstância, garantia ou indicativo de resultados futuros. Qualquer projeção, estimativa ou exemplificação de ganhos potenciais apresentada em nossa plataforma é meramente ilustrativa e hipotética, não representando promessa ou expectativa real de ganhos.</p>
           
-          <h3 className="text-white/90 font-medium">4. PRIVACIDADE E DADOS</h3>
-          <p>Respeitamos sua privacidade. Seus dados são armazenados de forma segura e não são compartilhados com terceiros sem seu consentimento explícito, exceto quando exigido por lei.</p>
+          <p><strong>RISCOS INERENTES AO MERCADO FINANCEIRO:</strong> Investimentos em mercados financeiros envolvem riscos significativos, incluindo, mas não se limitando a: possibilidade de perda parcial ou total do capital investido, volatilidade de preços, liquidez dos ativos, riscos cambiais, riscos de crédito, riscos sistêmicos, riscos operacionais, riscos regulatórios e outros fatores que podem afetar negativamente o valor dos investimentos. O usuário reconhece, compreende e aceita integralmente todos estes riscos ao utilizar nossa plataforma.</p>
           
-          <h3 className="text-white/90 font-medium">5. RESPONSABILIDADES DO USUÁRIO</h3>
-          <p>O usuário é responsável por manter a confidencialidade de sua conta e senha, bem como por todas as atividades realizadas em sua conta. O usuário é o único responsável por suas decisões de investimento e deve buscar aconselhamento profissional antes de investir.</p>
+          <p><strong>DECISÕES DE INVESTIMENTO:</strong> Todas as decisões de investimento são tomadas exclusivamente pelo usuário, por sua própria conta e risco. Recomendamos enfaticamente que o usuário consulte profissionais de investimentos devidamente certificados e registrados nos órgãos competentes antes de tomar qualquer decisão de investimento.</p>
           
-          <h3 className="text-white/90 font-medium">6. MODIFICAÇÕES DOS TERMOS</h3>
-          <p>Reservamo-nos o direito de modificar estes Termos a qualquer momento, a nosso exclusivo critério. As alterações entrarão em vigor imediatamente após sua publicação na plataforma.</p>
+          <h3 className="text-white/90 font-medium">2. LIMITAÇÃO ABSOLUTA DE RESPONSABILIDADE</h3>
+          <p><strong>RENÚNCIA EXPRESSA A QUALQUER RECLAMAÇÃO:</strong> Ao utilizar nossa plataforma, o usuário renuncia expressamente, na extensão máxima permitida pela legislação aplicável, a qualquer direito de apresentar reclamações, processos judiciais ou extrajudiciais, ações coletivas ou individuais, ou qualquer outro tipo de demanda contra a empresa, seus proprietários, diretores, funcionários, colaboradores, parceiros, afiliados ou quaisquer pessoas físicas ou jurídicas relacionadas à plataforma, por quaisquer danos ou prejuízos decorrentes do uso ou incapacidade de uso da plataforma.</p>
           
-          <p className="mt-6 text-white/90 font-medium">Ao clicar em "Aceitar e Continuar", você reconhece que leu, compreendeu e concorda com estes Termos e Condições de Uso. Se não concordar com estes termos, você deve clicar em "Recusar" e não poderá utilizar nossa plataforma.</p>
+          <p><strong>ACORDO IRREVOGÁVEL DE NÃO PROCESSAR:</strong> O usuário concorda irrevogavelmente em não iniciar, participar ou prosseguir com qualquer ação judicial, arbitragem, mediação, reclamação administrativa ou qualquer outro procedimento legal contra o ProfEyes, seus proprietários, diretores, funcionários, colaboradores, parceiros ou afiliados, relacionado direta ou indiretamente ao uso da plataforma ou às informações nela contidas. Esta renúncia inclui, mas não se limita a, ações por perdas financeiras, danos morais, danos emergentes, lucros cessantes, ou quaisquer outros tipos de danos ou prejuízos.</p>
+          
+          <p><strong>FALHAS TÉCNICAS E OPERACIONAIS:</strong> Não nos responsabilizamos, em nenhuma hipótese, por falhas, interrupções, atrasos, erros, bugs, vírus, malwares ou quaisquer outros problemas no funcionamento da plataforma, incluindo, mas não se limitando a: problemas de conexão, indisponibilidade do serviço, atrasos na transmissão de dados, falhas de servidor, problemas de compatibilidade com dispositivos ou navegadores, ou quaisquer outras questões técnicas que possam afetar o acesso ou uso da plataforma.</p>
+          
+          <p><strong>PRECISÃO E ATUALIDADE DAS INFORMAÇÕES:</strong> Embora nos esforcemos para fornecer informações precisas e atualizadas, não garantimos, de forma alguma, a exatidão, integridade, atualidade, confiabilidade ou adequação das informações disponibilizadas. As informações podem conter erros, imprecisões, omissões ou desatualizações. O usuário reconhece que utiliza tais informações por sua própria conta e risco.</p>
+          
+          <p><strong>PERDAS FINANCEIRAS E OUTROS DANOS:</strong> Em nenhuma circunstância, independentemente da teoria legal invocada, seremos responsáveis por quaisquer perdas ou danos diretos, indiretos, incidentais, consequenciais, especiais, punitivos ou exemplares resultantes do uso ou incapacidade de uso de nossa plataforma, incluindo, mas não se limitando a: perdas financeiras, perda de lucros, perda de oportunidades de negócio, perda de dados, danos à reputação, ou quaisquer outros danos, mesmo que tenhamos sido previamente advertidos sobre a possibilidade de tais danos.</p>
+          
+          <p><strong>LIMITAÇÃO DE VALOR:</strong> Na eventualidade improvável de que, apesar das disposições destes Termos, sejamos considerados legalmente responsáveis por algum dano ou prejuízo, nossa responsabilidade total e agregada será limitada ao valor pago pelo usuário para acessar a plataforma nos últimos 12 meses, ou R$ 100,00 (cem reais), o que for menor.</p>
+          
+          <h3 className="text-white/90 font-medium">3. CONFORMIDADE LEGAL E REGULATÓRIA</h3>
+          <p><strong>LEGISLAÇÃO APLICÁVEL:</strong> Nossa plataforma opera em conformidade com a legislação brasileira, incluindo, mas não se limitando a: Lei nº 6.385/76 (que regula o mercado de valores mobiliários), Instruções da CVM, Lei nº 13.709/2018 (Lei Geral de Proteção de Dados - LGPD), e demais normas aplicáveis. No entanto, o usuário reconhece que é sua responsabilidade verificar se o uso da plataforma está em conformidade com as leis e regulamentos aplicáveis em sua jurisdição.</p>
+          
+          <p><strong>NÃO CARACTERIZAÇÃO DE CONSULTORIA:</strong> De acordo com a Instrução CVM nº 592/2017, a atividade de consultoria de valores mobiliários consiste na prestação de serviços de orientação, recomendação e aconselhamento personalizado. Reiteramos enfaticamente que NÃO realizamos tais atividades. Qualquer interpretação de que nosso conteúdo constitui consultoria de investimentos é incorreta e contrária às disposições expressas nestes Termos.</p>
+          
+          <p><strong>AUSÊNCIA DE RELAÇÃO FIDUCIÁRIA:</strong> Não existe relação fiduciária entre a plataforma e seus usuários. Não assumimos nenhum dever fiduciário ou obrigação de lealdade para com os usuários. Nossa relação é estritamente limitada ao fornecimento de informações e ferramentas, conforme descrito nestes Termos.</p>
+          
+          <h3 className="text-white/90 font-medium">4. PRIVACIDADE, DADOS E CONFIDENCIALIDADE</h3>
+          <p><strong>COLETA E USO DE DADOS:</strong> Respeitamos sua privacidade de acordo com nossa Política de Privacidade. Seus dados são armazenados de forma segura e não são compartilhados com terceiros sem seu consentimento explícito, exceto quando exigido por lei, ordem judicial ou para proteger nossos direitos legais.</p>
+          
+          <p><strong>MONITORAMENTO E REGISTROS:</strong> Reservamo-nos o direito de monitorar, registrar e armazenar informações sobre o uso da plataforma, incluindo, mas não se limitando a: endereços IP, dispositivos utilizados, páginas visitadas, tempo de permanência, ações realizadas e quaisquer outras informações relacionadas ao uso da plataforma. Estes registros podem ser utilizados para fins de segurança, melhoria do serviço, cumprimento de obrigações legais ou defesa em processos judiciais.</p>
+          
+          <h3 className="text-white/90 font-medium">5. RESPONSABILIDADES E OBRIGAÇÕES DO USUÁRIO</h3>
+          <p><strong>RESPONSABILIDADE EXCLUSIVA:</strong> O usuário é exclusivamente responsável por todas as decisões de investimento, transações financeiras, e quaisquer outras ações tomadas com base nas informações obtidas através da plataforma. O usuário reconhece que é o único responsável por avaliar a adequação das informações às suas necessidades, objetivos financeiros, perfil de risco e situação financeira.</p>
+          
+          <p><strong>OBRIGAÇÃO DE BUSCAR ACONSELHAMENTO PROFISSIONAL:</strong> O usuário concorda em buscar aconselhamento profissional adequado antes de tomar decisões de investimento. Recomendamos enfaticamente a consulta a consultores de investimentos registrados na CVM, contadores, advogados especializados e outros profissionais qualificados antes de realizar qualquer investimento.</p>
+          
+          <p><strong>VERACIDADE DAS INFORMAÇÕES:</strong> O usuário garante que todas as informações fornecidas durante o cadastro e uso da plataforma são verdadeiras, precisas, atuais e completas. O usuário compromete-se a atualizar prontamente quaisquer informações que se tornem incorretas ou desatualizadas.</p>
+          
+          <p><strong>PROIBIÇÃO DE USO INDEVIDO:</strong> O usuário concorda em não utilizar a plataforma para qualquer finalidade ilegal, não autorizada ou proibida por estes Termos ou pela legislação aplicável. É expressamente proibido: (i) violar direitos de propriedade intelectual; (ii) distribuir, modificar, copiar ou criar obras derivadas do conteúdo da plataforma; (iii) realizar engenharia reversa, descompilação ou tentativa de acesso ao código-fonte; (iv) utilizar robôs, spiders, scrapers ou outros meios automatizados para acessar a plataforma; (v) interferir ou tentar interferir no funcionamento adequado da plataforma; (vi) contornar medidas de segurança; ou (vii) utilizar a plataforma de qualquer maneira que possa danificá-la ou prejudicar sua funcionalidade.</p>
+          
+          <h3 className="text-white/90 font-medium">6. PROPRIEDADE INTELECTUAL</h3>
+          <p><strong>DIREITOS RESERVADOS:</strong> Todo o conteúdo disponibilizado na plataforma, incluindo, mas não se limitando a: textos, gráficos, logotipos, ícones, imagens, clipes de áudio, downloads digitais, compilações de dados, software, código, design, layout, e quaisquer outros materiais, são de propriedade exclusiva do ProfEyes ou de seus licenciadores e estão protegidos pelas leis brasileiras e internacionais de direitos autorais, marcas registradas, patentes e outros direitos de propriedade intelectual.</p>
+          
+          <p><strong>LICENÇA LIMITADA:</strong> Concedemos ao usuário uma licença limitada, não exclusiva, não transferível, revogável e não sublicenciável para acessar e utilizar a plataforma apenas para uso pessoal e não comercial, sujeita a estes Termos. Esta licença não inclui o direito de: (i) revender ou usar comercialmente a plataforma ou seu conteúdo; (ii) distribuir, exibir publicamente ou executar publicamente qualquer conteúdo; (iii) modificar ou criar obras derivadas da plataforma ou de seu conteúdo; (iv) utilizar mineração de dados, robôs ou métodos similares de coleta e extração de dados; (v) fazer download de qualquer parte da plataforma, exceto para cache de página quando permitido pelos recursos da plataforma; ou (vi) utilizar a plataforma ou seu conteúdo para além do uso pretendido.</p>
+          
+          <h3 className="text-white/90 font-medium">7. MODIFICAÇÕES, SUSPENSÃO E RESCISÃO</h3>
+          <p><strong>MODIFICAÇÕES DOS TERMOS:</strong> Reservamo-nos o direito de modificar, alterar, adicionar ou remover partes destes Termos a qualquer momento, a nosso exclusivo critério, sem aviso prévio. As alterações entrarão em vigor imediatamente após sua publicação na plataforma. O uso continuado da plataforma após tais modificações constitui aceitação dos novos Termos. É responsabilidade do usuário verificar regularmente se houve alterações.</p>
+          
+          <p><strong>MODIFICAÇÕES DA PLATAFORMA:</strong> Reservamo-nos o direito de modificar, suspender, descontinuar ou restringir, temporária ou permanentemente, todo ou parte da plataforma, incluindo quaisquer serviços, funcionalidades, conteúdos ou recursos, sem aviso prévio e sem qualquer responsabilidade perante o usuário ou terceiros.</p>
+          
+          <p><strong>SUSPENSÃO E RESCISÃO:</strong> Reservamo-nos o direito de suspender ou encerrar o acesso do usuário à plataforma, a qualquer momento, por qualquer motivo ou sem motivo, sem aviso prévio e sem qualquer responsabilidade perante o usuário ou terceiros. Motivos para suspensão ou rescisão podem incluir, mas não se limitam a: (i) violação destes Termos; (ii) uso fraudulento ou abusivo da plataforma; (iii) comportamento que prejudique outros usuários; (iv) solicitações de autoridades legais; ou (v) questões técnicas ou de segurança.</p>
+          
+          <h3 className="text-white/90 font-medium">8. DISPOSIÇÕES GERAIS</h3>
+          <p><strong>ACORDO INTEGRAL:</strong> Estes Termos constituem o acordo integral entre o usuário e o ProfEyes em relação ao uso da plataforma, substituindo quaisquer acordos, entendimentos ou comunicações anteriores, sejam escritos ou verbais.</p>
+          
+          <p><strong>INDEPENDÊNCIA DAS DISPOSIÇÕES:</strong> Se qualquer disposição destes Termos for considerada ilegal, nula ou inexequível, no todo ou em parte, por qualquer tribunal de jurisdição competente, tal disposição será considerada uma disposição independente e não afetará a validade e exequibilidade de quaisquer disposições remanescentes.</p>
+          
+          <p><strong>INDENIZAÇÃO OBRIGATÓRIA:</strong> O usuário concorda em defender, indenizar e isentar de responsabilidade o ProfEyes, seus proprietários, diretores, funcionários, colaboradores, parceiros, afiliados e licenciadores contra quaisquer reclamações, responsabilidades, danos, perdas, custos e despesas, incluindo honorários advocatícios razoáveis, decorrentes ou relacionados a: (i) violação destes Termos pelo usuário; (ii) uso da plataforma pelo usuário; (iii) violação de direitos de terceiros pelo usuário; (iv) decisões de investimento tomadas pelo usuário com base nas informações disponibilizadas na plataforma; ou (v) qualquer conteúdo publicado ou compartilhado pelo usuário através da plataforma. Esta obrigação de indenização sobreviverá à rescisão ou expiração destes Termos e ao uso da plataforma pelo usuário.</p>
+          
+          <p><strong>NÃO RENÚNCIA:</strong> A falha do ProfEyes em exercer ou fazer cumprir qualquer direito ou disposição destes Termos não constituirá renúncia a tal direito ou disposição. Nenhuma renúncia a qualquer disposição destes Termos será considerada uma renúncia adicional ou contínua de tal disposição ou de qualquer outra disposição.</p>
+          
+          <p><strong>CESSÃO:</strong> O usuário não pode ceder, transferir ou sublicenciar quaisquer direitos ou obrigações decorrentes destes Termos sem o consentimento prévio por escrito do ProfEyes. O ProfEyes pode ceder ou transferir estes Termos, no todo ou em parte, sem restrições.</p>
+          
+          <p><strong>LEI APLICÁVEL E FORO:</strong> Estes Termos são regidos e interpretados de acordo com as leis da República Federativa do Brasil. Qualquer disputa, controvérsia ou reclamação decorrente ou relacionada a estes Termos será submetida à jurisdição exclusiva do foro da Comarca de São Paulo, Estado de São Paulo, com expressa renúncia a qualquer outro, por mais privilegiado que seja.</p>
+          
+          <h3 className="text-white/90 font-medium">9. ARBITRAGEM OBRIGATÓRIA E RENÚNCIA A AÇÕES COLETIVAS</h3>
+          
+          <p><strong>ARBITRAGEM VINCULANTE:</strong> Qualquer disputa, controvérsia ou reclamação decorrente ou relacionada a estes Termos, incluindo sua validade, interpretação, execução, violação ou rescisão, será resolvida exclusivamente por arbitragem vinculante, de acordo com o Regulamento de Arbitragem da Câmara de Comércio Brasil-Canadá. A sede da arbitragem será a cidade de São Paulo, Estado de São Paulo, Brasil. O idioma da arbitragem será o português. A decisão arbitral será final e vinculativa para as partes.</p>
+          
+          <p><strong>RENÚNCIA A JULGAMENTO POR JÚRI:</strong> O usuário e o ProfEyes renunciam expressamente a qualquer direito a um julgamento por júri em qualquer ação, processo ou reconvenção decorrente ou relacionada a estes Termos ou à plataforma.</p>
+          
+          <p><strong>RENÚNCIA A AÇÕES COLETIVAS:</strong> O usuário renuncia expressamente a qualquer direito de participar como representante ou membro de qualquer classe em qualquer ação coletiva, consolidada ou representativa contra o ProfEyes ou seus proprietários, diretores, funcionários, colaboradores, parceiros ou afiliados. Qualquer disputa será resolvida individualmente, e o usuário não poderá buscar reparação como membro de uma classe ou grupo.</p>
+          
+          <p><strong>PRAZO PARA RECLAMAÇÕES:</strong> Qualquer reclamação ou causa de ação decorrente ou relacionada a estes Termos ou à plataforma deve ser iniciada no prazo máximo de 6 (seis) meses após o surgimento da causa de ação, caso contrário, tal reclamação ou causa de ação será permanentemente impedida.</p>
+          
+          <h3 className="text-white/90 font-medium">10. DECLARAÇÃO DE CIÊNCIA E ACEITAÇÃO</h3>
+          <p className="mt-6 text-white/90 font-medium">Ao clicar em "Aceitar e Continuar", você reconhece e declara expressamente que:</p>
+          <ol className="list-decimal pl-5 space-y-2 text-white/70">
+            <li>Leu, compreendeu e concorda integralmente com todos os termos e condições acima descritos;</li>
+            <li>Compreende os riscos associados a investimentos no mercado financeiro;</li>
+            <li>Reconhece que o ProfEyes não oferece consultoria de investimentos;</li>
+            <li>Assume total responsabilidade por suas decisões de investimento;</li>
+            <li>Renuncia a quaisquer reclamações contra o ProfEyes por perdas ou danos relacionados ao uso da plataforma;</li>
+            <li>Tem capacidade legal para aceitar estes termos e utilizar a plataforma.</li>
+          </ol>
+          
+          <p className="mt-4 text-white/90">Se não concordar com qualquer parte destes termos, você deve clicar em "Recusar" e não poderá utilizar nossa plataforma.</p>
         </div>
         <DialogFooter className="mt-6 flex flex-col sm:flex-row gap-3">
           <Button 
