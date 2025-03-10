@@ -541,100 +541,34 @@ export default function Auth() {
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -20 }}
-      transition={{ duration: 0.5 }}
+      transition={{ duration: 0.3 }}
       className="space-y-6"
     >
       <div className="text-center space-y-2">
-        <motion.div
-          initial={{ scale: 0.8, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          transition={{ delay: 0.2, duration: 0.5 }}
-          className="mx-auto bg-gradient-to-br from-black/40 to-black/20 p-4 rounded-full w-20 h-20 flex items-center justify-center border border-white/5 shadow-lg"
-        >
-          <Mail className="h-10 w-10 text-white/70" />
-        </motion.div>
-        <h2 className="text-xl font-light tracking-wide text-white/90">Verificar Email</h2>
-        <p className="text-sm text-white/60 max-w-xs mx-auto">
-          Enviaremos um link de verificação para o seu email. Verifique sua caixa de entrada e spam.
+        <Mail className="w-12 h-12 text-white/40 mx-auto mb-2" />
+        <h2 className="text-xl font-light text-white/90">Verifique seu Email</h2>
+        <p className="text-sm text-white/50">
+          Enviamos um link de verificação para seu email. Por favor, confira sua caixa de entrada.
         </p>
       </div>
-      
-      <div className="space-y-4">
-        <div className="space-y-2">
-          <Label htmlFor="verify-email" className="text-xs uppercase text-white/40 tracking-wider font-light flex items-center">
-            <Mail className="h-3 w-3 mr-1.5 opacity-40" />
-            Email
-          </Label>
-          <div className="relative group">
-            <Input 
-              id="verify-email" 
-              type="email" 
-              value={verifyEmailAddress}
-              onChange={(e) => {
-                setVerifyEmailAddress(e.target.value);
-                clearError();
-              }}
-              placeholder="seu-email@exemplo.com"
-              className={`bg-black/20 border-[0.5px] border-white/[0.03] h-11 px-4 text-white/70 focus:outline-none focus:ring-1 focus:ring-white/10 hover:bg-black/30 transition-all duration-300 rounded-xl placeholder:text-white/20 ${error?.field === 'verifyEmail' ? 'border-rose-500/50 animate-shake' : ''}`}
-              disabled={loadingAction !== null}
-              ref={verifyEmailRef}
-              onKeyDown={(e) => e.key === 'Enter' && handleVerifyEmail()}
-              style={{
-                backgroundColor: "rgba(0, 0, 0, 0.2)",
-                color: "rgba(255, 255, 255, 0.7)",
-                caretColor: "rgba(255, 255, 255, 0.7)"
-              }}
-            />
-          </div>
-          <AnimatePresence>
-            {error?.field === 'verifyEmail' && <ErrorMessage message={error.message} />}
-          </AnimatePresence>
-        </div>
-        
-        <div className="pt-2 space-y-3">
-          <Button 
-            className="w-full bg-black/30 hover:bg-black/50 text-white/80 hover:text-white/90 border-[0.5px] border-white/[0.05] h-11 rounded-xl transition-all duration-300 group"
-            onClick={handleVerifyEmail}
-            disabled={loadingAction !== null}
-          >
-            {loadingAction === 'verify' ? (
-              <div className="flex items-center justify-center space-x-3">
-                <div className="h-4 w-4 relative">
-                  <div className="absolute inset-0 border-2 border-white/10 rounded-full"></div>
-                  <div className="absolute inset-0 border-2 border-t-white/40 rounded-full animate-spin"></div>
-                </div>
-                <span className="text-sm tracking-wide text-white/50">Enviando...</span>
-              </div>
-            ) : (
-              <>
-                <Mail className="h-4 w-4 mr-2 opacity-70 group-hover:opacity-90 transition-opacity" />
-                <span className="text-sm tracking-wide">Enviar Link</span>
-              </>
-            )}
-          </Button>
-          
-          <Button 
-            variant="ghost" 
-            className="w-full text-white/50 hover:text-white/70 hover:bg-white/5 h-11 rounded-xl transition-all duration-300 border border-white/5"
-            onClick={openGmail}
-          >
-            <ExternalLink className="h-4 w-4 mr-2 opacity-70" />
-            <span className="text-sm tracking-wide">Abrir Gmail</span>
-          </Button>
-          
-          <Button 
-            variant="link" 
-            className="w-full text-white/40 hover:text-white/60 transition-colors"
-            onClick={() => {
-              setVerifyEmailState(false);
-              setVerifyEmailAddress("");
-              clearError();
-            }}
-          >
-            <ArrowLeft className="h-3 w-3 mr-1.5" />
-            <span className="text-xs tracking-wide">Voltar para login</span>
-          </Button>
-        </div>
+
+      <div className="space-y-3">
+        <Button 
+          className="w-full bg-black/30 hover:bg-black/50 text-white/80 hover:text-white/90 border-[0.5px] border-white/[0.05] h-11 rounded-xl transition-all duration-300 group"
+          onClick={openGmail}
+        >
+          <CheckCheck className="h-4 w-4 mr-2 opacity-70 group-hover:opacity-90 transition-opacity" />
+          <span className="text-sm tracking-wide">Conferir Email</span>
+        </Button>
+
+        <Button 
+          variant="ghost" 
+          className="w-full text-white/40 hover:text-white/60 hover:bg-white/5"
+          onClick={() => setVerifyEmailState(false)}
+        >
+          <ArrowLeft className="h-4 w-4 mr-2" />
+          <span className="text-xs">Voltar</span>
+        </Button>
       </div>
     </motion.div>
   );
@@ -691,13 +625,10 @@ export default function Auth() {
       >
         <Button 
           className="bg-black/30 hover:bg-black/50 text-white/80 hover:text-white/90 border-[0.5px] border-white/[0.05] h-11 rounded-xl transition-all duration-300 group"
-          onClick={() => {
-            setVerifyEmailState(true);
-            setVerifyEmailAddress(registeredEmail);
-          }}
+          onClick={openGmail}
         >
           <CheckCheck className="h-4 w-4 mr-2 opacity-70 group-hover:opacity-90 transition-opacity" />
-          <span className="text-sm tracking-wide">Verificar Email</span>
+          <span className="text-sm tracking-wide">Conferir Email</span>
         </Button>
         
         <Button 
