@@ -1,5 +1,6 @@
 import { API_KEYS } from './apiKeys';
-import * as crypto from 'crypto';
+// Removendo a importação do crypto que não funciona no navegador
+// import * as crypto from 'crypto';
 
 // Chaves de API Binance (autenticação)
 const API_KEY = API_KEYS.BINANCE.API_KEY;
@@ -19,6 +20,35 @@ let reconnectAttempts = 0;
 const MAX_RECONNECT_ATTEMPTS = 5;
 let reconnectTimeout: number | null = null;
 
+// Função para gerar assinatura HMAC SHA256 usando SubtleCrypto (Web Crypto API)
+async function generateHmacSignature(message: string, secret: string): Promise<string> {
+  // Converter a mensagem e a chave secreta para ArrayBuffer
+  const encoder = new TextEncoder();
+  const messageBuffer = encoder.encode(message);
+  const secretBuffer = encoder.encode(secret);
+  
+  // Importar a chave secreta
+  const key = await window.crypto.subtle.importKey(
+    'raw',
+    secretBuffer,
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign']
+  );
+  
+  // Gerar a assinatura
+  const signature = await window.crypto.subtle.sign(
+    'HMAC',
+    key,
+    messageBuffer
+  );
+  
+  // Converter o resultado para string hexadecimal
+  return Array.from(new Uint8Array(signature))
+    .map(b => b.toString(16).padStart(2, '0'))
+    .join('');
+}
+
 // Função para fazer chamadas autenticadas à API da Binance
 async function binanceAuthenticatedCall(
   endpoint: string,
@@ -33,11 +63,8 @@ async function binanceAuthenticatedCall(
       timestamp
     });
     
-    // Gerar assinatura HMAC SHA256
-    const signature = crypto
-      .createHmac('sha256', API_SECRET)
-      .update(queryParams.toString())
-      .digest('hex');
+    // Gerar assinatura HMAC SHA256 usando a função Web Crypto API
+    const signature = await generateHmacSignature(queryParams.toString(), API_SECRET);
     
     // Adicionar assinatura aos parâmetros
     queryParams.append('signature', signature);

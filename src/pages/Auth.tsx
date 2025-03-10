@@ -328,72 +328,26 @@ export default function Auth() {
   };
 
   // Componente para exibir os termos e condições
-  const TermsAndConditionsModal = () => (
+  const TermsAndConditionsModal = ({ showTerms, setShowTerms }: { showTerms: boolean, setShowTerms: (show: boolean) => void }) => (
     <Dialog open={showTerms} onOpenChange={setShowTerms}>
       <DialogContent className="bg-black/80 backdrop-blur-xl border border-white/5 text-white/90 p-6 rounded-2xl max-w-3xl max-h-[80vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="text-xl font-light tracking-wide text-white/90 mb-4">Termos e Condições</DialogTitle>
-          <DialogDescription className="text-white/70">
-            <div className="space-y-4 text-sm">
-              <h2 className="text-lg font-medium text-white/90">TERMOS E CONDIÇÕES DE USO - PROFEYES</h2>
-              
-              <p>Última atualização: {new Date().toLocaleDateString()}</p>
-              
-              <h3 className="text-md font-medium text-white/90 mt-4">1. INTRODUÇÃO</h3>
-              <p>Bem-vindo ao ProfEyes ("nós", "nosso", "plataforma"). Ao acessar ou utilizar nossa plataforma, você concorda com estes Termos e Condições de Uso ("Termos"). Por favor, leia-os atentamente.</p>
-              
-              <h3 className="text-md font-medium text-white/90 mt-4">2. ISENÇÃO DE RESPONSABILIDADE SOBRE INVESTIMENTOS</h3>
-              <p>2.1. <strong>Não somos consultores de investimentos:</strong> O ProfEyes NÃO é uma plataforma de consultoria de investimentos registrada na Comissão de Valores Mobiliários (CVM) ou qualquer outro órgão regulador. Não oferecemos recomendações personalizadas de investimentos.</p>
-              
-              <p>2.2. <strong>Conteúdo informativo:</strong> Todo o conteúdo disponibilizado em nossa plataforma, incluindo análises, gráficos, sinais e indicadores, tem caráter EXCLUSIVAMENTE INFORMATIVO e EDUCACIONAL.</p>
-              
-              <p>2.3. <strong>Ausência de garantia de resultados:</strong> Não garantimos rentabilidade, retorno ou resultado específico de qualquer natureza. Resultados passados NÃO são garantia de resultados futuros.</p>
-              
-              <p>2.4. <strong>Riscos inerentes:</strong> Investimentos em mercados financeiros envolvem riscos significativos, incluindo a possibilidade de perda parcial ou total do capital investido. O usuário reconhece e aceita estes riscos ao utilizar nossa plataforma.</p>
-              
-              <p>2.5. <strong>Decisão independente:</strong> Qualquer decisão de investimento tomada pelo usuário é de sua exclusiva responsabilidade. Recomendamos que o usuário consulte um profissional de investimentos devidamente certificado antes de tomar qualquer decisão de investimento.</p>
-              
-              <h3 className="text-md font-medium text-white/90 mt-4">3. LIMITAÇÃO DE RESPONSABILIDADE</h3>
-              <p>3.1. <strong>Falhas técnicas:</strong> Não nos responsabilizamos por falhas, interrupções ou atrasos no funcionamento da plataforma, incluindo, mas não se limitando a: problemas de conexão, indisponibilidade do serviço, atrasos na transmissão de dados ou imprecisões nas informações fornecidas.</p>
-              
-              <p>3.2. <strong>Precisão das informações:</strong> Embora nos esforcemos para fornecer informações precisas e atualizadas, não garantimos a exatidão, integridade ou atualidade das informações disponibilizadas.</p>
-              
-              <p>3.3. <strong>Perdas financeiras:</strong> Em nenhuma circunstância seremos responsáveis por quaisquer perdas ou danos diretos, indiretos, incidentais, consequenciais, especiais ou punitivos resultantes do uso ou incapacidade de uso de nossa plataforma, incluindo perdas financeiras decorrentes de decisões de investimento.</p>
-              
-              <h3 className="text-md font-medium text-white/90 mt-4">4. CONFORMIDADE LEGAL</h3>
-              <p>4.1. <strong>Legislação aplicável:</strong> Nossa plataforma opera em conformidade com a legislação brasileira, incluindo a Lei nº 6.385/76 (que regula o mercado de valores mobiliários) e as Instruções da CVM.</p>
-              
-              <p>4.2. <strong>Não caracterização de consultoria:</strong> De acordo com a Instrução CVM nº 592/2017, a atividade de consultoria de valores mobiliários consiste na prestação de serviços de orientação, recomendação e aconselhamento personalizado. Reiteramos que NÃO realizamos tais atividades.</p>
-              
-              <h3 className="text-md font-medium text-white/90 mt-4">5. PROPRIEDADE INTELECTUAL</h3>
-              <p>5.1. Todo o conteúdo disponibilizado na plataforma, incluindo, mas não se limitando a textos, gráficos, logotipos, ícones, imagens, clipes de áudio, downloads digitais e compilações de dados, é de propriedade exclusiva do ProfEyes ou de seus fornecedores de conteúdo e está protegido pelas leis brasileiras e internacionais de direitos autorais.</p>
-              
-              <h3 className="text-md font-medium text-white/90 mt-4">6. MODIFICAÇÕES DOS TERMOS</h3>
-              <p>6.1. Reservamo-nos o direito de modificar estes Termos a qualquer momento, a nosso exclusivo critério. As alterações entrarão em vigor imediatamente após sua publicação na plataforma. O uso continuado da plataforma após tais modificações constitui aceitação dos novos Termos.</p>
-              
-              <h3 className="text-md font-medium text-white/90 mt-4">7. DISPOSIÇÕES GERAIS</h3>
-              <p>7.1. <strong>Lei aplicável:</strong> Estes Termos são regidos pelas leis da República Federativa do Brasil.</p>
-              
-              <p>7.2. <strong>Resolução de conflitos:</strong> Qualquer controvérsia originada ou relacionada a estes Termos será resolvida de forma amigável entre as partes. Não sendo possível, fica eleito o foro da comarca de São Paulo, com exclusão de qualquer outro, por mais privilegiado que seja.</p>
-              
-              <p>7.3. <strong>Independência das disposições:</strong> Se qualquer disposição destes Termos for considerada ilegal, nula ou inexequível, as demais disposições permanecerão em pleno vigor e efeito.</p>
-              
-              <h3 className="text-md font-medium text-white/90 mt-4">8. CONTATO</h3>
-              <p>8.1. Para questões relacionadas a estes Termos, entre em contato conosco através dos canais disponibilizados na plataforma.</p>
-              
-              <p className="mt-6 text-white/90">Ao utilizar nossa plataforma, você reconhece que leu, compreendeu e concorda com estes Termos e Condições de Uso.</p>
-            </div>
-          </DialogDescription>
         </DialogHeader>
+        <div className="space-y-4 text-sm text-white/70">
+          <p>Ao utilizar o ProfEyes, você concorda com os seguintes termos e condições:</p>
+          <h3 className="text-white/90 font-medium">1. Uso do Serviço</h3>
+          <p>O ProfEyes é uma ferramenta educacional destinada a auxiliar professores e educadores. O uso inadequado ou para fins não educacionais é estritamente proibido.</p>
+          <h3 className="text-white/90 font-medium">2. Privacidade e Dados</h3>
+          <p>Respeitamos sua privacidade. Seus dados são armazenados de forma segura e não são compartilhados com terceiros sem seu consentimento explícito.</p>
+          <h3 className="text-white/90 font-medium">3. Responsabilidades</h3>
+          <p>O usuário é responsável por manter a confidencialidade de sua conta e senha, bem como por todas as atividades realizadas em sua conta.</p>
+          <h3 className="text-white/90 font-medium">4. Limitações</h3>
+          <p>O ProfEyes é fornecido "como está", sem garantias de qualquer tipo. Não nos responsabilizamos por quaisquer danos diretos, indiretos, incidentais ou consequenciais resultantes do uso ou incapacidade de usar o serviço.</p>
+        </div>
         <DialogFooter className="mt-6">
-          <Button 
-            onClick={() => {
-              setTermsAccepted(true);
-              setShowTerms(false);
-            }}
-            className="bg-black/30 hover:bg-black/50 text-white/80 hover:text-white/90 border-[0.5px] border-white/[0.05] h-10 rounded-xl transition-all duration-300"
-          >
-            Aceitar e Continuar
+          <Button variant="outline" className="border-white/10 text-white/70 hover:text-white hover:bg-white/5" onClick={() => setShowTerms(false)}>
+            Fechar
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -1180,7 +1134,7 @@ export default function Auth() {
         
         {/* Reflexo sutil na parte inferior */}
         <div className="absolute -bottom-10 left-0 right-0 h-20 bg-gradient-to-b from-white/[0.01] to-transparent blur-xl rounded-full mx-auto w-4/5 opacity-30"></div>
-        <TermsAndConditionsModal />
+        <TermsAndConditionsModal showTerms={showTerms} setShowTerms={setShowTerms} />
       </motion.div>
     </div>
   );
