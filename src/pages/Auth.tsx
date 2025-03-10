@@ -38,17 +38,25 @@ const GlobalScrollbarStyle = () => (
     
     /* Estilização específica para o modal de termos e condições */
     .terms-modal-content::-webkit-scrollbar {
-      width: 3px;
-      height: 3px;
+      width: 6px;
+      height: 6px;
+    }
+    
+    .terms-modal-content::-webkit-scrollbar-track {
+      margin: 4px;
+      background: transparent;
     }
     
     .terms-modal-content::-webkit-scrollbar-thumb {
-      background-color: rgba(255, 255, 255, 0.03);
-      box-shadow: inset 0 0 6px rgba(255, 255, 255, 0.02);
+      background-color: rgba(255, 255, 255, 0.05);
+      box-shadow: inset 0 0 6px rgba(255, 255, 255, 0.03);
+      border-radius: 10px;
+      min-height: 40px;
+      max-height: 100px;
     }
     
     .terms-modal-content::-webkit-scrollbar-thumb:hover {
-      background-color: rgba(255, 255, 255, 0.1);
+      background-color: rgba(255, 255, 255, 0.12);
     }
     
     /* Estilização para Firefox */
@@ -59,8 +67,8 @@ const GlobalScrollbarStyle = () => (
     
     /* Classe específica para Firefox */
     .terms-modal-content {
-      scrollbar-width: thin;
-      scrollbar-color: rgba(255, 255, 255, 0.03) transparent;
+      scrollbar-width: auto;
+      scrollbar-color: rgba(255, 255, 255, 0.05) transparent;
     }
   `}</style>
 );
@@ -393,7 +401,8 @@ export default function Auth() {
         className="bg-black/80 backdrop-blur-xl border border-white/5 text-white/90 p-6 rounded-2xl max-w-3xl max-h-[80vh] overflow-y-auto terms-modal-content"
         style={{
           scrollbarGutter: 'stable',
-          scrollBehavior: 'smooth'
+          scrollBehavior: 'smooth',
+          paddingRight: '16px' // Padding extra para acomodar a barra de rolagem mais grossa
         }}
       >
         <DialogHeader>
