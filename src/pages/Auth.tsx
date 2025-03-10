@@ -3,12 +3,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { User, UserPlus, KeyRound, Loader2, CheckCircle2, LogIn, AlertCircle, Mail, CheckCheck, Eye, EyeOff } from "lucide-react";
+import { User, UserPlus, KeyRound, Loader2, CheckCircle2, LogIn, AlertCircle, Mail, CheckCheck, Eye, EyeOff, ExternalLink, ArrowLeft } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
-import { TermsAndConditions } from "@/components/TermsAndConditions";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 // Adicione este estilo global no início do arquivo, logo após os imports
 export default function Auth() {
@@ -58,8 +59,9 @@ export default function Auth() {
   const [passwordsMatch, setPasswordsMatch] = useState<{isMatch: boolean, message: string} | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [termsAccepted, setTermsAccepted] = useState(false);
   const [showTerms, setShowTerms] = useState(false);
-  const [attemptedSignup, setAttemptedSignup] = useState(false);
+  const [showTermsError, setShowTermsError] = useState(false);
   const emailRef = useRef<HTMLInputElement>(null);
   const passwordRef = useRef<HTMLInputElement>(null);
   const confirmPasswordRef = useRef<HTMLInputElement>(null);
@@ -73,6 +75,20 @@ export default function Auth() {
 
   // Validar campos e focalizar o primeiro campo vazio
   const validateFields = (isLogin: boolean) => {
+    // Mostrar validações ao tentar criar conta apenas se houver problemas
+    if (!isLogin) {
+      // Verificar força da senha
+      const strengthCheck = isStrongPassword(password);
+      // Só mostrar validação de senha se houver problemas
+      setShowPasswordValidation(!strengthCheck.isStrong);
+      
+      // Só mostrar validação de coincidência se as senhas não coincidirem
+      setShowPasswordMatch(password !== confirmPassword && password && confirmPassword);
+      
+      // Sempre mostrar erro de termos se não estiverem aceitos
+      setShowTermsError(!termsAccepted);
+    }
+
     if (!email) {
       setError({ field: 'email', message: 'Por favor, informe seu email' });
       emailRef.current?.focus();
@@ -103,6 +119,12 @@ export default function Auth() {
       if (!strengthCheck.isStrong) {
         setError({ field: 'password', message: strengthCheck.message });
         passwordRef.current?.focus();
+        return false;
+      }
+      
+      // Verificar se os termos foram aceitos
+      if (!termsAccepted) {
+        setError({ field: 'terms', message: 'Você precisa aceitar os termos e condições para continuar' });
         return false;
       }
     }
@@ -176,10 +198,10 @@ export default function Auth() {
       // Ativa a animação de sucesso
       setLoginSuccess(true);
       
-      // Mostra os termos após 1.5 segundos
+      // Redireciona para a página inicial após a animação (3 segundos)
       setTimeout(() => {
-        setShowTerms(true);
-      }, 1500);
+        navigate("/");
+      }, 3000);
       
     } catch (error: any) {
       console.error('Erro ao fazer login:', error);
@@ -193,9 +215,6 @@ export default function Auth() {
   
   // Função para lidar com o cadastro
   const handleSignUp = async () => {
-    // Ativar flag de tentativa de cadastro
-    setAttemptedSignup(true);
-    
     // Limpar qualquer erro anterior
     clearError();
     
@@ -232,10 +251,15 @@ export default function Auth() {
       // Ativa o estado de sucesso
       setSignupSuccess(true);
       
-      // Mostra os termos após 1.5 segundos
-      setTimeout(() => {
-        setShowTerms(true);
-      }, 1500);
+      // Mostrar a opção de verificar email
+      setVerifyEmailAddress(email);
+      
+      // Limpa os campos
+      setEmail("");
+      setPassword("");
+      setConfirmPassword("");
+      setPasswordStrength(null);
+      setTermsAccepted(false);
       
     } catch (error: any) {
       console.error('Erro ao criar conta:', error);
@@ -249,6 +273,11 @@ export default function Auth() {
     }
   };
   
+  // Função para abrir o Gmail em uma nova aba
+  const openGmail = () => {
+    window.open('https://mail.google.com', '_blank');
+  };
+
   // Função para verificar email
   const handleVerifyEmail = async () => {
     if (!verifyEmailAddress) {
@@ -270,6 +299,9 @@ export default function Auth() {
       toast.success("Email verificado com sucesso!", {
         description: "Agora você pode fazer login na sua conta."
       });
+      
+      // Abrir o Gmail em uma nova aba
+      openGmail();
       
       // Voltar para a tela de login
       setVerifyEmailState(false);
@@ -295,47 +327,104 @@ export default function Auth() {
     // A animação é controlada pelo CSS e framer-motion
   };
 
-  // Função para lidar com a aceitação dos termos
-  const handleAcceptTerms = () => {
-    setShowTerms(false);
-    // Redireciona para a página inicial
-    navigate("/");
-  };
-  
-  // Função para lidar com a recusa dos termos
-  const handleDeclineTerms = () => {
-    setShowTerms(false);
-    // Limpa os dados de autenticação e volta para o login
-    setLoginSuccess(false);
-    setSignupSuccess(false);
-    setEmail("");
-    setPassword("");
-    setConfirmPassword("");
-  };
+  // Componente para exibir os termos e condições
+  const TermsAndConditionsModal = () => (
+    <Dialog open={showTerms} onOpenChange={setShowTerms}>
+      <DialogContent className="bg-black/80 backdrop-blur-xl border border-white/5 text-white/90 p-6 rounded-2xl max-w-3xl max-h-[80vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="text-xl font-light tracking-wide text-white/90 mb-4">Termos e Condições</DialogTitle>
+          <DialogDescription className="text-white/70">
+            <div className="space-y-4 text-sm">
+              <h2 className="text-lg font-medium text-white/90">TERMOS E CONDIÇÕES DE USO - PROFEYES</h2>
+              
+              <p>Última atualização: {new Date().toLocaleDateString()}</p>
+              
+              <h3 className="text-md font-medium text-white/90 mt-4">1. INTRODUÇÃO</h3>
+              <p>Bem-vindo ao ProfEyes ("nós", "nosso", "plataforma"). Ao acessar ou utilizar nossa plataforma, você concorda com estes Termos e Condições de Uso ("Termos"). Por favor, leia-os atentamente.</p>
+              
+              <h3 className="text-md font-medium text-white/90 mt-4">2. ISENÇÃO DE RESPONSABILIDADE SOBRE INVESTIMENTOS</h3>
+              <p>2.1. <strong>Não somos consultores de investimentos:</strong> O ProfEyes NÃO é uma plataforma de consultoria de investimentos registrada na Comissão de Valores Mobiliários (CVM) ou qualquer outro órgão regulador. Não oferecemos recomendações personalizadas de investimentos.</p>
+              
+              <p>2.2. <strong>Conteúdo informativo:</strong> Todo o conteúdo disponibilizado em nossa plataforma, incluindo análises, gráficos, sinais e indicadores, tem caráter EXCLUSIVAMENTE INFORMATIVO e EDUCACIONAL.</p>
+              
+              <p>2.3. <strong>Ausência de garantia de resultados:</strong> Não garantimos rentabilidade, retorno ou resultado específico de qualquer natureza. Resultados passados NÃO são garantia de resultados futuros.</p>
+              
+              <p>2.4. <strong>Riscos inerentes:</strong> Investimentos em mercados financeiros envolvem riscos significativos, incluindo a possibilidade de perda parcial ou total do capital investido. O usuário reconhece e aceita estes riscos ao utilizar nossa plataforma.</p>
+              
+              <p>2.5. <strong>Decisão independente:</strong> Qualquer decisão de investimento tomada pelo usuário é de sua exclusiva responsabilidade. Recomendamos que o usuário consulte um profissional de investimentos devidamente certificado antes de tomar qualquer decisão de investimento.</p>
+              
+              <h3 className="text-md font-medium text-white/90 mt-4">3. LIMITAÇÃO DE RESPONSABILIDADE</h3>
+              <p>3.1. <strong>Falhas técnicas:</strong> Não nos responsabilizamos por falhas, interrupções ou atrasos no funcionamento da plataforma, incluindo, mas não se limitando a: problemas de conexão, indisponibilidade do serviço, atrasos na transmissão de dados ou imprecisões nas informações fornecidas.</p>
+              
+              <p>3.2. <strong>Precisão das informações:</strong> Embora nos esforcemos para fornecer informações precisas e atualizadas, não garantimos a exatidão, integridade ou atualidade das informações disponibilizadas.</p>
+              
+              <p>3.3. <strong>Perdas financeiras:</strong> Em nenhuma circunstância seremos responsáveis por quaisquer perdas ou danos diretos, indiretos, incidentais, consequenciais, especiais ou punitivos resultantes do uso ou incapacidade de uso de nossa plataforma, incluindo perdas financeiras decorrentes de decisões de investimento.</p>
+              
+              <h3 className="text-md font-medium text-white/90 mt-4">4. CONFORMIDADE LEGAL</h3>
+              <p>4.1. <strong>Legislação aplicável:</strong> Nossa plataforma opera em conformidade com a legislação brasileira, incluindo a Lei nº 6.385/76 (que regula o mercado de valores mobiliários) e as Instruções da CVM.</p>
+              
+              <p>4.2. <strong>Não caracterização de consultoria:</strong> De acordo com a Instrução CVM nº 592/2017, a atividade de consultoria de valores mobiliários consiste na prestação de serviços de orientação, recomendação e aconselhamento personalizado. Reiteramos que NÃO realizamos tais atividades.</p>
+              
+              <h3 className="text-md font-medium text-white/90 mt-4">5. PROPRIEDADE INTELECTUAL</h3>
+              <p>5.1. Todo o conteúdo disponibilizado na plataforma, incluindo, mas não se limitando a textos, gráficos, logotipos, ícones, imagens, clipes de áudio, downloads digitais e compilações de dados, é de propriedade exclusiva do ProfEyes ou de seus fornecedores de conteúdo e está protegido pelas leis brasileiras e internacionais de direitos autorais.</p>
+              
+              <h3 className="text-md font-medium text-white/90 mt-4">6. MODIFICAÇÕES DOS TERMOS</h3>
+              <p>6.1. Reservamo-nos o direito de modificar estes Termos a qualquer momento, a nosso exclusivo critério. As alterações entrarão em vigor imediatamente após sua publicação na plataforma. O uso continuado da plataforma após tais modificações constitui aceitação dos novos Termos.</p>
+              
+              <h3 className="text-md font-medium text-white/90 mt-4">7. DISPOSIÇÕES GERAIS</h3>
+              <p>7.1. <strong>Lei aplicável:</strong> Estes Termos são regidos pelas leis da República Federativa do Brasil.</p>
+              
+              <p>7.2. <strong>Resolução de conflitos:</strong> Qualquer controvérsia originada ou relacionada a estes Termos será resolvida de forma amigável entre as partes. Não sendo possível, fica eleito o foro da comarca de São Paulo, com exclusão de qualquer outro, por mais privilegiado que seja.</p>
+              
+              <p>7.3. <strong>Independência das disposições:</strong> Se qualquer disposição destes Termos for considerada ilegal, nula ou inexequível, as demais disposições permanecerão em pleno vigor e efeito.</p>
+              
+              <h3 className="text-md font-medium text-white/90 mt-4">8. CONTATO</h3>
+              <p>8.1. Para questões relacionadas a estes Termos, entre em contato conosco através dos canais disponibilizados na plataforma.</p>
+              
+              <p className="mt-6 text-white/90">Ao utilizar nossa plataforma, você reconhece que leu, compreendeu e concorda com estes Termos e Condições de Uso.</p>
+            </div>
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter className="mt-6">
+          <Button 
+            onClick={() => {
+              setTermsAccepted(true);
+              setShowTerms(false);
+            }}
+            className="bg-black/30 hover:bg-black/50 text-white/80 hover:text-white/90 border-[0.5px] border-white/[0.05] h-10 rounded-xl transition-all duration-300"
+          >
+            Aceitar e Continuar
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
 
-  // Componente para verificação de email
+  // Componente para a tela de verificação de email
   const VerifyEmailContent = () => (
-    <motion.div 
-      initial={{ opacity: 0, y: 10 }}
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -10 }}
+      exit={{ opacity: 0, y: -20 }}
       transition={{ duration: 0.5 }}
       className="space-y-6"
     >
-      <motion.div 
-        initial={{ opacity: 0, y: -10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.2 }}
-        className="text-center mb-2"
-      >
-        <Mail className="h-12 w-12 text-white/40 mx-auto mb-4" strokeWidth={1.5} />
-        <h2 className="text-xl font-light text-white/90 mb-2">Verificar Email</h2>
-        <p className="text-white/50 text-sm">
-          Digite seu email para receber um link de verificação
+      <div className="text-center space-y-2">
+        <motion.div
+          initial={{ scale: 0.8, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ delay: 0.2, duration: 0.5 }}
+          className="mx-auto bg-gradient-to-br from-black/40 to-black/20 p-4 rounded-full w-20 h-20 flex items-center justify-center border border-white/5 shadow-lg"
+        >
+          <Mail className="h-10 w-10 text-white/70" />
+        </motion.div>
+        <h2 className="text-xl font-light tracking-wide text-white/90">Verificar Email</h2>
+        <p className="text-sm text-white/60 max-w-xs mx-auto">
+          Enviaremos um link de verificação para o seu email. Verifique sua caixa de entrada e spam.
         </p>
-      </motion.div>
+      </div>
       
-      <div className="space-y-5">
+      <div className="space-y-4">
         <div className="space-y-2">
           <Label htmlFor="verify-email" className="text-xs uppercase text-white/40 tracking-wider font-light flex items-center">
             <Mail className="h-3 w-3 mr-1.5 opacity-40" />
@@ -352,7 +441,7 @@ export default function Auth() {
               }}
               placeholder="seu-email@exemplo.com"
               className={`bg-black/20 border-[0.5px] border-white/[0.03] h-11 px-4 text-white/70 focus:outline-none focus:ring-1 focus:ring-white/10 hover:bg-black/30 transition-all duration-300 rounded-xl placeholder:text-white/20 ${error?.field === 'verifyEmail' ? 'border-rose-500/50 animate-shake' : ''}`}
-              disabled={authLoading || loadingAction !== null}
+              disabled={loadingAction !== null}
               ref={verifyEmailRef}
               onKeyDown={(e) => e.key === 'Enter' && handleVerifyEmail()}
               style={{
@@ -367,11 +456,11 @@ export default function Auth() {
           </AnimatePresence>
         </div>
         
-        <div className="flex flex-col space-y-3">
+        <div className="pt-2 space-y-3">
           <Button 
             className="w-full bg-black/30 hover:bg-black/50 text-white/80 hover:text-white/90 border-[0.5px] border-white/[0.05] h-11 rounded-xl transition-all duration-300 group"
             onClick={handleVerifyEmail}
-            disabled={authLoading || loadingAction !== null}
+            disabled={loadingAction !== null}
           >
             {loadingAction === 'verify' ? (
               <div className="flex items-center justify-center space-x-3">
@@ -391,11 +480,24 @@ export default function Auth() {
           
           <Button 
             variant="ghost" 
-            className="text-white/40 hover:text-white/60 hover:bg-white/5"
-            onClick={() => setVerifyEmailState(false)}
-            disabled={authLoading || loadingAction !== null}
+            className="w-full text-white/50 hover:text-white/70 hover:bg-white/5 h-11 rounded-xl transition-all duration-300 border border-white/5"
+            onClick={openGmail}
           >
-            <span className="text-xs">Voltar</span>
+            <ExternalLink className="h-4 w-4 mr-2 opacity-70" />
+            <span className="text-sm tracking-wide">Abrir Gmail</span>
+          </Button>
+          
+          <Button 
+            variant="link" 
+            className="w-full text-white/40 hover:text-white/60 transition-colors"
+            onClick={() => {
+              setVerifyEmailState(false);
+              setVerifyEmailAddress("");
+              clearError();
+            }}
+          >
+            <ArrowLeft className="h-3 w-3 mr-1.5" />
+            <span className="text-xs tracking-wide">Voltar para login</span>
           </Button>
         </div>
       </div>
@@ -559,8 +661,6 @@ export default function Auth() {
   
   // Componente de indicador de força de senha
   const PasswordStrengthIndicator = ({ strength }: { strength: { isStrong: boolean; message: string } }) => {
-    if (!attemptedSignup) return null;
-
     // Identificar requisitos não atendidos
     const requirements = [
       { id: 'length', label: 'Pelo menos 8 caracteres', met: password.length >= 8 },
@@ -628,41 +728,37 @@ export default function Auth() {
   };
 
   // Componente de indicador de correspondência de senhas
-  const PasswordMatchIndicator = ({ match }: { match: { isMatch: boolean; message: string } }) => {
-    if (!attemptedSignup) return null;
-
-    return (
-      <motion.div 
-        initial={{ opacity: 0, height: 0 }}
-        animate={{ opacity: 1, height: 'auto' }}
-        exit={{ opacity: 0, height: 0 }}
-        transition={{ duration: 0.3 }}
-        className="bg-black/20 border-[0.5px] border-white/[0.03] p-3 rounded-lg mt-2"
-      >
-        <div className="flex items-center text-xs">
-          {match.isMatch ? (
-            <>
-              <div className="h-3.5 w-3.5 rounded-full flex items-center justify-center mr-2 bg-emerald-500/10">
-                <CheckCircle2 className="h-2.5 w-2.5 text-emerald-400/70" />
-              </div>
-              <span className="text-white/50">
-                {match.message}
-              </span>
-            </>
-          ) : (
-            <>
-              <div className="h-3.5 w-3.5 rounded-full flex items-center justify-center mr-2 bg-rose-500/10">
-                <AlertCircle className="h-2.5 w-2.5 text-rose-400/70" />
-              </div>
-              <span className="text-rose-400/70">
-                {match.message}
-              </span>
-            </>
-          )}
-        </div>
-      </motion.div>
-    );
-  };
+  const PasswordMatchIndicator = ({ match }: { match: { isMatch: boolean; message: string } }) => (
+    <motion.div 
+      initial={{ opacity: 0, height: 0 }}
+      animate={{ opacity: 1, height: 'auto' }}
+      exit={{ opacity: 0, height: 0 }}
+      transition={{ duration: 0.3 }}
+      className="bg-black/20 border-[0.5px] border-white/[0.03] p-3 rounded-lg mt-2"
+    >
+      <div className="flex items-center text-xs">
+        {match.isMatch ? (
+          <>
+            <div className="h-3.5 w-3.5 rounded-full flex items-center justify-center mr-2 bg-emerald-500/10">
+              <CheckCircle2 className="h-2.5 w-2.5 text-emerald-400/70" />
+            </div>
+            <span className="text-white/50">
+              {match.message}
+            </span>
+          </>
+        ) : (
+          <>
+            <div className="h-3.5 w-3.5 rounded-full flex items-center justify-center mr-2 bg-rose-500/10">
+              <AlertCircle className="h-2.5 w-2.5 text-rose-400/70" />
+            </div>
+            <span className="text-rose-400/70">
+              {match.message}
+            </span>
+          </>
+        )}
+      </div>
+    </motion.div>
+  );
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-black bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-gray-900/30 via-black to-black p-4 relative overflow-hidden">
@@ -1009,6 +1105,43 @@ export default function Auth() {
                           </AnimatePresence>
                         </div>
                         
+                        <div className="space-y-2 pt-2">
+                          <div className="flex items-start space-x-2">
+                            <Checkbox 
+                              id="terms" 
+                              checked={termsAccepted}
+                              onCheckedChange={(checked) => {
+                                if (checked === true) {
+                                  setShowTerms(true);
+                                } else {
+                                  setTermsAccepted(false);
+                                }
+                                clearError();
+                              }}
+                              className="mt-1 bg-black/20 border-white/10 data-[state=checked]:bg-white/20 data-[state=checked]:border-white/30 data-[state=checked]:text-white"
+                            />
+                            <div className="space-y-1">
+                              <Label 
+                                htmlFor="terms" 
+                                className="text-xs text-white/60 leading-relaxed cursor-pointer"
+                              >
+                                Li e concordo com os <button 
+                                  type="button" 
+                                  onClick={() => setShowTerms(true)}
+                                  className="text-white/80 hover:text-white underline underline-offset-2 focus:outline-none"
+                                >
+                                  Termos e Condições
+                                </button> de uso da plataforma.
+                              </Label>
+                              <AnimatePresence>
+                                {(error?.field === 'terms' || showTermsError && !termsAccepted) && (
+                                  <ErrorMessage message="Você precisa aceitar os termos e condições para continuar" />
+                                )}
+                              </AnimatePresence>
+                            </div>
+                          </div>
+                        </div>
+                        
                         <motion.div
                           initial={{ opacity: 0, y: 10 }}
                           animate={{ opacity: 1, y: 0 }}
@@ -1047,16 +1180,8 @@ export default function Auth() {
         
         {/* Reflexo sutil na parte inferior */}
         <div className="absolute -bottom-10 left-0 right-0 h-20 bg-gradient-to-b from-white/[0.01] to-transparent blur-xl rounded-full mx-auto w-4/5 opacity-30"></div>
+        <TermsAndConditionsModal />
       </motion.div>
-      
-      <AnimatePresence>
-        {showTerms && (
-          <TermsAndConditions
-            onAccept={handleAcceptTerms}
-            onDecline={handleDeclineTerms}
-          />
-        )}
-      </AnimatePresence>
     </div>
   );
 } 
