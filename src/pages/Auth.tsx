@@ -16,28 +16,51 @@ const GlobalScrollbarStyle = () => (
   <style jsx global>{`
     /* Estilização para navegadores WebKit (Chrome, Safari, etc.) */
     ::-webkit-scrollbar {
-      width: 5px;
-      height: 5px;
+      width: 4px;
+      height: 4px;
     }
     
     ::-webkit-scrollbar-track {
       background: transparent;
+      margin: 3px;
     }
     
     ::-webkit-scrollbar-thumb {
-      background-color: rgba(255, 255, 255, 0.1);
-      border-radius: 10px;
+      background-color: rgba(255, 255, 255, 0.05);
+      border-radius: 20px;
       border: none;
+      transition: background-color 0.3s ease;
     }
     
     ::-webkit-scrollbar-thumb:hover {
-      background-color: rgba(255, 255, 255, 0.2);
+      background-color: rgba(255, 255, 255, 0.15);
+    }
+    
+    /* Estilização específica para o modal de termos e condições */
+    .terms-modal-content::-webkit-scrollbar {
+      width: 3px;
+      height: 3px;
+    }
+    
+    .terms-modal-content::-webkit-scrollbar-thumb {
+      background-color: rgba(255, 255, 255, 0.03);
+      box-shadow: inset 0 0 6px rgba(255, 255, 255, 0.02);
+    }
+    
+    .terms-modal-content::-webkit-scrollbar-thumb:hover {
+      background-color: rgba(255, 255, 255, 0.1);
     }
     
     /* Estilização para Firefox */
     * {
       scrollbar-width: thin;
-      scrollbar-color: rgba(255, 255, 255, 0.1) transparent;
+      scrollbar-color: rgba(255, 255, 255, 0.05) transparent;
+    }
+    
+    /* Classe específica para Firefox */
+    .terms-modal-content {
+      scrollbar-width: thin;
+      scrollbar-color: rgba(255, 255, 255, 0.03) transparent;
     }
   `}</style>
 );
@@ -367,7 +390,11 @@ export default function Auth() {
       setShowTerms(open);
     }}>
       <DialogContent 
-        className="bg-black/80 backdrop-blur-xl border border-white/5 text-white/90 p-6 rounded-2xl max-w-3xl max-h-[80vh] overflow-y-auto"
+        className="bg-black/80 backdrop-blur-xl border border-white/5 text-white/90 p-6 rounded-2xl max-w-3xl max-h-[80vh] overflow-y-auto terms-modal-content"
+        style={{
+          scrollbarGutter: 'stable',
+          scrollBehavior: 'smooth'
+        }}
       >
         <DialogHeader>
           <DialogTitle className="text-xl font-light tracking-wide text-white/90 mb-4">Termos e Condições</DialogTitle>
