@@ -11,7 +11,37 @@ import { useNavigate } from "react-router-dom";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
-// Adicione este estilo global no início do arquivo, logo após os imports
+// Estilo global para barras de rolagem elegantes
+const GlobalScrollbarStyle = () => (
+  <style jsx global>{`
+    /* Estilização para navegadores WebKit (Chrome, Safari, etc.) */
+    ::-webkit-scrollbar {
+      width: 5px;
+      height: 5px;
+    }
+    
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    
+    ::-webkit-scrollbar-thumb {
+      background-color: rgba(255, 255, 255, 0.1);
+      border-radius: 10px;
+      border: none;
+    }
+    
+    ::-webkit-scrollbar-thumb:hover {
+      background-color: rgba(255, 255, 255, 0.2);
+    }
+    
+    /* Estilização para Firefox */
+    * {
+      scrollbar-width: thin;
+      scrollbar-color: rgba(255, 255, 255, 0.1) transparent;
+    }
+  `}</style>
+);
+
 export default function Auth() {
   // Adicione este estilo global para corrigir o preenchimento automático
   useEffect(() => {
@@ -336,7 +366,9 @@ export default function Auth() {
       }
       setShowTerms(open);
     }}>
-      <DialogContent className="bg-black/80 backdrop-blur-xl border border-white/5 text-white/90 p-6 rounded-2xl max-w-3xl max-h-[80vh] overflow-y-auto custom-scrollbar">
+      <DialogContent 
+        className="bg-black/80 backdrop-blur-xl border border-white/5 text-white/90 p-6 rounded-2xl max-w-3xl max-h-[80vh] overflow-y-auto"
+      >
         <DialogHeader>
           <DialogTitle className="text-xl font-light tracking-wide text-white/90 mb-4">Termos e Condições</DialogTitle>
         </DialogHeader>
@@ -829,6 +861,9 @@ export default function Auth() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-black bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-gray-900/30 via-black to-black p-4 relative overflow-hidden">
+      {/* Adiciona o estilo global para barras de rolagem */}
+      <GlobalScrollbarStyle />
+      
       {/* Efeitos de fundo sutis */}
       <div className="absolute inset-0 pointer-events-none">
         <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-b from-white/[0.01] to-transparent opacity-30"></div>
