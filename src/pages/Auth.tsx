@@ -329,25 +329,67 @@ export default function Auth() {
 
   // Componente para exibir os termos e condições
   const TermsAndConditionsModal = ({ showTerms, setShowTerms }: { showTerms: boolean, setShowTerms: (show: boolean) => void }) => (
-    <Dialog open={showTerms} onOpenChange={setShowTerms}>
+    <Dialog open={showTerms} onOpenChange={(open) => {
+      // Impede que o usuário feche o modal clicando fora dele
+      if (!termsAccepted && !open) {
+        return;
+      }
+      setShowTerms(open);
+    }}>
       <DialogContent className="bg-black/80 backdrop-blur-xl border border-white/5 text-white/90 p-6 rounded-2xl max-w-3xl max-h-[80vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="text-xl font-light tracking-wide text-white/90 mb-4">Termos e Condições</DialogTitle>
         </DialogHeader>
         <div className="space-y-4 text-sm text-white/70">
-          <p>Ao utilizar o ProfEyes, você concorda com os seguintes termos e condições:</p>
-          <h3 className="text-white/90 font-medium">1. Uso do Serviço</h3>
-          <p>O ProfEyes é uma ferramenta educacional destinada a auxiliar professores e educadores. O uso inadequado ou para fins não educacionais é estritamente proibido.</p>
-          <h3 className="text-white/90 font-medium">2. Privacidade e Dados</h3>
-          <p>Respeitamos sua privacidade. Seus dados são armazenados de forma segura e não são compartilhados com terceiros sem seu consentimento explícito.</p>
-          <h3 className="text-white/90 font-medium">3. Responsabilidades</h3>
-          <p>O usuário é responsável por manter a confidencialidade de sua conta e senha, bem como por todas as atividades realizadas em sua conta.</p>
-          <h3 className="text-white/90 font-medium">4. Limitações</h3>
-          <p>O ProfEyes é fornecido "como está", sem garantias de qualquer tipo. Não nos responsabilizamos por quaisquer danos diretos, indiretos, incidentais ou consequenciais resultantes do uso ou incapacidade de usar o serviço.</p>
+          <p>Última atualização: {new Date().toLocaleDateString()}</p>
+          
+          <h3 className="text-white/90 font-medium">1. ISENÇÃO DE RESPONSABILIDADE SOBRE INVESTIMENTOS</h3>
+          <p><strong>NÃO SOMOS CONSULTORES DE INVESTIMENTOS:</strong> O ProfEyes NÃO é uma plataforma de consultoria de investimentos registrada na Comissão de Valores Mobiliários (CVM) ou qualquer outro órgão regulador. Não oferecemos recomendações personalizadas de investimentos.</p>
+          <p><strong>CONTEÚDO INFORMATIVO:</strong> Todo o conteúdo disponibilizado em nossa plataforma, incluindo análises, gráficos, sinais e indicadores, tem caráter EXCLUSIVAMENTE INFORMATIVO e EDUCACIONAL.</p>
+          <p><strong>AUSÊNCIA DE GARANTIA DE RESULTADOS:</strong> Não garantimos rentabilidade, retorno ou resultado específico de qualquer natureza. Resultados passados NÃO são garantia de resultados futuros.</p>
+          <p><strong>RISCOS INERENTES:</strong> Investimentos em mercados financeiros envolvem riscos significativos, incluindo a possibilidade de perda parcial ou total do capital investido. O usuário reconhece e aceita estes riscos ao utilizar nossa plataforma.</p>
+          
+          <h3 className="text-white/90 font-medium">2. LIMITAÇÃO DE RESPONSABILIDADE</h3>
+          <p><strong>FALHAS TÉCNICAS:</strong> Não nos responsabilizamos por falhas, interrupções ou atrasos no funcionamento da plataforma, incluindo, mas não se limitando a: problemas de conexão, indisponibilidade do serviço, atrasos na transmissão de dados ou imprecisões nas informações fornecidas.</p>
+          <p><strong>PRECISÃO DAS INFORMAÇÕES:</strong> Embora nos esforcemos para fornecer informações precisas e atualizadas, não garantimos a exatidão, integridade ou atualidade das informações disponibilizadas.</p>
+          <p><strong>PERDAS FINANCEIRAS:</strong> Em nenhuma circunstância seremos responsáveis por quaisquer perdas ou danos diretos, indiretos, incidentais, consequenciais, especiais ou punitivos resultantes do uso ou incapacidade de uso de nossa plataforma, incluindo perdas financeiras decorrentes de decisões de investimento.</p>
+          
+          <h3 className="text-white/90 font-medium">3. CONFORMIDADE LEGAL</h3>
+          <p><strong>LEGISLAÇÃO APLICÁVEL:</strong> Nossa plataforma opera em conformidade com a legislação brasileira, incluindo a Lei nº 6.385/76 (que regula o mercado de valores mobiliários) e as Instruções da CVM.</p>
+          <p><strong>NÃO CARACTERIZAÇÃO DE CONSULTORIA:</strong> De acordo com a Instrução CVM nº 592/2017, a atividade de consultoria de valores mobiliários consiste na prestação de serviços de orientação, recomendação e aconselhamento personalizado. Reiteramos que NÃO realizamos tais atividades.</p>
+          
+          <h3 className="text-white/90 font-medium">4. PRIVACIDADE E DADOS</h3>
+          <p>Respeitamos sua privacidade. Seus dados são armazenados de forma segura e não são compartilhados com terceiros sem seu consentimento explícito, exceto quando exigido por lei.</p>
+          
+          <h3 className="text-white/90 font-medium">5. RESPONSABILIDADES DO USUÁRIO</h3>
+          <p>O usuário é responsável por manter a confidencialidade de sua conta e senha, bem como por todas as atividades realizadas em sua conta. O usuário é o único responsável por suas decisões de investimento e deve buscar aconselhamento profissional antes de investir.</p>
+          
+          <h3 className="text-white/90 font-medium">6. MODIFICAÇÕES DOS TERMOS</h3>
+          <p>Reservamo-nos o direito de modificar estes Termos a qualquer momento, a nosso exclusivo critério. As alterações entrarão em vigor imediatamente após sua publicação na plataforma.</p>
+          
+          <p className="mt-6 text-white/90 font-medium">Ao clicar em "Aceitar e Continuar", você reconhece que leu, compreendeu e concorda com estes Termos e Condições de Uso. Se não concordar com estes termos, você deve clicar em "Recusar" e não poderá utilizar nossa plataforma.</p>
         </div>
-        <DialogFooter className="mt-6">
-          <Button variant="outline" className="border-white/10 text-white/70 hover:text-white hover:bg-white/5" onClick={() => setShowTerms(false)}>
-            Fechar
+        <DialogFooter className="mt-6 flex flex-col sm:flex-row gap-3">
+          <Button 
+            variant="destructive" 
+            className="bg-rose-900/50 hover:bg-rose-800/70 text-white/90 border-[0.5px] border-rose-800/30"
+            onClick={() => {
+              setTermsAccepted(false);
+              setShowTerms(false);
+              // Redirecionar para uma página externa ou mostrar uma mensagem
+              window.location.href = "https://www.google.com";
+            }}
+          >
+            Recusar
+          </Button>
+          <Button 
+            className="bg-emerald-900/30 hover:bg-emerald-800/50 text-white/90 border-[0.5px] border-emerald-800/30"
+            onClick={() => {
+              setTermsAccepted(true);
+              setShowTerms(false);
+            }}
+          >
+            Aceitar e Continuar
           </Button>
         </DialogFooter>
       </DialogContent>

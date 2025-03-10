@@ -70,7 +70,7 @@ We don't support custom domains (yet). If you want to deploy your project under 
 
 # ProfEyes
 
-Aplicativo para professores e educadores.
+Aplicativo para traders e investidores do mercado financeiro.
 
 ## Sistema de Sincronização Automática
 
