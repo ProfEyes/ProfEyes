@@ -46,7 +46,7 @@ export function AuthGuard({ children }: AuthGuardProps) {
           <h2 className="mt-4 text-white/70 text-lg">Verificando autenticação...</h2>
           {loading && !isVerifying && (
             <p className="mt-2 text-white/50 text-sm">
-              Isso está demorando mais do que o esperado...
+              Preparando seu ambiente personalizado...
             </p>
           )}
         </div>
