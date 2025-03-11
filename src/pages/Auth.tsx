@@ -1323,17 +1323,27 @@ export default function Auth() {
                                 }
                                 clearError();
                               }}
-                              className="mt-1 bg-black/20 border-white/10 data-[state=checked]:bg-white/20 data-[state=checked]:border-white/30 data-[state=checked]:text-white"
+                              className={`mt-1 relative ${
+                                termsAccepted 
+                                  ? 'bg-emerald-500/20 border-emerald-500/50 data-[state=checked]:bg-emerald-500/20 data-[state=checked]:border-emerald-400/50 data-[state=checked]:text-emerald-400'
+                                  : 'bg-black/20 border-white/10 data-[state=checked]:bg-white/20 data-[state=checked]:border-white/30 data-[state=checked]:text-white'
+                              } transition-all duration-300`}
                             />
+                            {termsAccepted && (
+                              <div className="absolute mt-1 ml-0.5 pointer-events-none">
+                                <div className="absolute inset-0 rounded-sm bg-emerald-400/20 blur-[2px] scale-110"></div>
+                                <div className="absolute inset-0 rounded-sm bg-emerald-400/10 blur-[4px] scale-150"></div>
+                              </div>
+                            )}
                             <div className="space-y-1">
                               <Label 
                                 htmlFor="terms" 
-                                className="text-xs text-white/60 leading-relaxed cursor-pointer"
+                                className={`text-xs ${termsAccepted ? 'text-emerald-400/90' : 'text-white/60'} leading-relaxed cursor-pointer transition-colors duration-300`}
                               >
                                 Li e concordo com os <button 
                                   type="button" 
                                   onClick={() => setShowTerms(true)}
-                                  className="text-white/80 hover:text-white underline underline-offset-2 focus:outline-none"
+                                  className={`${termsAccepted ? 'text-emerald-400 hover:text-emerald-300' : 'text-white/80 hover:text-white'} underline underline-offset-2 focus:outline-none transition-colors duration-300`}
                                 >
                                   Termos e Condições
                                 </button> de uso da plataforma.
