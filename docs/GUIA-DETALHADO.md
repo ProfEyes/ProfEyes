@@ -182,4 +182,33 @@ git push origin Pro
 - [Documentação do Projeto](link-para-documentacao)
 - [Discord do Projeto](link-para-discord)
 - [Guia do GitHub](https://docs.github.com/pt)
-- [Documentação do Cursor](https://cursor.sh/docs) 
+- [Documentação do Cursor](https://cursor.sh/docs)
+
+## 11. Colaboração em Tempo Real no Cursor
+
+### 11.1. Configurando a Colaboração
+1. Abra o projeto no Cursor Editor
+2. Procure o ícone de "Colaboração" no canto superior direito
+3. Clique para ver quem está online
+4. Se necessário, convide outros membros compartilhando o link de colaboração
+
+### 11.2. Recursos de Colaboração
+1. **Cursores Múltiplos:**
+   - Cada membro terá um cursor de cor diferente
+   - Você pode ver onde cada pessoa está trabalhando
+
+2. **Edição em Tempo Real:**
+   - As alterações aparecem instantaneamente
+   - Você pode ver quem está editando cada arquivo
+   - As mudanças são sincronizadas automaticamente
+
+3. **Comunicação:**
+   - Use o chat integrado para discussões rápidas
+   - Veja o histórico de alterações em tempo real
+   - Compartilhe trechos de código facilmente
+
+### 11.3. Boas Práticas na Colaboração
+1. Mantenha o Cursor aberto e conectado
+2. Comunique no chat quando começar a trabalhar em um arquivo
+3. Evite editar o mesmo trecho de código simultaneamente
+4. Use o sistema de branches mesmo com edição em tempo real 
