@@ -1,0 +1,28 @@
+name: Notificações de Alterações
+
+on:
+  push:
+    branches:
+      - Pro
+      - main
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v2
+
+      - name: Notificar sobre alterações
+        uses: rjstone/discord-webhook-notify@v1
+        with:
+          severity: info
+          details: |
+            Nova alteração no projeto ProfEyes!
+            Autor: ${{ github.actor }}
+            Branch: ${{ github.ref }}
+            Commit: ${{ github.sha }}
+            Mensagem: ${{ github.event.head_commit.message }}
+          webhookUrl: ${{ secrets.DISCORD_WEBHOOK }} 
