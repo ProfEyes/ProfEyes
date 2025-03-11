@@ -123,6 +123,8 @@ export default function Auth() {
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [showTerms, setShowTerms] = useState(false);
   const [showTermsError, setShowTermsError] = useState(false);
+  const [forgotPasswordState, setForgotPasswordState] = useState(false);
+  const [resetEmailSent, setResetEmailSent] = useState(false);
   const emailRef = useRef<HTMLInputElement>(null);
   const passwordRef = useRef<HTMLInputElement>(null);
   const confirmPasswordRef = useRef<HTMLInputElement>(null);
@@ -826,6 +828,132 @@ export default function Auth() {
     </motion.div>
   );
 
+  // Componente para a tela de recuperação de senha
+  const ForgotPasswordContent = () => (
+    <motion.div 
+      className="space-y-5"
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -10 }}
+      transition={{ duration: 0.5 }}
+    >
+      {resetEmailSent ? (
+        <motion.div 
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="text-center space-y-4"
+        >
+          <CheckCircle2 className="h-16 w-16 text-emerald-500 mx-auto" />
+          <h2 className="text-xl text-white/90">Email Enviado!</h2>
+          <p className="text-white/60 text-sm">
+            Enviamos instruções de recuperação de senha para seu email. Por favor, verifique sua caixa de entrada.
+          </p>
+          <Button 
+            onClick={() => {
+              setForgotPasswordState(false);
+              setResetEmailSent(false);
+            }}
+            className="mt-4"
+          >
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            Voltar para o login
+          </Button>
+        </motion.div>
+      ) : (
+        <>
+          <div>
+            <h2 className="text-xl text-white/90 mb-2">Recuperar Senha</h2>
+            <p className="text-white/60 text-sm">
+              Digite seu email e enviaremos instruções para redefinir sua senha.
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="reset-email" className="text-xs uppercase text-white/40 tracking-wider font-light flex items-center">
+              <Mail className="h-3 w-3 mr-1.5 opacity-40" />
+              Email
+            </Label>
+            <Input 
+              id="reset-email"
+              type="email"
+              value={email}
+              onChange={(e) => {
+                setEmail(e.target.value);
+                clearError();
+              }}
+              placeholder="seu@email.com"
+              className={`bg-black/20 border-[0.5px] border-white/[0.03] h-11 px-4 text-white/70 focus:outline-none focus:ring-1 focus:ring-white/10 hover:bg-black/30 transition-all duration-300 rounded-xl placeholder:text-white/20 ${error?.field === 'email' ? 'border-rose-500/50 animate-shake' : ''}`}
+              disabled={loadingAction !== null}
+              ref={emailRef}
+            />
+            <AnimatePresence>
+              {error?.field === 'email' && <ErrorMessage message={error.message} />}
+            </AnimatePresence>
+          </div>
+
+          <div className="flex space-x-3">
+            <Button 
+              onClick={() => setForgotPasswordState(false)}
+              className="flex-1 bg-black/30 hover:bg-black/50 text-white/80 hover:text-white/90 border-[0.5px] border-white/[0.05] h-11 rounded-xl transition-all duration-300"
+            >
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              Voltar
+            </Button>
+            <Button 
+              onClick={handleResetPassword}
+              className="flex-1 bg-black/30 hover:bg-black/50 text-white/80 hover:text-white/90 border-[0.5px] border-white/[0.05] h-11 rounded-xl transition-all duration-300"
+              disabled={loadingAction !== null}
+            >
+              {loadingAction === 'reset' ? (
+                <div className="flex items-center justify-center space-x-3">
+                  <div className="h-4 w-4 relative">
+                    <div className="absolute inset-0 border-2 border-white/10 rounded-full"></div>
+                    <div className="absolute inset-0 border-2 border-t-white/40 rounded-full animate-spin"></div>
+                  </div>
+                  <span className="text-sm tracking-wide text-white/50">Enviando...</span>
+                </div>
+              ) : (
+                <>
+                  <Mail className="h-4 w-4 mr-2" />
+                  Enviar Email
+                </>
+              )}
+            </Button>
+          </div>
+        </>
+      )}
+    </motion.div>
+  );
+
+  // Função para lidar com a recuperação de senha
+  const handleResetPassword = async () => {
+    clearError();
+    
+    if (!email) {
+      setError({ field: 'email', message: 'Por favor, informe seu email' });
+      emailRef.current?.focus();
+      return;
+    }
+
+    try {
+      setLoadingAction('reset');
+      const { error: resetError } = await resetPassword(email);
+      
+      if (resetError) {
+        setError({ field: 'email', message: resetError.message });
+        return;
+      }
+      
+      setResetEmailSent(true);
+      toast.success('Email de recuperação enviado com sucesso!');
+    } catch (error: any) {
+      console.error('Erro ao enviar email de recuperação:', error);
+      setError({ field: 'email', message: 'Erro ao enviar email de recuperação. Tente novamente.' });
+    } finally {
+      setLoadingAction(null);
+    }
+  };
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-black bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-gray-900/30 via-black to-black p-4 relative overflow-hidden">
       {/* Adiciona o estilo global para barras de rolagem */}
@@ -894,6 +1022,8 @@ export default function Auth() {
           <AnimatePresence mode="wait">
             {verifyEmailState ? (
               <VerifyEmailContent />
+            ) : forgotPasswordState ? (
+              <ForgotPasswordContent />
             ) : (
               <Tabs defaultValue="login" className="w-full">
                 <TabsList className="grid w-full grid-cols-2 mb-8 bg-black/20 p-1 rounded-xl border-[0.5px] border-white/[0.03]">
@@ -997,6 +1127,12 @@ export default function Auth() {
                           <AnimatePresence>
                             {error?.field === 'password' && <ErrorMessage message={error.message} />}
                           </AnimatePresence>
+                          <button
+                            onClick={() => setForgotPasswordState(true)}
+                            className="text-xs text-white/40 hover:text-white/60 transition-colors mt-1 text-right w-full"
+                          >
+                            Esqueceu a senha?
+                          </button>
                         </div>
                         
                         <motion.div

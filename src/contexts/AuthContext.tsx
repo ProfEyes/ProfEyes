@@ -259,48 +259,15 @@ export function AuthProvider({ children }: AuthProviderProps) {
       setSession(data.session);
       setUser(data.user);
       
-      // Carregar o perfil do usuário
-      try {
-        const { data: profileData } = await supabase
-          .from('user_profiles')
-          .select('*')
-          .eq('user_id', data.user.id)
-          .single();
-          
-        if (profileData) {
-          setProfile(profileData);
-        } else {
-          // Criar um perfil padrão se não existir
-          const newProfile = {
-            user_id: data.user.id,
-            display_name: data.user.email?.split('@')[0] || 'Usuário',
-            avatar_url: null,
-            language: 'pt-BR',
-            timezone: 'america-sao_paulo',
-            risk_level: 'moderado',
-            default_currency: 'brl'
-          };
-          
-          const { data: createdProfile } = await supabase
-            .from('user_profiles')
-            .insert([newProfile])
-            .select()
-            .single();
-            
-          if (createdProfile) {
-            setProfile(createdProfile);
-          }
-        }
-      } catch (profileError) {
-        console.error('Erro ao carregar perfil:', profileError);
-      }
-      
-      toast.success('Login realizado com sucesso!');
-      return { error: null };
-    } catch (error: any) {
+      return { data };
+    } catch (error) {
       console.error('Erro ao fazer login:', error);
-      toast.error(`Erro ao fazer login: ${error.message}`);
-      return { error: error as any };
+      return {
+        error: {
+          message: 'Erro ao fazer login. Por favor, tente novamente.',
+          name: 'LoginFailed'
+        } as any
+      };
     } finally {
       setLoading(false);
     }
@@ -442,30 +409,40 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }
   };
 
-  // Função para redefinir senha (simulada)
+  // Função para resetar a senha
   const resetPassword = async (email: string) => {
     try {
       setLoading(true);
       
-      // Verificar se o usuário existe
-      const users = getLocalUsers();
-      const foundUser = users.find(u => u.email === email);
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/auth/reset-password`
+      });
       
-      if (!foundUser) {
-        return { 
-          error: {
-            message: 'Email não encontrado. Por favor, crie uma conta primeiro.',
-            name: 'UserNotFound'
-          } as any
-        };
+      if (error) {
+        console.error('Erro ao enviar email de recuperação:', error);
+        
+        // Traduzir as mensagens de erro comuns do Supabase
+        if (error.message.includes('User not found')) {
+          return { 
+            error: {
+              message: 'Email não encontrado. Por favor, verifique o email informado.',
+              name: 'UserNotFound'
+            } as any 
+          };
+        }
+        
+        return { error };
       }
       
-      // Em um cenário real, enviaria um email. Aqui, apenas exibimos uma mensagem
-      toast.success('Email enviado para redefinição de senha!');
-      return { error: null };
-    } catch (error: any) {
-      toast.error(`Erro ao solicitar redefinição: ${error.message}`);
-      return { error: error as any };
+      return { data: true };
+    } catch (error) {
+      console.error('Erro ao enviar email de recuperação:', error);
+      return {
+        error: {
+          message: 'Erro ao enviar email de recuperação. Por favor, tente novamente.',
+          name: 'ResetFailed'
+        } as any
+      };
     } finally {
       setLoading(false);
     }
