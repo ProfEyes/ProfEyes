@@ -1,7 +1,7 @@
 import { ReactNode, useEffect, useState } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
-import { Loader2 } from 'lucide-react';
+import { Loader } from 'lucide-react';
 
 interface AuthGuardProps {
   children: ReactNode;
@@ -12,18 +12,24 @@ export function AuthGuard({ children }: AuthGuardProps) {
   const location = useLocation();
   const [isVerifying, setIsVerifying] = useState(true);
   const [verificationTimeout, setVerificationTimeout] = useState(false);
+  const [fadeIn, setFadeIn] = useState(false);
 
   // Dá um pequeno delay para que a autenticação seja verificada corretamente
   useEffect(() => {
     const timer = setTimeout(() => {
       setIsVerifying(false);
-    }, 1000);
+    }, 700); // Reduzido de 1000ms para 700ms
 
     // Adiciona um timeout máximo para evitar carregamento infinito
     const maxTimeout = setTimeout(() => {
       setVerificationTimeout(true);
       setIsVerifying(false);
-    }, 10000); // 10 segundos de timeout máximo
+    }, 8000); // Reduzido de 10s para 8s
+
+    // Adiciona um efeito de fade-in suave
+    setTimeout(() => {
+      setFadeIn(true);
+    }, 100);
 
     return () => {
       clearTimeout(timer);
@@ -40,14 +46,22 @@ export function AuthGuard({ children }: AuthGuardProps) {
   // Mostra um indicador de carregamento enquanto verifica a autenticação
   if (loading || isVerifying) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-black bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-blue-900/20 via-black to-black">
-        <div className="flex flex-col items-center">
-          <Loader2 className="h-10 w-10 text-blue-500 animate-spin" />
-          <h2 className="mt-4 text-white/70 text-lg">Verificando autenticação...</h2>
+      <div className="min-h-screen flex items-center justify-center bg-black bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-blue-900/10 via-black to-black">
+        <div 
+          className={`flex flex-col items-center transition-opacity duration-500 ease-in-out ${fadeIn ? 'opacity-100' : 'opacity-0'}`}
+        >
+          <Loader className="h-8 w-8 text-blue-400 animate-spin opacity-80" />
+          <div className="overflow-hidden relative">
+            <h2 className="mt-3 text-blue-400/70 text-base font-light animate-pulse">
+              Verificando acesso...
+            </h2>
+          </div>
           {loading && !isVerifying && (
-            <p className="mt-2 text-white/50 text-sm">
-              Preparando seu ambiente personalizado...
-            </p>
+            <div className="overflow-hidden">
+              <p className="mt-2 text-blue-300/50 text-xs font-light transition-all duration-300 ease-in-out animate-pulse">
+                Preparando seu ambiente...
+              </p>
+            </div>
           )}
         </div>
       </div>
