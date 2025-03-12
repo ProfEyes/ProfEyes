@@ -38,37 +38,65 @@ const GlobalScrollbarStyle = () => (
     
     /* Estilização específica para o modal de termos e condições */
     .terms-modal-content::-webkit-scrollbar {
-      width: 6px;
-      height: 6px;
+      width: 8px;
+      height: 8px;
     }
     
     .terms-modal-content::-webkit-scrollbar-track {
       margin: 4px;
-      background: transparent;
+      background: rgba(0, 0, 0, 0.2);
+      border-radius: 10px;
     }
     
     .terms-modal-content::-webkit-scrollbar-thumb {
-      background-color: rgba(255, 255, 255, 0.05);
-      box-shadow: inset 0 0 6px rgba(255, 255, 255, 0.03);
+      background: linear-gradient(180deg, #3b82f6 0%, #1e40af 100%);
+      box-shadow: inset 0 0 6px rgba(0, 0, 0, 0.3);
       border-radius: 10px;
       min-height: 40px;
       max-height: 100px;
+      border: 2px solid rgba(0, 0, 0, 0.2);
     }
     
     .terms-modal-content::-webkit-scrollbar-thumb:hover {
-      background-color: rgba(255, 255, 255, 0.12);
+      background: linear-gradient(180deg, #60a5fa 0%, #2563eb 100%);
     }
     
-    /* Estilização para Firefox */
-    * {
-      scrollbar-width: thin;
-      scrollbar-color: rgba(255, 255, 255, 0.05) transparent;
+    /* Animações para o modal */
+    .terms-modal-content h3 {
+      position: relative;
+      padding-left: 15px;
+      margin-top: 1.5rem;
+      text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
     }
     
-    /* Classe específica para Firefox */
-    .terms-modal-content {
-      scrollbar-width: auto;
-      scrollbar-color: rgba(255, 255, 255, 0.05) transparent;
+    .terms-modal-content h3::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 0;
+      height: 100%;
+      width: 4px;
+      background: linear-gradient(180deg, #3b82f6 0%, #1e40af 100%);
+      border-radius: 2px;
+    }
+    
+    .terms-modal-content p strong {
+      color: #60a5fa;
+      text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+    }
+    
+    .terms-modal-highlight {
+      background: linear-gradient(90deg, rgba(59, 130, 246, 0.08) 0%, transparent 100%);
+      border-left: 3px solid #3b82f6;
+      padding: 0.75rem 1rem;
+      margin: 1rem 0;
+      border-radius: 0 4px 4px 0;
+      transition: all 0.3s ease;
+    }
+    
+    .terms-modal-highlight:hover {
+      background: linear-gradient(90deg, rgba(59, 130, 246, 0.12) 0%, transparent 100%);
+      transform: translateX(2px);
     }
   `}</style>
 );
@@ -400,22 +428,28 @@ export default function Auth() {
       setShowTerms(open);
     }}>
       <DialogContent 
-        className="bg-black/80 backdrop-blur-xl border border-white/5 text-white/90 p-6 rounded-2xl max-w-3xl max-h-[80vh] overflow-y-auto terms-modal-content"
+        className="bg-gradient-to-b from-slate-900 to-black border border-blue-900/20 text-white/90 p-6 rounded-2xl max-w-3xl max-h-[80vh] overflow-y-auto terms-modal-content shadow-[0_0_30px_rgba(59,130,246,0.15)]"
         style={{
           scrollbarGutter: 'stable',
           scrollBehavior: 'smooth',
-          paddingRight: '16px' // Padding extra para acomodar a barra de rolagem mais grossa
+          backdropFilter: 'blur(12px)',
+          paddingRight: '20px'
         }}
       >
-        <DialogHeader>
-          <DialogTitle className="text-xl font-light tracking-wide text-white/90 mb-4">Termos e Condições</DialogTitle>
+        <DialogHeader className="border-b border-white/10 pb-4">
+          <DialogTitle className="text-2xl font-light tracking-wide text-blue-400 flex items-center gap-2">
+            <KeyRound className="h-5 w-5 text-blue-500" />
+            <span>Termos e Condições</span>
+          </DialogTitle>
         </DialogHeader>
-        <div className="space-y-4 text-sm text-white/70">
-          <p className="text-rose-400/90 font-medium text-center border border-rose-900/30 bg-rose-950/20 p-3 rounded-lg">AVISO LEGAL IMPORTANTE: ESTE É UM CONTRATO VINCULANTE. LEIA ATENTAMENTE ANTES DE UTILIZAR O SERVIÇO.</p>
+        <div className="space-y-4 text-sm text-white/80 pt-2">
+          <div className="terms-modal-highlight">
+            <p className="text-rose-400/90 font-medium text-center border border-rose-900/30 bg-rose-950/20 p-3 rounded-lg">AVISO LEGAL IMPORTANTE: ESTE É UM CONTRATO VINCULANTE. LEIA ATENTAMENTE ANTES DE UTILIZAR O SERVIÇO.</p>
+          </div>
           
           <p className="text-white/90">Ao acessar ou utilizar o ProfEyes, você concorda expressamente em renunciar a determinados direitos legais e aceitar limitações de responsabilidade conforme detalhado abaixo. Se você não concorda com qualquer parte destes termos, não utilize nossos serviços.</p>
           
-          <p>Última atualização: {new Date().toLocaleDateString()}</p>
+          <p className="text-blue-500/70 text-xs border-b border-blue-900/20 pb-2 mb-2">Última atualização: {new Date().toLocaleDateString()}</p>
           
           <h3 className="text-white/90 font-medium">1. ISENÇÃO TOTAL DE RESPONSABILIDADE SOBRE INVESTIMENTOS</h3>
           <p><strong>NÃO SOMOS CONSULTORES DE INVESTIMENTOS:</strong> O ProfEyes NÃO é uma plataforma de consultoria de investimentos registrada na Comissão de Valores Mobiliários (CVM) ou qualquer outro órgão regulador nacional ou internacional. Não oferecemos, sob nenhuma circunstância, recomendações personalizadas de investimentos, aconselhamento financeiro ou qualquer tipo de orientação que possa ser interpretada como consultoria de investimentos.</p>
@@ -510,26 +544,24 @@ export default function Auth() {
           
           <p className="mt-4 text-white/90">Se não concordar com qualquer parte destes termos, você deve clicar em "Recusar" e não poderá utilizar nossa plataforma.</p>
         </div>
-        <DialogFooter className="mt-6 flex flex-col sm:flex-row gap-3">
+        <DialogFooter className="mt-6 flex flex-col sm:flex-row gap-3 pt-4 border-t border-white/10">
           <Button 
             variant="destructive" 
-            className="bg-rose-900/50 hover:bg-rose-800/70 text-white/90 border-[0.5px] border-rose-800/30"
-            onClick={() => {
-              setTermsAccepted(false);
-              setShowTerms(false);
-              // Redirecionar para uma página externa ou mostrar uma mensagem
-              window.location.href = "https://www.google.com";
-            }}
+            onClick={() => setShowTerms(false)}
+            className="bg-gradient-to-r from-rose-700 to-rose-900 hover:from-rose-600 hover:to-rose-800 transition-all duration-300 shadow-lg"
           >
             Recusar
           </Button>
           <Button 
-            className="bg-emerald-900/30 hover:bg-emerald-800/50 text-white/90 border-[0.5px] border-emerald-800/30"
             onClick={() => {
               setTermsAccepted(true);
               setShowTerms(false);
+              setError(null);
+              clearError();
             }}
+            className="bg-gradient-to-r from-blue-700 to-blue-900 hover:from-blue-600 hover:to-blue-800 transition-all duration-300 shadow-lg"
           >
+            <CheckCheck className="mr-2 h-4 w-4" />
             Aceitar e Continuar
           </Button>
         </DialogFooter>
