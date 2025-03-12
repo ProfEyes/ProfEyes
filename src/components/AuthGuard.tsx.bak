@@ -1,0 +1,80 @@
+import { ReactNode, useEffect, useState } from 'react';
+import { Navigate, useLocation } from 'react-router-dom';
+import { useAuth } from '@/contexts/AuthContext';
+import { Loader } from 'lucide-react';
+
+interface AuthGuardProps {
+  children: ReactNode;
+}
+
+export function AuthGuard({ children }: AuthGuardProps) {
+  const { user, loading } = useAuth();
+  const location = useLocation();
+  const [isVerifying, setIsVerifying] = useState(true);
+  const [verificationTimeout, setVerificationTimeout] = useState(false);
+
+  // Dá um pequeno delay para que a autenticação seja verificada corretamente
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setIsVerifying(false);
+    }, 500); // Reduzido de 1000ms para 500ms para ser mais rápido
+
+    // Adiciona um timeout máximo para evitar carregamento infinito
+    const maxTimeout = setTimeout(() => {
+      setVerificationTimeout(true);
+      setIsVerifying(false);
+    }, 8000); // Reduzido de 10s para 8s
+
+    return () => {
+      clearTimeout(timer);
+      clearTimeout(maxTimeout);
+    };
+  }, []);
+
+  // Se o timeout máximo foi atingido, redireciona para a página de login
+  if (verificationTimeout && loading) {
+    console.error('Timeout na verificação de autenticação. Redirecionando para login.');
+    return <Navigate to="/auth" state={{ from: location, error: 'timeout' }} replace />;
+  }
+
+  // Mostra um indicador de carregamento enquanto verifica a autenticação
+  if (loading || isVerifying) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
+        <div className="flex flex-col items-center opacity-80 transition-opacity duration-300">
+          <div className="relative animate-pulse-subtle">
+            <Loader className="h-7 w-7 text-gray-600 dark:text-gray-400 animate-spin" />
+          </div>
+          
+          <div className="mt-3 text-center animate-fade-in">
+            <h2 className="text-gray-700 dark:text-gray-300 text-base font-medium">
+              {loading && !isVerifying 
+                ? "Preparando ambiente..."
+                : "Autenticando..."}
+            </h2>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Redireciona para a página de login se não estiver autenticado
+  if (!user) {
+    return <Navigate to="/auth" state={{ from: location }} replace />;
+  }
+
+  // Renderiza os componentes filhos se estiver autenticado
+  return <>{children}</>;
+}
+
+// Adicione estes estilos ao seu arquivo global CSS ou adicione aqui se estiver usando CSS-in-JS
+/*
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.5s ease-in-out;
+}
+*/ 
