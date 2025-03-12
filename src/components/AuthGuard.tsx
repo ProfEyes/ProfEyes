@@ -1,7 +1,7 @@
 import { ReactNode, useEffect, useState } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
-import { Loader2 } from 'lucide-react';
+import { Loader } from 'lucide-react';
 
 interface AuthGuardProps {
   children: ReactNode;
@@ -12,14 +12,12 @@ export function AuthGuard({ children }: AuthGuardProps) {
   const location = useLocation();
   const [isVerifying, setIsVerifying] = useState(true);
   const [verificationTimeout, setVerificationTimeout] = useState(false);
-  const [loadingText, setLoadingText] = useState('Verificando');
-  const [dots, setDots] = useState('');
 
   // Dá um pequeno delay para que a autenticação seja verificada corretamente
   useEffect(() => {
     const timer = setTimeout(() => {
       setIsVerifying(false);
-    }, 600); // Reduzido de 1000ms para 600ms
+    }, 500); // Reduzido de 1000ms para 500ms para ser mais rápido
 
     // Adiciona um timeout máximo para evitar carregamento infinito
     const maxTimeout = setTimeout(() => {
@@ -27,25 +25,11 @@ export function AuthGuard({ children }: AuthGuardProps) {
       setIsVerifying(false);
     }, 8000); // Reduzido de 10s para 8s
 
-    // Animação suave dos pontos
-    const dotsInterval = setInterval(() => {
-      setDots(prev => prev.length < 3 ? prev + '.' : '');
-    }, 400);
-
-    // Alterna entre mensagens de carregamento
-    const textInterval = setInterval(() => {
-      if (!isVerifying) {
-        setLoadingText('Preparando ambiente');
-      }
-    }, 2000);
-
     return () => {
       clearTimeout(timer);
       clearTimeout(maxTimeout);
-      clearInterval(dotsInterval);
-      clearInterval(textInterval);
     };
-  }, [isVerifying]);
+  }, []);
 
   // Se o timeout máximo foi atingido, redireciona para a página de login
   if (verificationTimeout && loading) {
@@ -56,14 +40,19 @@ export function AuthGuard({ children }: AuthGuardProps) {
   // Mostra um indicador de carregamento enquanto verifica a autenticação
   if (loading || isVerifying) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-gray-900">
-        <div className="flex flex-col items-center opacity-80">
-          <div className="relative h-8 w-8">
-            <Loader2 className="h-8 w-8 text-gray-500 dark:text-gray-400 animate-spin opacity-80" />
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
+        <div className="flex flex-col items-center opacity-80 transition-opacity duration-300">
+          <div className="relative animate-pulse-subtle">
+            <Loader className="h-7 w-7 text-gray-600 dark:text-gray-400 animate-spin" />
           </div>
-          <h2 className="mt-3 text-gray-700 dark:text-gray-300 text-sm font-medium tracking-wide transition-all duration-300 ease-in-out">
-            {loadingText}<span className="inline-block w-6 text-left">{dots}</span>
-          </h2>
+          
+          <div className="mt-3 text-center animate-fade-in">
+            <h2 className="text-gray-700 dark:text-gray-300 text-base font-medium">
+              {loading && !isVerifying 
+                ? "Preparando ambiente..."
+                : "Autenticando..."}
+            </h2>
+          </div>
         </div>
       </div>
     );
