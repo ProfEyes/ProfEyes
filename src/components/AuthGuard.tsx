@@ -1,7 +1,7 @@
 import { ReactNode, useEffect, useState } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
-import { Loader } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 
 interface AuthGuardProps {
   children: ReactNode;
@@ -17,13 +17,13 @@ export function AuthGuard({ children }: AuthGuardProps) {
   useEffect(() => {
     const timer = setTimeout(() => {
       setIsVerifying(false);
-    }, 500); // Reduzido de 1000ms para 500ms para ser mais rápido
+    }, 1000);
 
     // Adiciona um timeout máximo para evitar carregamento infinito
     const maxTimeout = setTimeout(() => {
       setVerificationTimeout(true);
       setIsVerifying(false);
-    }, 8000); // Reduzido de 10s para 8s
+    }, 10000); // 10 segundos de timeout máximo
 
     return () => {
       clearTimeout(timer);
@@ -40,19 +40,15 @@ export function AuthGuard({ children }: AuthGuardProps) {
   // Mostra um indicador de carregamento enquanto verifica a autenticação
   if (loading || isVerifying) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
-        <div className="flex flex-col items-center opacity-80 transition-opacity duration-300">
-          <div className="relative animate-pulse-subtle">
-            <Loader className="h-7 w-7 text-gray-600 dark:text-gray-400 animate-spin" />
-          </div>
-          
-          <div className="mt-3 text-center animate-fade-in">
-            <h2 className="text-gray-700 dark:text-gray-300 text-base font-medium">
-              {loading && !isVerifying 
-                ? "Preparando ambiente..."
-                : "Autenticando..."}
-            </h2>
-          </div>
+      <div className="min-h-screen flex items-center justify-center bg-black bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-blue-900/20 via-black to-black">
+        <div className="flex flex-col items-center">
+          <Loader2 className="h-10 w-10 text-blue-500 animate-spin" />
+          <h2 className="mt-4 text-white/70 text-lg">Verificando autenticação...</h2>
+          {loading && !isVerifying && (
+            <p className="mt-2 text-white/50 text-sm">
+              Preparando tudo para você...
+            </p>
+          )}
         </div>
       </div>
     );
