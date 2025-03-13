@@ -130,7 +130,7 @@ export default function Auth() {
     };
   }, []);
 
-  const { signInWithEmail, signUp, verifyEmail, isStrongPassword, loading: authLoading } = useAuth();
+  const { signInWithEmail, signUp, verifyEmail, isStrongPassword, resetPassword, loading: authLoading } = useAuth();
   const [loadingAction, setLoadingAction] = useState<string | null>(null);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
