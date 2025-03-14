@@ -72,49 +72,41 @@ We don't support custom domains (yet). If you want to deploy your project under 
 
 A plataforma avançada para monitoramento e análise de mercado.
 
-## Sincronização Automática
+## Sincronização com o Repositório Oficial
 
-Este repositório está configurado para sincronizar automaticamente com o repositório oficial do ProfEyes em https://github.com/ProfEyes/AppProfyesAtual.git.
+Este repositório está configurado para trabalhar com o repositório oficial do ProfEyes em https://github.com/ProfEyes/AppProfyesAtual.git.
 
-> **Nota:** O repositório oficial do ProfEyes está configurado como público, facilitando a sincronização e contribuição pela comunidade.
+> **Nota:** O repositório oficial do ProfEyes está configurado como público, permitindo contribuições via Pull Requests.
 
-## Sistema de Sincronização Automática
+## Sistema de Sincronização
 
-Este projeto está configurado com um sistema de sincronização automática que mantém dois repositórios GitHub atualizados:
+Este projeto está configurado com um sistema de sincronização que:
 
-1. **Repositório Principal**: `origin` (https://github.com/IgorElion/IgorelionProfEyes.git)
-2. **Repositório Cópia**: `copia` (https://github.com/IgorElion/ProfEyes-C-pia.git)
-3. **Repositório Oficial ProfEyes**: `profeyes` (https://github.com/ProfEyes/AppProfyesAtual.git)
+1. **Sincroniza Automaticamente** com seu repositório pessoal (`origin`) após cada commit
+2. **Prepara Pull Requests** para contribuição ao repositório oficial ProfEyes
 
-### Funcionalidades do Sistema de Sincronização
+### Como Contribuir para o Repositório Oficial
 
-O sistema sincroniza automaticamente os repositórios nas seguintes situações:
+Para enviar suas alterações para o repositório oficial do ProfEyes:
 
-- **Após um commit**: Quando você faz um commit, o hook `post-commit` é acionado.
-- **Após um checkout**: Quando você muda de branch ou volta para uma versão anterior (checkout), o hook `post-checkout` é acionado.
-- **Após um merge**: Quando você realiza um merge, o hook `post-merge` é acionado.
-- **Após um rebase ou amend**: Quando você faz um rebase ou amend, o hook `post-rewrite` é acionado.
+1. **Fork o repositório oficial**: Acesse https://github.com/ProfEyes/AppProfyesAtual e clique em "Fork"
+2. **Configure seu fork como um remote**: `git remote add meu-fork [URL-DO-SEU-FORK]`
+3. **Envie suas alterações para seu fork**: `git push meu-fork sua-branch`
+4. **Crie um Pull Request**: Acesse seu fork no GitHub e clique em "Contribute" e "Open Pull Request"
 
 ### Sincronização Manual
 
-Se por algum motivo a sincronização automática falhar, você pode sincronizar manualmente os repositórios usando:
-
-1. O atalho "Sincronizar Repositórios" na área de trabalho.
-2. Executando o arquivo `sincronizar.bat` na raiz do projeto.
-
-#### Novo Script de Sincronização
-
-Foi adicionado um novo script `sincronizar.bat` que facilita o processo de commit e push para todos os repositórios configurados. Para usar:
+O script `sincronizar.bat` facilita o processo de commit e push para o seu repositório:
 
 1. Execute `sincronizar.bat` na raiz do projeto
 2. Digite sua mensagem de commit quando solicitado
-3. Forneça suas credenciais do GitHub quando solicitado para o push para o repositório ProfEyes/AppProfyesAtual
+3. O script fará push para seu repositório e mostrará instruções para criar um Pull Request
 
 ### Detalhes Técnicos
 
-- O sistema usa hooks Git para detectar eventos e acionar a sincronização.
-- Os scripts PowerShell são usados para realizar a sincronização.
-- O sistema suporta estados "detached HEAD" (quando você volta para versões anteriores).
+- O script usa hooks Git para automatizar o push para o seu repositório pessoal
+- O sistema foi projetado para trabalhar com o fluxo padrão de contribuição via Pull Requests
+- Recomendamos criar uma branch separada para cada feature antes de submeter Pull Requests
 
 ## Desenvolvimento
 

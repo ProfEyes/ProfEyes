@@ -21,11 +21,14 @@ echo 4. Enviando alterações para o repositório principal...
 git push origin %BRANCH%
 echo.
 
-echo 5. Enviando alterações para o repositório ProfEyes/AppProfyesAtual...
-echo (Você precisará fornecer suas credenciais)
-git push profeyes %BRANCH%
+echo 5. Instruções para sincronizar com o repositório oficial ProfEyes:
+echo.
+echo    a. Acesse https://github.com/ProfEyes/AppProfyesAtual
+echo    b. Clique em "Fork" (caso ainda não tenha um fork)
+echo    c. Compare e crie um Pull Request a partir do seu repositório
+echo    d. Aguarde a aprovação do Pull Request pela equipe do ProfEyes
 echo.
 
-echo Sincronização concluída com sucesso!
+echo Sincronização com origin concluída com sucesso!
 echo.
 pause 
