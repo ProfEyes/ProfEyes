@@ -70,7 +70,11 @@ We don't support custom domains (yet). If you want to deploy your project under 
 
 # ProfEyes
 
-Aplicativo para traders e investidores do mercado financeiro.
+A plataforma avançada para monitoramento e análise de mercado.
+
+## Sincronização Automática
+
+Este repositório está configurado para sincronizar automaticamente com o repositório oficial do ProfEyes em https://github.com/ProfEyes/AppProfyesAtual.git.
 
 ## Sistema de Sincronização Automática
 
