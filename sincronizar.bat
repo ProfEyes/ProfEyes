@@ -1,34 +1,43 @@
 @echo off
-echo.
-echo Sincronizando repositórios ProfEyes...
-echo.
+setlocal enabledelayedexpansion
 
-echo 1. Verificando branch atual...
-for /f "tokens=*" %%a in ('git rev-parse --abbrev-ref HEAD') do set BRANCH=%%a
-echo Branch atual: %BRANCH%
-echo.
+REM Verifica se há alterações não confirmadas
+git status --porcelain > temp.txt
+set /p CHANGES=<temp.txt
+del temp.txt
 
-echo 2. Adicionando todas as alterações...
+if "!CHANGES!" == "" (
+    echo Nao ha alteracoes para confirmar.
+    exit /b 1
+)
+
+REM Solicita a mensagem de commit
+set /p COMMIT_MSG="Digite sua mensagem de commit: "
+
+REM Adiciona todas as alteracoes
+echo Adicionando alteracoes...
 git add .
-echo.
 
-echo 3. Realizando commit das alterações...
-set /p MENSAGEM="Digite a mensagem do commit: "
-git commit -m "%MENSAGEM%"
-echo.
+REM Faz o commit com a mensagem fornecida
+echo Confirmando alteracoes com a mensagem: "!COMMIT_MSG!"
+git commit -m "!COMMIT_MSG!"
 
-echo 4. Enviando alterações para o repositório principal...
-git push origin %BRANCH%
-echo.
+REM Envia para o repositório pessoal (origin)
+echo Enviando alteracoes para seu repositorio pessoal (origin)...
+git push origin Pro
 
-echo 5. Instruções para sincronizar com o repositório oficial ProfEyes:
-echo.
-echo    a. Acesse https://github.com/ProfEyes/AppProfyesAtual
-echo    b. Clique em "Fork" (caso ainda não tenha um fork)
-echo    c. Compare e crie um Pull Request a partir do seu repositório
-echo    d. Aguarde a aprovação do Pull Request pela equipe do ProfEyes
-echo.
+REM Envia para o repositório principal (upstream)
+echo Enviando alteracoes para o repositorio principal (upstream)...
+git push upstream Pro
 
-echo Sincronização com origin concluída com sucesso!
 echo.
-pause 
+echo ======================================================
+echo Alteracoes enviadas com sucesso para ambos os repositorios:
+echo.
+echo 1. Seu fork pessoal: https://github.com/IgorElion/ProfEyes
+echo 2. Repositorio principal: https://github.com/ProfEyes/ProfEyes
+echo ======================================================
+echo.
+echo Todas as alteracoes foram sincronizadas automaticamente!
+
+endlocal 
