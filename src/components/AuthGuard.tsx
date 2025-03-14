@@ -13,7 +13,7 @@ export function AuthGuard({ children }: AuthGuardProps) {
   const location = useLocation();
   const [isVerifying, setIsVerifying] = useState(true);
   const [verificationTimeout, setVerificationTimeout] = useState(false);
-  const [loadingTextProgress, setLoadingTextProgress] = useState(0);
+  const [showLoadingText, setShowLoadingText] = useState(false);
   const loadingText = "Preparando tudo para você...";
 
   // Dá um pequeno delay para que a autenticação seja verificada corretamente
@@ -34,22 +34,16 @@ export function AuthGuard({ children }: AuthGuardProps) {
     };
   }, []);
 
-  // Efeito para animar o texto de carregamento
+  // Efeito para mostrar o texto de carregamento após um breve delay
   useEffect(() => {
     if (loading && !isVerifying) {
-      const interval = setInterval(() => {
-        setLoadingTextProgress(prev => {
-          if (prev < loadingText.length) {
-            return prev + 1;
-          }
-          clearInterval(interval);
-          return prev;
-        });
-      }, 80); // Velocidade da digitação
+      const timer = setTimeout(() => {
+        setShowLoadingText(true);
+      }, 300);
 
-      return () => clearInterval(interval);
+      return () => clearTimeout(timer);
     }
-  }, [loading, isVerifying, loadingText.length]);
+  }, [loading, isVerifying]);
 
   // Se o timeout máximo foi atingido, redireciona para a página de login
   if (verificationTimeout && loading) {
@@ -60,63 +54,106 @@ export function AuthGuard({ children }: AuthGuardProps) {
   // Mostra um indicador de carregamento enquanto verifica a autenticação
   if (loading || isVerifying) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-black bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-blue-900/20 via-black to-black">
-        <div className="flex flex-col items-center">
+      <div className="min-h-screen flex items-center justify-center bg-black overflow-hidden">
+        {/* Fundo dinâmico */}
+        <div className="absolute inset-0">
+          <div className="absolute inset-0 bg-gradient-to-b from-blue-950/20 via-black to-black" />
+          <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(circle_at_top_right,_var(--tw-gradient-stops))] from-blue-800/10 via-transparent to-transparent" />
+          <div className="absolute bottom-0 right-0 w-full h-full bg-[radial-gradient(circle_at_bottom_left,_var(--tw-gradient-stops))] from-slate-900/20 via-transparent to-transparent" />
+        </div>
+
+        {/* Container principal com borda gradiente */}
+        <div className="relative flex flex-col items-center">
+          {/* Círculo de luz de fundo */}
+          <div className="absolute -inset-10 bg-gradient-to-t from-blue-500/5 to-transparent blur-3xl" />
+          
+          {/* Loader com animação simples */}
           <motion.div
-            animate={{ 
-              rotate: 360,
-              scale: [1, 1.1, 1],
-            }}
-            transition={{ 
-              rotate: { duration: 2, repeat: Infinity, ease: "linear" },
-              scale: { duration: 2, repeat: Infinity, repeatType: "reverse" }
-            }}
+            className="relative"
           >
-            <Loader2 className="h-12 w-12 text-blue-500" />
+            {/* Loader principal */}
+            <motion.div
+              animate={{
+                rotate: 360
+              }}
+              transition={{
+                duration: 2,
+                repeat: Infinity,
+                ease: "linear"
+              }}
+              className="relative"
+            >
+              <Loader2 className="h-12 w-12 text-gray-300/90" />
+            </motion.div>
           </motion.div>
           
+          {/* Textos com animações suaves */}
           <motion.h2 
-            className="mt-4 text-white/70 text-lg font-light"
+            className="mt-8 text-gray-200 text-xl font-light tracking-widest"
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5 }}
+            transition={{ duration: 1, delay: 0.2 }}
           >
-            Verificando autenticação...
+            Verificando autenticação
           </motion.h2>
           
           <AnimatePresence>
             {loading && !isVerifying && (
               <motion.div
-                className="mt-2 h-6 overflow-hidden"
+                className="mt-4 overflow-hidden"
                 initial={{ opacity: 0, height: 0 }}
                 animate={{ opacity: 1, height: "auto" }}
                 exit={{ opacity: 0, height: 0 }}
-                transition={{ duration: 0.5 }}
+                transition={{ duration: 1 }}
               >
                 <motion.p 
-                  className="relative text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-500 text-sm font-medium"
-                  style={{
-                    backgroundSize: "200% 100%",
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ 
+                    opacity: showLoadingText ? 1 : 0,
+                    y: showLoadingText ? 0 : 10
                   }}
-                  animate={{
-                    backgroundPosition: ["0% 50%", "100% 50%", "0% 50%"],
+                  transition={{ 
+                    duration: 1.5, 
+                    ease: "easeOut"
                   }}
-                  transition={{
-                    duration: 4,
-                    repeat: Infinity,
-                    repeatType: "reverse",
-                  }}
+                  className="text-gray-400 text-base font-light tracking-wider"
                 >
-                  {loadingText.substring(0, loadingTextProgress)}
-                  <motion.span 
-                    className="inline-block w-0.5 h-4 bg-blue-400 ml-0.5 relative top-[1px]"
-                    animate={{ opacity: [0, 1, 0] }}
-                    transition={{ duration: 1, repeat: Infinity }}
-                  />
+                  {loadingText}
                 </motion.p>
               </motion.div>
             )}
           </AnimatePresence>
+
+          {/* Elementos decorativos flutuantes */}
+          <motion.div
+            className="absolute -z-10"
+            animate={{
+              rotate: [0, 360],
+              scale: [0.8, 1.2, 0.8],
+            }}
+            transition={{
+              duration: 20,
+              repeat: Infinity,
+              ease: "linear"
+            }}
+          >
+            <div className="w-80 h-80 rounded-full border border-gray-800/30 blur-sm" />
+          </motion.div>
+          
+          <motion.div
+            className="absolute -z-10"
+            animate={{
+              rotate: [360, 0],
+              scale: [1.2, 0.8, 1.2],
+            }}
+            transition={{
+              duration: 15,
+              repeat: Infinity,
+              ease: "linear"
+            }}
+          >
+            <div className="w-96 h-96 rounded-full border border-blue-900/20 blur-sm" />
+          </motion.div>
         </div>
       </div>
     );
