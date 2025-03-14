@@ -49,7 +49,7 @@ const GlobalScrollbarStyle = () => (
     }
     
     .terms-modal-content::-webkit-scrollbar-thumb {
-      background: linear-gradient(180deg, #3b82f6 0%, #1e40af 100%);
+      background: linear-gradient(180deg, rgba(161, 161, 170, 0.3) 0%, rgba(82, 82, 91, 0.2) 100%);
       box-shadow: inset 0 0 6px rgba(0, 0, 0, 0.3);
       border-radius: 10px;
       min-height: 40px;
@@ -58,7 +58,7 @@ const GlobalScrollbarStyle = () => (
     }
     
     .terms-modal-content::-webkit-scrollbar-thumb:hover {
-      background: linear-gradient(180deg, #60a5fa 0%, #2563eb 100%);
+      background: linear-gradient(180deg, rgba(161, 161, 170, 0.4) 0%, rgba(82, 82, 91, 0.3) 100%);
     }
     
     /* Animações para o modal */
@@ -75,19 +75,19 @@ const GlobalScrollbarStyle = () => (
       left: 0;
       top: 0;
       height: 100%;
-      width: 4px;
-      background: linear-gradient(180deg, #3b82f6 0%, #1e40af 100%);
+      width: 3px;
+      background: linear-gradient(180deg, rgba(161, 161, 170, 0.2) 0%, rgba(82, 82, 91, 0.1) 100%);
       border-radius: 2px;
     }
     
     .terms-modal-content p strong {
-      color: #60a5fa;
+      color: rgba(212, 212, 216, 0.9);
       text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
     }
     
     .terms-modal-highlight {
-      background: linear-gradient(90deg, rgba(59, 130, 246, 0.08) 0%, transparent 100%);
-      border-left: 3px solid #3b82f6;
+      background: linear-gradient(90deg, rgba(82, 82, 91, 0.05) 0%, transparent 100%);
+      border-left: 3px solid rgb(82, 82, 91);
       padding: 0.75rem 1rem;
       margin: 1rem 0;
       border-radius: 0 4px 4px 0;
@@ -95,7 +95,7 @@ const GlobalScrollbarStyle = () => (
     }
     
     .terms-modal-highlight:hover {
-      background: linear-gradient(90deg, rgba(59, 130, 246, 0.12) 0%, transparent 100%);
+      background: linear-gradient(90deg, rgba(82, 82, 91, 0.08) 0%, transparent 100%);
       transform: translateX(2px);
     }
   `}</style>
@@ -421,14 +421,13 @@ export default function Auth() {
   // Componente para exibir os termos e condições
   const TermsAndConditionsModal = ({ showTerms, setShowTerms }: { showTerms: boolean, setShowTerms: (show: boolean) => void }) => (
     <Dialog open={showTerms} onOpenChange={(open) => {
-      // Impede que o usuário feche o modal clicando fora dele
       if (!termsAccepted && !open) {
         return;
       }
       setShowTerms(open);
     }}>
       <DialogContent 
-        className="bg-gradient-to-b from-slate-900 to-black border border-blue-900/20 text-white/90 p-6 rounded-2xl max-w-3xl max-h-[80vh] overflow-y-auto terms-modal-content shadow-[0_0_30px_rgba(59,130,246,0.15)]"
+        className="bg-black border border-neutral-800 text-neutral-200 p-6 rounded-xl max-w-3xl max-h-[80vh] overflow-y-auto terms-modal-content shadow-2xl"
         style={{
           scrollbarGutter: 'stable',
           scrollBehavior: 'smooth',
@@ -436,23 +435,90 @@ export default function Auth() {
           paddingRight: '20px'
         }}
       >
-        <DialogHeader className="border-b border-white/10 pb-4">
-          <DialogTitle className="text-2xl font-light tracking-wide text-blue-400 flex items-center gap-2">
-            <KeyRound className="h-5 w-5 text-blue-500" />
-            <span>Termos e Condições</span>
+        <DialogHeader className="border-b border-neutral-800 pb-4 mb-6">
+          <DialogTitle className="text-xl font-light tracking-wider text-white uppercase">
+            Termos e Condições
           </DialogTitle>
+          <DialogDescription className="text-neutral-400 text-sm mt-2">
+            Leia atentamente os termos antes de prosseguir
+          </DialogDescription>
         </DialogHeader>
-        <div className="space-y-4 text-sm text-white/80 pt-2">
-          <div className="terms-modal-highlight">
-            <p className="text-rose-400/90 font-medium text-center border border-rose-900/30 bg-rose-950/20 p-3 rounded-lg">AVISO LEGAL IMPORTANTE: ESTE É UM CONTRATO VINCULANTE. LEIA ATENTAMENTE ANTES DE UTILIZAR O SERVIÇO.</p>
+        <div className="space-y-4 text-sm text-neutral-300 pt-4">
+          <div className="bg-neutral-900 border border-neutral-800 p-4 rounded-lg">
+            <p className="text-neutral-100 font-medium text-center">AVISO LEGAL IMPORTANTE: ESTE É UM CONTRATO VINCULANTE. LEIA ATENTAMENTE ANTES DE UTILIZAR O SERVIÇO.</p>
           </div>
           
-          <p className="text-white/90">Ao acessar ou utilizar o ProfEyes, você concorda expressamente em renunciar a determinados direitos legais e aceitar limitações de responsabilidade conforme detalhado abaixo. Se você não concorda com qualquer parte destes termos, não utilize nossos serviços.</p>
+          <p className="text-neutral-200">Ao acessar ou utilizar o ProfEyes, você concorda expressamente em renunciar a determinados direitos legais e aceitar limitações de responsabilidade conforme detalhado abaixo. Se você não concorda com qualquer parte destes termos, não utilize nossos serviços.</p>
           
-          <p className="text-blue-500/70 text-xs border-b border-blue-900/20 pb-2 mb-2">Última atualização: {new Date().toLocaleDateString()}</p>
+          <p className="text-neutral-400 text-xs border-b border-neutral-800 pb-2 mb-2">Última atualização: {new Date().toLocaleDateString()}</p>
           
-          <h3 className="text-white/90 font-medium">1. ISENÇÃO TOTAL DE RESPONSABILIDADE SOBRE INVESTIMENTOS</h3>
-          <p><strong>NÃO SOMOS CONSULTORES DE INVESTIMENTOS:</strong> O ProfEyes NÃO é uma plataforma de consultoria de investimentos registrada na Comissão de Valores Mobiliários (CVM) ou qualquer outro órgão regulador nacional ou internacional. Não oferecemos, sob nenhuma circunstância, recomendações personalizadas de investimentos, aconselhamento financeiro ou qualquer tipo de orientação que possa ser interpretada como consultoria de investimentos.</p>
+          <style jsx global>{`
+            .terms-modal-content {
+              background: #000000;
+            }
+            
+            .terms-modal-content h3 {
+              position: relative;
+              padding-left: 12px;
+              margin-top: 2rem;
+              margin-bottom: 1rem;
+              font-size: 0.95rem;
+              color: #ffffff;
+              letter-spacing: 0.03em;
+              text-transform: uppercase;
+              font-weight: 400;
+            }
+            
+            .terms-modal-content h3::before {
+              content: '';
+              position: absolute;
+              left: 0;
+              top: 50%;
+              transform: translateY(-50%);
+              height: 70%;
+              width: 2px;
+              background: #333333;
+            }
+            
+            .terms-modal-content p {
+              line-height: 1.7;
+              color: #a3a3a3;
+              font-size: 0.875rem;
+              margin-bottom: 1rem;
+            }
+            
+            .terms-modal-content p strong {
+              color: #ffffff;
+              font-weight: 500;
+              letter-spacing: 0.02em;
+            }
+            
+            .terms-modal-content ol {
+              margin: 1.5rem 0;
+            }
+            
+            .terms-modal-content ol li {
+              margin-bottom: 0.75rem;
+              line-height: 1.6;
+              color: #a3a3a3;
+            }
+            
+            .terms-modal-content::-webkit-scrollbar {
+              width: 4px;
+            }
+            
+            .terms-modal-content::-webkit-scrollbar-track {
+              background: #0a0a0a;
+            }
+            
+            .terms-modal-content::-webkit-scrollbar-thumb {
+              background: #262626;
+            }
+            
+            .terms-modal-content::-webkit-scrollbar-thumb:hover {
+              background: #333333;
+            }
+          `}</style>
           
           <p><strong>CONTEÚDO EXCLUSIVAMENTE INFORMATIVO:</strong> Todo o conteúdo disponibilizado em nossa plataforma, incluindo, mas não se limitando a: análises técnicas, gráficos, indicadores, sinais de mercado, notícias, relatórios, projeções, simulações, ferramentas de cálculo, e quaisquer outros materiais, tem caráter EXCLUSIVAMENTE INFORMATIVO e EDUCACIONAL. Nenhuma informação disponibilizada deve ser interpretada como recomendação de compra, venda ou manutenção de ativos financeiros.</p>
           
@@ -534,21 +600,21 @@ export default function Auth() {
           <h3 className="text-white/90 font-medium">10. DECLARAÇÃO DE CIÊNCIA E ACEITAÇÃO</h3>
           <p className="mt-6 text-white/90 font-medium">Ao clicar em "Aceitar e Continuar", você reconhece e declara expressamente que:</p>
           <ol className="list-decimal pl-5 space-y-2 text-white/70">
-            <li>Leu, compreendeu e concorda integralmente com todos os termos e condições acima descritos;</li>
-            <li>Compreende os riscos associados a investimentos no mercado financeiro;</li>
-            <li>Reconhece que o ProfEyes não oferece consultoria de investimentos;</li>
-            <li>Assume total responsabilidade por suas decisões de investimento;</li>
-            <li>Renuncia a quaisquer reclamações contra o ProfEyes por perdas ou danos relacionados ao uso da plataforma;</li>
-            <li>Tem capacidade legal para aceitar estes termos e utilizar a plataforma.</li>
+            <li className="text-gray-300">Leu, compreendeu e concorda integralmente com todos os termos e condições acima descritos;</li>
+            <li className="text-gray-300">Compreende os riscos associados a investimentos no mercado financeiro;</li>
+            <li className="text-gray-300">Reconhece que o ProfEyes não oferece consultoria de investimentos;</li>
+            <li className="text-gray-300">Assume total responsabilidade por suas decisões de investimento;</li>
+            <li className="text-gray-300">Renuncia a quaisquer reclamações contra o ProfEyes por perdas ou danos relacionados ao uso da plataforma;</li>
+            <li className="text-gray-300">Tem capacidade legal para aceitar estes termos e utilizar a plataforma.</li>
           </ol>
           
-          <p className="mt-4 text-white/90">Se não concordar com qualquer parte destes termos, você deve clicar em "Recusar" e não poderá utilizar nossa plataforma.</p>
+          <p className="mt-4 text-gray-400">Se não concordar com qualquer parte destes termos, você deve clicar em "Recusar" e não poderá utilizar nossa plataforma.</p>
         </div>
-        <DialogFooter className="mt-6 flex flex-col sm:flex-row gap-3 pt-4 border-t border-white/10">
+        <DialogFooter className="mt-8 flex flex-col sm:flex-row gap-3 pt-4 border-t border-neutral-800">
           <Button 
             variant="destructive" 
             onClick={() => setShowTerms(false)}
-            className="bg-gradient-to-r from-rose-700 to-rose-900 hover:from-rose-600 hover:to-rose-800 transition-all duration-300 shadow-lg"
+            className="bg-neutral-900 hover:bg-neutral-800 text-neutral-200 transition-all duration-300 px-6 py-2 h-10 text-sm tracking-wide"
           >
             Recusar
           </Button>
@@ -559,9 +625,8 @@ export default function Auth() {
               setError(null);
               clearError();
             }}
-            className="bg-gradient-to-r from-blue-700 to-blue-900 hover:from-blue-600 hover:to-blue-800 transition-all duration-300 shadow-lg"
+            className="bg-white hover:bg-neutral-200 text-black transition-all duration-300 px-6 py-2 h-10 text-sm tracking-wide font-medium"
           >
-            <CheckCheck className="mr-2 h-4 w-4" />
             Aceitar e Continuar
           </Button>
         </DialogFooter>
