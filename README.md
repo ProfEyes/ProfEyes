@@ -76,6 +76,8 @@ A plataforma avançada para monitoramento e análise de mercado.
 
 Este repositório está configurado para sincronizar automaticamente com o repositório oficial do ProfEyes em https://github.com/ProfEyes/AppProfyesAtual.git.
 
+> **Nota:** O repositório oficial do ProfEyes está configurado como público, facilitando a sincronização e contribuição pela comunidade.
+
 ## Sistema de Sincronização Automática
 
 Este projeto está configurado com um sistema de sincronização automática que mantém dois repositórios GitHub atualizados:
