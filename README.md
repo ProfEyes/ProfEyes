@@ -82,6 +82,7 @@ Este projeto está configurado com um sistema de sincronização automática que
 
 1. **Repositório Principal**: `origin` (https://github.com/IgorElion/IgorelionProfEyes.git)
 2. **Repositório Cópia**: `copia` (https://github.com/IgorElion/ProfEyes-C-pia.git)
+3. **Repositório Oficial ProfEyes**: `profeyes` (https://github.com/ProfEyes/AppProfyesAtual.git)
 
 ### Funcionalidades do Sistema de Sincronização
 
@@ -98,6 +99,14 @@ Se por algum motivo a sincronização automática falhar, você pode sincronizar
 
 1. O atalho "Sincronizar Repositórios" na área de trabalho.
 2. Executando o arquivo `sincronizar.bat` na raiz do projeto.
+
+#### Novo Script de Sincronização
+
+Foi adicionado um novo script `sincronizar.bat` que facilita o processo de commit e push para todos os repositórios configurados. Para usar:
+
+1. Execute `sincronizar.bat` na raiz do projeto
+2. Digite sua mensagem de commit quando solicitado
+3. Forneça suas credenciais do GitHub quando solicitado para o push para o repositório ProfEyes/AppProfyesAtual
 
 ### Detalhes Técnicos
 
