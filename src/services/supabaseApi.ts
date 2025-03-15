@@ -1,10 +1,5 @@
-import { createClient } from '@supabase/supabase-js';
+import { supabase } from '@/lib/supabase';
 import { NewsArticle } from './newsApi';
-
-// Usando a mesma URL e chave que está funcionando em src/lib/supabase.ts
-const supabaseUrl = 'https://nkvqddfphyiiufkuqavd.supabase.co';
-const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5rdnFkZGZwaHlpaXVma3VxYXZkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDE0MDY3MzgsImV4cCI6MjA1Njk4MjczOH0.fX9wm_fBTigakGCcH2nW2VVr_aqbtsusVMeEKQz2Fpw';
-const supabase = createClient(supabaseUrl, supabaseKey);
 
 // Função para buscar notícias do mercado do Supabase
 export async function fetchMarketNewsFromSupabase(limit: number = 10, category?: string): Promise<any[]> {

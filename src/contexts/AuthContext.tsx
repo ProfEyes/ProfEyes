@@ -22,8 +22,8 @@ type AuthContextType = {
   user: User | null;
   profile: UserProfile | null;
   loading: boolean;
-  signInWithEmail: (email: string, password: string) => Promise<{ error: AuthError | null }>;
-  signUp: (email: string, password: string) => Promise<{ error: AuthError | null }>;
+  signInWithEmail: (email: string, password: string, rememberMe?: boolean) => Promise<{ error: AuthError | null }>;
+  signUp: (email: string, password: string, birthdate?: string) => Promise<{ error: AuthError | null }>;
   signOut: () => Promise<void>;
   resetPassword: (email: string) => Promise<{ error: AuthError | null }>;
   updateProfile: (data: Partial<UserProfile>) => Promise<{ error: Error | null }>;
@@ -120,29 +120,35 @@ export function AuthProvider({ children }: AuthProviderProps) {
     // Sincronizar com o estado de autenticação do Supabase
     const getCurrentUser = async () => {
       try {
+        // Já começamos com loading true
         setLoading(true);
         
-        // Adicionar um timeout para evitar carregamento infinito
-        const timeoutPromise = new Promise((_, reject) => {
-          setTimeout(() => {
-            reject(new Error('Timeout ao verificar autenticação'));
-          }, 5000); // 5 segundos de timeout
-        });
+        // Verificar se existe uma sessão no localStorage antes de fazer a requisição
+        const localSession = localStorage.getItem('supabase.auth.token');
         
-        // Verificar se existe uma sessão ativa
-        const sessionPromise = supabase.auth.getSession();
-        
-        // Usar Promise.race para aplicar o timeout
-        const { data: { session }, error } = await Promise.race([
-          sessionPromise,
-          timeoutPromise
-        ]) as any;
-        
-        if (error) {
-          console.error('Erro ao verificar autenticação:', error);
+        // Se não houver sessão local, podemos retornar mais rapidamente
+        if (!localSession) {
+          setSession(null);
+          setUser(null);
+          setProfile(null);
           setLoading(false);
           return;
         }
+        
+        // Verificar a sessão no Supabase
+        const { data, error } = await supabase.auth.getSession();
+        
+        if (error) {
+          console.error('Erro ao verificar autenticação:', error);
+          // Em caso de erro, consideramos que não há usuário autenticado
+          setSession(null);
+          setUser(null);
+          setProfile(null);
+          setLoading(false);
+          return;
+        }
+        
+        const session = data?.session;
         
         if (session) {
           setSession(session);
@@ -163,6 +169,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
             console.error('Erro ao carregar perfil:', profileError);
             // Continuar mesmo se houver erro ao carregar o perfil
           }
+        } else {
+          // Sem sessão
+          setSession(null);
+          setUser(null);
+          setProfile(null);
         }
       } catch (error) {
         console.error('Erro ao verificar autenticação:', error);
@@ -176,6 +187,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       }
     };
     
+    // Executar imediatamente
     getCurrentUser();
     
     // Configurar o listener para mudanças na autenticação
@@ -211,14 +223,17 @@ export function AuthProvider({ children }: AuthProviderProps) {
   }, []);
 
   // Função para login com email e senha via Supabase
-  const signInWithEmail = async (email: string, password: string) => {
+  const signInWithEmail = async (email: string, password: string, rememberMe: boolean = false) => {
     try {
       setLoading(true);
       
       // Fazer login utilizando o Supabase
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
-        password
+        password,
+        options: {
+          persistSession: rememberMe
+        }
       });
       
       if (error) {
@@ -274,7 +289,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   };
 
   // Função para cadastro com email e senha via Supabase
-  const signUp = async (email: string, password: string) => {
+  const signUp = async (email: string, password: string, birthdate?: string) => {
     try {
       setLoading(true);
       
@@ -289,6 +304,16 @@ export function AuthProvider({ children }: AuthProviderProps) {
         };
       }
       
+      // Verificar se a data de nascimento foi fornecida
+      if (!birthdate) {
+        return {
+          error: {
+            message: 'A data de nascimento é obrigatória.',
+            name: 'MissingBirthdate'
+          } as any
+        };
+      }
+      
       // Realizar o cadastro utilizando o Supabase
       const { data, error } = await supabase.auth.signUp({
         email,
@@ -299,6 +324,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
           // Dados adicionais do usuário
           data: {
             display_name: email.split('@')[0],
+            birthdate: birthdate,
           }
         }
       });

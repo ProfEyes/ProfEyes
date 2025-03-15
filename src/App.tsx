@@ -1,6 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from '@/components/ui/toaster';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import Index from '@/pages/Index';
 import Analysis from '@/pages/Analysis';
@@ -18,6 +18,7 @@ import { NotificationProvider } from '@/contexts/NotificationContext';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { AuthGuard } from '@/components/AuthGuard';
 import { useAuth } from '@/contexts/AuthContext';
+import { motion } from 'framer-motion';
 
 // Criar o cliente de query
 const queryClient = new QueryClient();
@@ -25,7 +26,17 @@ const queryClient = new QueryClient();
 // Componente interno que usa os hooks para gerenciar rotas protegidas e públicas
 const AppContent = () => {
   const queryClient = useQueryClient();
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
+  const [initialLoading, setInitialLoading] = useState(true);
+
+  // Efeito para simular um carregamento inicial
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setInitialLoading(false);
+    }, 1500);
+    
+    return () => clearTimeout(timer);
+  }, []);
 
   // Iniciar monitoramento de sinais ao carregar a aplicação
   useEffect(() => {
@@ -69,6 +80,42 @@ const AppContent = () => {
       monitor.stop();
     };
   }, [queryClient, user]);
+  
+  // Mostrar tela de carregamento inicial
+  if (initialLoading || loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-black overflow-hidden">
+        <div className="flex flex-col items-center justify-center">
+          <h1 
+            style={{
+              fontFamily: 'Mollen',
+              fontWeight: 'bold',
+              fontSize: '3.5rem',
+              color: 'white',
+              marginBottom: '2rem',
+              letterSpacing: '0.05em'
+            }}
+          >
+            ProfEyes
+          </h1>
+          
+          <motion.div
+            animate={{
+              rotate: 360
+            }}
+            transition={{
+              duration: 1.5,
+              repeat: Infinity,
+              ease: "linear"
+            }}
+            className="relative"
+          >
+            <div className="w-16 h-16 rounded-full border-t-4 border-l-4 border-r-4 border-b-4 border-b-transparent border-white/30 border-t-white/90 border-l-white/60 border-r-white/60"></div>
+          </motion.div>
+        </div>
+      </div>
+    );
+  }
   
   return (
     <>
