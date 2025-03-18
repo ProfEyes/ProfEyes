@@ -114,7 +114,8 @@ export function NotificationButton() {
         </div>
       )}
 
-      <style jsx global>{`
+      <style dangerouslySetInnerHTML={{
+        __html: `
         @keyframes bell {
           0%, 100% { transform: rotate(0); }
           20%, 60% { transform: rotate(15deg); }
@@ -183,7 +184,7 @@ export function NotificationButton() {
         .animate-pulse-ring {
           animation: pulse-ring 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
         }
-      `}</style>
+      `}} />
     </Button>
   );
 } 

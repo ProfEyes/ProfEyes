@@ -182,6 +182,13 @@ export default function Auth() {
       return false;
     }
     
+    // Verificar se o ano é muito antigo (limite realista para idade humana)
+    const minRealisticYear = currentYear - 120; // Assumindo 120 anos como idade máxima realista
+    if (year < minRealisticYear) {
+      setBirthdateError(`Ano de nascimento inválido. O ano informado (${year}) é muito antigo. A idade máxima permitida é de 120 anos.`);
+      return false;
+    }
+    
     // Verificar se o dia é válido (entre 1 e 31)
     if (day < 1 || day > 31) {
       setBirthdateError("Dia inválido. Deve estar entre 1 e 31.");
@@ -201,13 +208,14 @@ export default function Auth() {
       return false;
     }
     
-    // Verificar se a data é válida
-    if (day < 1 || day > 31 || month < 1 || month > 12 || year < 1900 || year > new Date().getFullYear()) {
-      return false;
-    }
-    
     // Criar data de nascimento
     const birthDate = new Date(year, month - 1, day);
+    
+    // Verificar se a data é válida (não permitir datas inválidas)
+    if (isNaN(birthDate.getTime())) {
+      setBirthdateError("Data de nascimento inválida. Por favor, verifique o formato (DD/MM/AAAA).");
+      return false;
+    }
     
     // Calcular idade
     const today = new Date();
@@ -599,13 +607,14 @@ export default function Auth() {
       // Adicionando classe personalizada para o overlay do Dialog
       className="terms-dialog"
     >
-      <style jsx global>{`
+      <style dangerouslySetInnerHTML={{
+        __html: `
         .terms-dialog .fixed.inset-0.z-50.bg-background\/80.backdrop-blur-sm.data-\[state\=open\]:animate-in.data-\[state\=closed\]:animate-out.data-\[state\=closed\]:fade-out-0.data-\[state\=open\]:fade-in-0 {
           background-color: rgba(0, 0, 0, 0.25);
           backdrop-filter: blur(6px);
           -webkit-backdrop-filter: blur(6px);
         }
-      `}</style>
+      `}} />
       <DialogContent 
         className="bg-black/70 border border-neutral-800 text-neutral-200 p-6 rounded-xl max-w-5xl max-h-[85vh] overflow-y-auto terms-modal-content shadow-2xl"
         style={{

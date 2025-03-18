@@ -11,7 +11,8 @@ import {
   Signal,
   Bell,
   Check,
-  Divide
+  Divide,
+  TrendingUp
 } from "lucide-react";
 import { useNavigate } from 'react-router-dom';
 import { Logo } from "@/components/ui/logo";
@@ -148,6 +149,21 @@ export default function Layout({ children }: LayoutProps) {
               >
                 <PieChart className="h-4 w-4 opacity-70" />
                 Portfólio
+              </Button>
+              
+              <Button 
+                variant="ghost" 
+                className={cn(
+                  "w-full justify-start gap-3 py-3 text-sm font-medium transition-all",
+                  "hover:bg-white/5 text-white/80 hover:text-white",
+                  isActive('/stocks') 
+                    ? "bg-white/5 text-white border-l-2 border-white/60 pl-3" 
+                    : "pl-4"
+                )} 
+                onClick={() => navigate('/stocks')}
+              >
+                <TrendingUp className="h-4 w-4 opacity-70" />
+                Ações
               </Button>
             </nav>
             

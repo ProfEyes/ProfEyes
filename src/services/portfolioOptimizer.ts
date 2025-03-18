@@ -1,4 +1,5 @@
 import { getStockData, getMarketNews, getTechnicalIndicators } from './marketAnalysis';
+import { getBrapiMultipleStockQuotes, isStockAvailableInBrapi } from './brapiService';
 import axios from 'axios';
 
 interface Asset {
@@ -112,7 +113,7 @@ const cryptoAssets = [
   { symbol: 'AAVE', description: 'Aave' }
 ];
 
-// Geração de preços simulados para ações
+// Geração de preços simulados para ações (usado apenas como fallback)
 function generateStockPrice(ticker: string): number {
   // Preços simulados, baseados em médias reais
   const basePrice = {
@@ -140,6 +141,33 @@ function generateCryptoPrice(symbol: string): number {
   return basePrice * (0.97 + Math.random() * 0.06);
 }
 
+// Verifica se as ações estão disponíveis nas APIs (BrAPI para ações brasileiras)
+async function checkStocksAvailability(stocks: string[]): Promise<{
+  availableStocks: string[];
+  unavailableStocks: string[];
+}> {
+  const availableStocks: string[] = [];
+  const unavailableStocks: string[] = [];
+  
+  for (const symbol of stocks) {
+    try {
+      // Verificar se a ação está disponível na BrAPI
+      const isAvailable = await isStockAvailableInBrapi(symbol);
+      
+      if (isAvailable) {
+        availableStocks.push(symbol);
+      } else {
+        unavailableStocks.push(symbol);
+      }
+    } catch {
+      // Em caso de erro na verificação, considerar indisponível
+      unavailableStocks.push(symbol);
+    }
+  }
+  
+  return { availableStocks, unavailableStocks };
+}
+
 export async function generateOptimalPortfolio(
   riskLevel: string,
   initialAmount: number,
@@ -164,21 +192,28 @@ export async function generateOptimalPortfolio(
     const stockCount = Math.max(5, Math.floor((stocksAllocation / 100) * totalAssetCount));
     const cryptoCount = Math.max(2, totalAssetCount - stockCount);
     
-    // Selecionar as ações com base no perfil de risco
-    let selectedStocks: Asset[] = [];
-    let stockPool = [...brazilianStocks];
-    
-    // Incluir ativos preferidos primeiro (se forem ações)
+    // Verificar disponibilidade de ações preferidas na BrAPI
     const preferredStocks = preferredAssets.filter(asset => 
       brazilianStocks.some(stock => stock.symbol === asset)
     );
     
-    for (const preferredSymbol of preferredStocks) {
+    // Verificar disponibilidade das ações preferidas
+    const { availableStocks: availablePreferredStocks } = 
+      await checkStocksAvailability(preferredStocks);
+    
+    console.log(`Ações preferidas disponíveis: ${availablePreferredStocks.join(', ')}`);
+    
+    // Selecionar as ações com base no perfil de risco
+    let selectedStocks: any[] = [];
+    let stockPool = [...brazilianStocks];
+    
+    // Incluir ativos preferidos disponíveis primeiro
+    for (const preferredSymbol of availablePreferredStocks) {
       const stockInfo = brazilianStocks.find(s => s.symbol === preferredSymbol);
       if (stockInfo && selectedStocks.length < stockCount) {
         selectedStocks.push({
           symbol: stockInfo.symbol,
-          price: generateStockPrice(stockInfo.symbol),
+          price: 0, // Será atualizado com dados reais
           weight: 0, // Será calculado depois
           type: 'STOCK'
         });
@@ -194,13 +229,49 @@ export async function generateOptimalPortfolio(
       
       selectedStocks.push({
         symbol: stockInfo.symbol,
-        price: generateStockPrice(stockInfo.symbol),
+        price: 0, // Será atualizado com dados reais
         weight: 0, // Será calculado depois
         type: 'STOCK'
       });
       
       // Remover do pool para evitar duplicatas
       stockPool.splice(randomIndex, 1);
+    }
+    
+    // Obter preços reais das ações selecionadas usando a API BrAPI
+    if (selectedStocks.length > 0) {
+      const stockSymbols = selectedStocks.map(stock => stock.symbol);
+      try {
+        const stockQuotes = await getBrapiMultipleStockQuotes(stockSymbols);
+        
+        // Atualizar preços com dados reais
+        if (stockQuotes && stockQuotes.length > 0) {
+          const stockPriceMap: Record<string, number> = {};
+          
+          stockQuotes.forEach(quote => {
+            stockPriceMap[quote.symbol] = quote.regularMarketPrice;
+          });
+          
+          // Atualizar preços nos ativos selecionados
+          selectedStocks = selectedStocks.map(stock => ({
+            ...stock,
+            price: stockPriceMap[stock.symbol] || generateStockPrice(stock.symbol) // Fallback para preço simulado
+          }));
+        } else {
+          // Fallback para preços simulados se a API falhar
+          selectedStocks = selectedStocks.map(stock => ({
+            ...stock,
+            price: generateStockPrice(stock.symbol)
+          }));
+        }
+      } catch (error) {
+        console.error('Erro ao obter preços reais das ações:', error);
+        // Fallback para preços simulados
+        selectedStocks = selectedStocks.map(stock => ({
+          ...stock,
+          price: generateStockPrice(stock.symbol)
+        }));
+      }
     }
     
     // Selecionar as criptomoedas

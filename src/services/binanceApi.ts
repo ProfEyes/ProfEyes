@@ -429,17 +429,48 @@ export async function createOrder(
   }
 }
 
-// Função legacy (compatibilidade) para obter o preço atual
+// Verificar se um símbolo é uma criptomoeda válida para a Binance
+export function isBinanceCryptoSymbol(symbol: string): boolean {
+  // Validar o formato do símbolo
+  // A Binance geralmente usa o formato de par de criptomoedas, como BTCUSDT, ETHUSDT, etc.
+  if (!symbol) return false;
+  
+  // Remover o sufixo "USDT" ou "BTC" se existir
+  const baseCoin = symbol.replace(/USDT$|BTC$|BUSD$|ETH$/, '');
+  
+  // Lista de criptomoedas conhecidas suportadas pela Binance
+  const knownCryptos = [
+    'BTC', 'ETH', 'BNB', 'SOL', 'ADA', 'XRP', 'DOT', 'AVAX', 
+    'MATIC', 'LINK', 'DOGE', 'ATOM', 'UNI', 'LTC', 'AAVE', 'NEAR',
+    'SHIB', 'TRX', 'ETC', 'FIL', 'XLM', 'ALGO', 'VET', 'MANA', 'SAND'
+  ];
+  
+  // Verificar se a base é uma criptomoeda conhecida
+  if (knownCryptos.includes(baseCoin)) return true;
+  
+  // Se o símbolo é um par de moedas com USDT, BTC, BUSD ou ETH, 
+  // é provável que seja um símbolo válido para a Binance
+  return /^[A-Z0-9]{2,10}(USDT|BTC|BUSD|ETH)$/.test(symbol);
+}
+
+// Obter o preço atual de um símbolo na Binance
 export async function getBinancePrice(symbol: string): Promise<{price: string}> {
   try {
-    const prices = await getLatestPrices([symbol]);
-    if (prices && prices.length > 0) {
-      return {price: prices[0].price};
+    // Verificar se é um símbolo de criptomoeda válido para a Binance
+    if (!isBinanceCryptoSymbol(symbol)) {
+      console.warn(`${symbol} não parece ser um símbolo válido de criptomoeda para a Binance`);
+      return { price: '0' };
     }
-    throw new Error(`Nenhum preço encontrado para ${symbol}`);
+    
+    // Adicionar USDT se for apenas o ticker da moeda
+    const formattedSymbol = symbol.includes('USDT') ? symbol : `${symbol}USDT`;
+    
+    const response = await fetch(`${BASE_URL}/api/v3/ticker/price?symbol=${formattedSymbol}`);
+    const data = await response.json();
+    return { price: data.price || '0' };
   } catch (error) {
-    console.error(`Erro ao obter preço para ${symbol}:`, error);
-    throw error;
+    console.error(`Erro ao obter preço da Binance para ${symbol}:`, error);
+    return { price: '0' };
   }
 }
 
@@ -482,39 +513,37 @@ export async function getBinanceHistoricalData(
   timestamps: number[];
 }> {
   try {
-    let limit = daysOrLimit;
-    const isDaysParameter = typeof arguments[2] === 'number' && arguments.length === 3 && typeof arguments[1] === 'string' && 
-      ['1m', '3m', '5m', '15m', '30m', '1h', '2h', '4h', '6h', '8h', '12h', '1d', '3d', '1w', '1M'].includes(arguments[1]);
-      
-    // Se estamos usando a primeira sobrecarga (com days)
-    if (isDaysParameter) {
-      const days = daysOrLimit;
-      // Ajustar limite com base no intervalo
-      if (interval === '1m') limit = days * 1440; // 1440 minutos em um dia
-      else if (interval === '3m') limit = days * 480;
-      else if (interval === '5m') limit = days * 288;
-      else if (interval === '15m') limit = days * 96;
-      else if (interval === '30m') limit = days * 48;
-      else if (interval === '1h') limit = days * 24;
-      else if (interval === '2h') limit = days * 12;
-      else if (interval === '4h') limit = days * 6;
-      
-      // Limitar a 1000 registros (limite da API Binance)
-      limit = Math.min(limit, 1000);
+    // Verificar se é um símbolo de criptomoeda válido para a Binance
+    if (!isBinanceCryptoSymbol(symbol)) {
+      console.warn(`${symbol} não parece ser um símbolo válido de criptomoeda para a Binance`);
+      return { prices: [], highs: [], lows: [], volumes: [], timestamps: [] };
     }
     
-    // Mapear intervalo para formato aceito pela API se for uma string não padrão
-    let apiInterval = interval;
-    if (!['1m', '3m', '5m', '15m', '30m', '1h', '2h', '4h', '6h', '8h', '12h', '1d', '3d', '1w', '1M'].includes(interval)) {
-      // Mapeamento básico de intervalos comuns
-      if (interval === 'daily') apiInterval = '1d';
-      else if (interval === 'hourly') apiInterval = '1h';
-      else if (interval === 'weekly') apiInterval = '1w';
-      else apiInterval = '1d'; // Default para diário
+    // Adicionar USDT se for apenas o ticker da moeda
+    const formattedSymbol = symbol.includes('USDT') ? symbol : `${symbol}USDT`;
+    
+    // Determinar se o parâmetro é um limite ou número de dias
+    let params: Record<string, string> = {
+      symbol: formattedSymbol,
+      interval
+    };
+    
+    if (typeof daysOrLimit === 'number') {
+      if (daysOrLimit <= 1000) {
+        // Tratar como limite
+        params.limit = daysOrLimit.toString();
+      } else {
+        // Tratar como dias (convertendo para milissegundos)
+        const endTime = Date.now();
+        const startTime = endTime - (daysOrLimit * 24 * 60 * 60 * 1000);
+        
+        params.startTime = startTime.toString();
+        params.endTime = endTime.toString();
+      }
     }
     
-    // Busca os klines
-    const klines = await getHistoricalKlines(symbol, apiInterval as any, limit);
+    // Fazer a requisição à API da Binance
+    const klines = await binancePublicCall('/api/v3/klines', params);
     
     // Processa os dados
     const prices: number[] = [];
@@ -523,13 +552,15 @@ export async function getBinanceHistoricalData(
     const volumes: number[] = [];
     const timestamps: number[] = [];
     
-    klines.forEach(kline => {
-      timestamps.push(kline[0]); // Open time
-      prices.push(parseFloat(kline[4])); // Close price
-      highs.push(parseFloat(kline[2])); // High price
-      lows.push(parseFloat(kline[3])); // Low price
-      volumes.push(parseFloat(kline[5])); // Volume
-    });
+    if (Array.isArray(klines)) {
+      klines.forEach(kline => {
+        timestamps.push(kline[0]); // Open time
+        prices.push(parseFloat(kline[4])); // Close price
+        highs.push(parseFloat(kline[2])); // High price
+        lows.push(parseFloat(kline[3])); // Low price
+        volumes.push(parseFloat(kline[5])); // Volume
+      });
+    }
     
     return { prices, highs, lows, volumes, timestamps };
   } catch (error) {

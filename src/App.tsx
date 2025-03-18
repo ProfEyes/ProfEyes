@@ -18,7 +18,8 @@ import { NotificationProvider } from '@/contexts/NotificationContext';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { AuthGuard } from '@/components/AuthGuard';
 import { useAuth } from '@/contexts/AuthContext';
-import { motion } from 'framer-motion';
+import { LoadingScreen } from '@/components/ui/loading-screen';
+import Stocks from '@/pages/Stocks';
 
 // Criar o cliente de query
 const queryClient = new QueryClient();
@@ -27,16 +28,31 @@ const queryClient = new QueryClient();
 const AppContent = () => {
   const queryClient = useQueryClient();
   const { user, loading } = useAuth();
-  const [initialLoading, setInitialLoading] = useState(true);
+  const [resourcesReady, setResourcesReady] = useState(false);
+  const [animationComplete, setAnimationComplete] = useState(false);
 
-  // Efeito para simular um carregamento inicial
+  // Efeito para controlar o carregamento inicial e recursos
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setInitialLoading(false);
-    }, 1500);
-    
-    return () => clearTimeout(timer);
-  }, []);
+    const loadResources = async () => {
+      try {
+        // Aguardar pelo menos 4.5 segundos para a animação do logo
+        await new Promise(resolve => setTimeout(resolve, 4500));
+        
+        // Aqui você pode adicionar mais verificações de recursos se necessário
+        // Por exemplo, carregar dados iniciais, configurações, etc.
+        
+        setResourcesReady(true);
+      } catch (error) {
+        console.error('Erro ao carregar recursos:', error);
+        // Mesmo em caso de erro, permitimos que a aplicação continue
+        setResourcesReady(true);
+      }
+    };
+
+    if (!loading) {
+      loadResources();
+    }
+  }, [loading]);
 
   // Iniciar monitoramento de sinais ao carregar a aplicação
   useEffect(() => {
@@ -80,40 +96,21 @@ const AppContent = () => {
       monitor.stop();
     };
   }, [queryClient, user]);
+
+  // Função para lidar com a conclusão da animação
+  const handleLoadComplete = () => {
+    setAnimationComplete(true);
+  };
   
-  // Mostrar tela de carregamento inicial
-  if (initialLoading || loading) {
+  // Determinar se devemos mostrar a tela de carregamento
+  const showLoadingScreen = !resourcesReady || !animationComplete || loading;
+  
+  if (showLoadingScreen) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-black overflow-hidden">
-        <div className="flex flex-col items-center justify-center">
-          <h1 
-            style={{
-              fontFamily: 'Mollen',
-              fontWeight: 'bold',
-              fontSize: '3.5rem',
-              color: 'white',
-              marginBottom: '2rem',
-              letterSpacing: '0.05em'
-            }}
-          >
-            ProfEyes
-          </h1>
-          
-          <motion.div
-            animate={{
-              rotate: 360
-            }}
-            transition={{
-              duration: 1.5,
-              repeat: Infinity,
-              ease: "linear"
-            }}
-            className="relative"
-          >
-            <div className="w-16 h-16 rounded-full border-t-4 border-l-4 border-r-4 border-b-4 border-b-transparent border-white/30 border-t-white/90 border-l-white/60 border-r-white/60"></div>
-          </motion.div>
-        </div>
-      </div>
+      <LoadingScreen 
+        isReady={resourcesReady && !loading}
+        onLoadComplete={handleLoadComplete}
+      />
     );
   }
   
@@ -125,13 +122,14 @@ const AppContent = () => {
           <Route path="/auth" element={user ? <Navigate to="/" replace /> : <Auth />} />
           
           {/* Rotas protegidas que exigem autenticação */}
-          <Route path="/" element={<AuthGuard><Index /></AuthGuard>} />
-          <Route path="/analysis" element={<AuthGuard><Analysis /></AuthGuard>} />
-          <Route path="/signals" element={<AuthGuard><Signals /></AuthGuard>} />
-          <Route path="/settings" element={<AuthGuard><Settings /></AuthGuard>} />
-          <Route path="/news" element={<AuthGuard><News /></AuthGuard>} />
-          <Route path="/portfolio" element={<AuthGuard><Portfolio /></AuthGuard>} />
-          <Route path="/notifications" element={<AuthGuard><NotificationsPage /></AuthGuard>} />
+          <Route path="/" element={<AuthGuard checkOnly={true}><Index /></AuthGuard>} />
+          <Route path="/analysis" element={<AuthGuard checkOnly={true}><Analysis /></AuthGuard>} />
+          <Route path="/signals" element={<AuthGuard checkOnly={true}><Signals /></AuthGuard>} />
+          <Route path="/settings" element={<AuthGuard checkOnly={true}><Settings /></AuthGuard>} />
+          <Route path="/news" element={<AuthGuard checkOnly={true}><News /></AuthGuard>} />
+          <Route path="/portfolio" element={<AuthGuard checkOnly={true}><Portfolio /></AuthGuard>} />
+          <Route path="/stocks" element={<AuthGuard checkOnly={true}><Stocks /></AuthGuard>} />
+          <Route path="/notifications" element={<AuthGuard checkOnly={true}><NotificationsPage /></AuthGuard>} />
           
           {/* Rota de fallback */}
           <Route path="*" element={<NotFound />} />

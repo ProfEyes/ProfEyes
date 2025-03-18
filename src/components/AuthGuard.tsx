@@ -3,12 +3,14 @@ import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Loader2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { LoadingScreen } from '@/components/ui/loading-screen';
 
 interface AuthGuardProps {
   children: ReactNode;
+  checkOnly?: boolean;
 }
 
-export function AuthGuard({ children }: AuthGuardProps) {
+export function AuthGuard({ children, checkOnly = false }: AuthGuardProps) {
   const { user, loading } = useAuth();
   const location = useLocation();
   const [isVerifying, setIsVerifying] = useState(true);
@@ -51,41 +53,12 @@ export function AuthGuard({ children }: AuthGuardProps) {
 
   // Mostra um indicador de carregamento enquanto verifica a autenticação
   if ((loading || isVerifying) || !authCheckComplete) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-black overflow-hidden">
-        {/* Nova tela de carregamento com fundo preto */}
-        <div className="flex flex-col items-center justify-center">
-          {/* Logo ProfEyes com a fonte Mollen Extra Bold */}
-          <h1 
-            style={{
-              fontFamily: 'Mollen',
-              fontWeight: 'bold',
-              fontSize: '3.5rem',
-              color: 'white',
-              marginBottom: '2rem',
-              letterSpacing: '0.05em'
-            }}
-          >
-            ProfEyes
-          </h1>
-          
-          {/* Spinner loader */}
-          <motion.div
-            animate={{
-              rotate: 360
-            }}
-            transition={{
-              duration: 1.5,
-              repeat: Infinity,
-              ease: "linear"
-            }}
-            className="relative"
-          >
-            <div className="w-16 h-16 rounded-full border-t-4 border-l-4 border-r-4 border-b-4 border-b-transparent border-white/30 border-t-white/90 border-l-white/60 border-r-white/60"></div>
-          </motion.div>
-        </div>
-      </div>
-    );
+    // Se checkOnly for true, não mostrar a tela de carregamento
+    // porque ela já estará sendo mostrada pelo componente pai (App.tsx)
+    if (checkOnly) {
+      return null;
+    }
+    return <LoadingScreen />;
   }
 
   // Redireciona para a página de login se não estiver autenticado

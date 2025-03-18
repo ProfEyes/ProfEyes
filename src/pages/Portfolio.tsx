@@ -64,6 +64,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { createPortal } from 'react-dom';
+import { getBrapiMultipleStockQuotes } from '@/services/brapiService';
 
 interface Asset {
   symbol: string;
@@ -152,15 +153,19 @@ interface TickerAsset {
   price: number;
   change: number;
   isCrypto?: boolean;
+  isStock?: boolean;
   isIndex?: boolean;
   isCurrency?: boolean;
+  currency?: 'USD' | 'BRL';
+  shortName?: string;
 }
 
 // Constantes para os ativos a serem exibidos no ticker
-const CRYPTO_ASSETS = ['BTC', 'ETH', 'BNB', 'SOL', 'ADA', 'XRP', 'DOT', 'AVAX', 'MATIC', 'LINK', 'DOGE', 'ATOM', 'UNI', 'LTC', 'AAVE', 'NEAR'];
+const CRYPTO_ASSETS = ['BTC', 'ETH', 'BNB', 'SOL', 'ADA', 'XRP', 'DOT', 'AVAX', 'MATIC', 'LINK', 'DOGE', 'ATOM'];
+const BRAZILIAN_STOCKS = ['PETR4', 'VALE3', 'ITUB4', 'BBDC4', 'BBAS3', 'MGLU3', 'WEGE3', 'RENT3', 'B3SA3', 'ABEV3'];
 
 // Componente do rodapé com ticker usando Portal
-const TickerFooter = ({ tickerAssets }: { tickerAssets: any[] }) => {
+const TickerFooter = ({ tickerAssets }: { tickerAssets: TickerAsset[] }) => {
   return createPortal(
     <div 
       className="fixed bottom-0 left-0 right-0 z-[9999] overflow-hidden border-t bg-background/90 backdrop-blur-md"
@@ -194,7 +199,7 @@ const TickerFooter = ({ tickerAssets }: { tickerAssets: any[] }) => {
                 <span className="font-mono">
                   {asset.price.toLocaleString('pt-BR', { 
                     style: 'currency', 
-                    currency: 'USD'
+                    currency: asset.currency || 'USD'
                   })}
                 </span>
                 <span 
@@ -476,7 +481,7 @@ export default function Portfolio() {
         
         // Buscar dados de criptomoedas da CoinGecko
         try {
-          const cryptoResponse = await fetch('https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&ids=bitcoin,ethereum,binancecoin,solana,cardano,ripple,polkadot,avalanche,matic-network,chainlink,dogecoin,cosmos,uniswap,litecoin,aave,near&sparkline=false&price_change_percentage=24h');
+          const cryptoResponse = await fetch('https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&ids=bitcoin,ethereum,binancecoin,solana,cardano,ripple,polkadot,avalanche,matic-network,chainlink,dogecoin,cosmos&sparkline=false&price_change_percentage=24h');
           const cryptoData = await cryptoResponse.json();
           
           if (Array.isArray(cryptoData)) {
@@ -492,11 +497,7 @@ export default function Portfolio() {
               'matic-network': 'MATIC',
               'chainlink': 'LINK',
               'dogecoin': 'DOGE',
-              'cosmos': 'ATOM',
-              'uniswap': 'UNI',
-              'litecoin': 'LTC',
-              'aave': 'AAVE',
-              'near': 'NEAR'
+              'cosmos': 'ATOM'
             };
             
             cryptoData.forEach(crypto => {
@@ -506,7 +507,9 @@ export default function Portfolio() {
                   symbol,
                   price: crypto.current_price,
                   change: crypto.price_change_percentage_24h,
-                  isCrypto: true
+                  isCrypto: true,
+                  isStock: false,
+                  currency: 'USD'
                 });
               }
             });
@@ -515,10 +518,32 @@ export default function Portfolio() {
           console.error('Erro ao buscar dados de criptomoedas:', error);
         }
         
-        // Se não houver dados novos, manter os dados anteriores de criptomoedas
+        // Buscar dados de ações brasileiras da BrAPI usando a função atualizada
+        try {
+          console.log('Buscando dados de ações brasileiras via getBrapiMultipleStockQuotes...');
+          const stockQuotes = await getBrapiMultipleStockQuotes(BRAZILIAN_STOCKS);
+          
+          if (stockQuotes && stockQuotes.length > 0) {
+            stockQuotes.forEach(stock => {
+              updatedAssets.push({
+                symbol: stock.symbol,
+                price: stock.regularMarketPrice,
+                change: stock.regularMarketChangePercent,
+                isCrypto: false,
+                isStock: true,
+                currency: 'BRL',
+                shortName: stock.shortName
+              });
+            });
+            console.log(`Recebidos dados de ${stockQuotes.length} ações brasileiras.`);
+          }
+        } catch (error) {
+          console.error('Erro ao buscar dados de ações brasileiras:', error);
+        }
+        
+        // Se não houver dados novos, manter os dados anteriores
         if (updatedAssets.length === 0) {
-          const existingCryptos = tickerAssets.filter(asset => asset.isCrypto);
-          updatedAssets.push(...existingCryptos);
+          updatedAssets.push(...tickerAssets);
         }
         
         // Atualizar o estado apenas se houver dados novos
@@ -531,10 +556,10 @@ export default function Portfolio() {
     };
 
     fetchRealTickerData();
-    const interval = setInterval(fetchRealTickerData, 30000); // Atualiza a cada 30 segundos
+    const interval = setInterval(fetchRealTickerData, 60000); // Aumentado para 60 segundos para evitar muitas requisições
     
     return () => clearInterval(interval);
-  }, []);
+  }, [tickerAssets]);
 
   return (
     <>
