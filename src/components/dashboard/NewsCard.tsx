@@ -6,6 +6,7 @@ import { useNavigate } from "react-router-dom";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { useEffect, useState, useMemo } from "react";
+import { Loader } from "lucide-react";
 
 // Array de imagens alternativas para notícias sem imagem
 const fallbackImages = [
@@ -49,13 +50,28 @@ const getRandomFallbackImage = (newsId: string) => {
 const NewsCard = () => {
   const navigate = useNavigate();
   const [showAllNews, setShowAllNews] = useState(false);
+  const [retryCount, setRetryCount] = useState(0);
   
   const { data: news, isLoading, error, refetch } = useQuery({
-    queryKey: ['marketNews'],
-    queryFn: () => fetchMarketNews({ limit: 10 }), // Busca até 10 notícias, mas exibiremos apenas 3 inicialmente
+    queryKey: ['marketNews', retryCount],
+    queryFn: () => fetchMarketNews({ limit: 10 }),
     refetchInterval: 1800000, // Atualiza a cada 30 minutos (1800000 ms)
     staleTime: 1800000, // Considera os dados obsoletos após 30 minutos
+    retry: 2,
+    retryDelay: 1000
   });
+
+  // Efeito para fazer nova tentativa se não tivermos notícias
+  useEffect(() => {
+    if (!isLoading && !error && (!news || news.length === 0) && retryCount < 3) {
+      console.log('Nenhuma notícia carregada, tentando novamente...');
+      const timer = setTimeout(() => {
+        setRetryCount(prev => prev + 1);
+      }, 2000);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [news, isLoading, error, retryCount]);
 
   // Garantir que as notícias tenham imagens únicas
   const newsWithImages = useMemo(() => {
@@ -66,7 +82,7 @@ const NewsCard = () => {
     
     return news.map(item => {
       // Se já tem uma imagem válida, usá-la
-      if (item.imageUrl) {
+      if (item.imageUrl && item.imageUrl.startsWith('http')) {
         // Se a imagem já foi usada, atribuir uma nova
         if (usedImages.has(item.imageUrl)) {
           const newImage = getRandomFallbackImage(item.id);
@@ -106,8 +122,9 @@ const NewsCard = () => {
           <CardTitle>Notícias Recentes</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="space-y-4">
-            <p>Carregando notícias...</p>
+          <div className="flex flex-col items-center justify-center py-8 space-y-4">
+            <Loader className="w-6 h-6 animate-spin" />
+            <p className="text-sm text-muted-foreground">Carregando notícias...</p>
           </div>
         </CardContent>
       </Card>
@@ -126,7 +143,10 @@ const NewsCard = () => {
             <Button 
               variant="outline" 
               size="sm"
-              onClick={() => refetch()}
+              onClick={() => {
+                setRetryCount(prev => prev + 1);
+                refetch();
+              }}
               className="mt-2"
             >
               Tentar novamente
@@ -156,7 +176,10 @@ const NewsCard = () => {
             <Button 
               variant="outline" 
               size="sm"
-              onClick={() => refetch()}
+              onClick={() => {
+                setRetryCount(prev => prev + 1);
+                refetch();
+              }}
               className="mt-2"
             >
               Atualizar
@@ -178,7 +201,10 @@ const NewsCard = () => {
           <Button 
             variant="ghost" 
             size="icon"
-            onClick={() => refetch()}
+            onClick={() => {
+              setRetryCount(prev => prev + 1);
+              refetch();
+            }}
             title="Atualizar notícias"
             className="h-8 w-8 rounded-full"
           >

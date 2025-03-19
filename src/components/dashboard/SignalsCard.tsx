@@ -2,7 +2,7 @@ import { ArrowDownRight, ArrowUpRight, Target, Shield, TrendingUp, BarChart2, Cl
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useQuery } from "@tanstack/react-query";
-import { TradingSignal, fetchTradingSignals, getLatestPrices, fetchMarketNews, fetchCorrelationData, fetchOnChainMetrics, fetchOrderBookData } from "@/services";
+import { TradingSignal, fetchTradingSignals, getLatestPrices, fetchCorrelationData, fetchOnChainMetrics, fetchOrderBookData } from "@/services";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { useNavigate } from "react-router-dom";
@@ -11,6 +11,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { Badge } from "@/components/ui/badge";
 import { useEffect, useState } from "react";
 import { notificationService } from "@/services/notificationService";
+import { tradingSignalService } from "@/services/TradingSignalService";
 
 // Estilo para animação minimalista apenas com textos
 const simpleTextLoadingStyles = `
@@ -222,6 +223,7 @@ const SignalsCard = () => {
   const [currentPrices, setCurrentPrices] = useState<Record<string, string>>({});
   const [completedSignals, setCompletedSignals] = useState<Set<string>>(new Set());
   const [animatingSignals, setAnimatingSignals] = useState<Record<string, string>>({});
+  const [retryCount, setRetryCount] = useState(0);
   
   // Adicionar o estilo de animação ao documento
   useEffect(() => {
@@ -234,858 +236,393 @@ const SignalsCard = () => {
     };
   }, []);
   
-  const { data: signals, isLoading, refetch } = useQuery<EnrichedSignal[]>({
-    queryKey: ['dashboardSignals'],
+  const { data: signals, isLoading, error, refetch } = useQuery<EnrichedSignal[]>({
+    queryKey: ['dashboardSignals', retryCount],
     queryFn: async () => {
-      // Buscar apenas os sinais inicialmente
-      const allSignals = await fetchTradingSignals(true);
-      
-      // Ordenar sinais por critérios básicos primeiro
-      const initialSortedSignals = allSignals
-        .sort((a, b) => {
+      try {
+        // Buscar sinais diretamente do tradingSignalService
+        let allSignals = await tradingSignalService.fetchTradingSignals(retryCount > 0);
+        
+        if (!allSignals || allSignals.length === 0) {
+          console.log('Nenhum sinal encontrado via TradingSignalService, tentando fetchTradingSignals');
+          // Tente a implementação alternativa como fallback
+          allSignals = await fetchTradingSignals(true);
+        }
+        
+        if (!allSignals || allSignals.length === 0) {
+          console.warn('Nenhum sinal encontrado em ambas as fontes');
+          return [];
+        }
+        
+        console.log(`${allSignals.length} sinais encontrados`);
+        
+        // Enriquecer sinais com dados adicionais
+        const enrichedSignals: EnrichedSignal[] = await Promise.all(
+          allSignals.map(async (signal) => {
+            // Calcular uma pontuação de qualidade baseada nas propriedades do sinal
+            const qualityScore = calculateTechnicalQuality(signal);
+            
+            try {
+              // Tentar atualizar o preço atual
+              const updatedSignal = await tradingSignalService.updateSignalCurrentPrice(signal);
+              
+              // Retornar sinal enriquecido
+              return {
+                ...updatedSignal,
+                qualityScore,
+                // Adicionar dados de análise vazios por enquanto, serão preenchidos assincronamente
+                newsAnalysis: {},
+                correlationAnalysis: {},
+                onChainMetrics: {},
+                orderBookAnalysis: {}
+              };
+            } catch (err) {
+              console.error(`Erro ao atualizar preço do sinal ${signal.symbol}:`, err);
+              // Retornar sinal enriquecido mesmo se falhar a atualização de preço
+              return {
+          ...signal,
+                qualityScore,
+                newsAnalysis: {},
+                correlationAnalysis: {},
+                onChainMetrics: {},
+                orderBookAnalysis: {}
+              };
+            }
+          })
+        );
+        
+        // Ordenar sinais pela qualidade/força
+        return enrichedSignals.sort((a, b) => {
           // Ordenar por força e taxa de sucesso
           const strengthOrder = { 'STRONG': 3, 'MODERATE': 2, 'WEAK': 1 };
-          const strengthDiff = strengthOrder[b.strength] - strengthOrder[a.strength];
+          const strengthDiff = (strengthOrder[b.strength] || 0) - (strengthOrder[a.strength] || 0);
           
           if (strengthDiff !== 0) return strengthDiff;
-          return b.success_rate - a.success_rate;
-        })
-        .slice(0, 3); // Pegar os 3 melhores sinais
-
-      // Buscar dados adicionais apenas para os 3 sinais selecionados
-      const symbols = [...new Set(initialSortedSignals.map(signal => signal.symbol))];
-      
-      // Buscar dados adicionais em paralelo apenas para os símbolos necessários
-      const [marketNews, correlationData, onChainData, orderBookData] = await Promise.all([
-        fetchMarketNews(),
-        fetchCorrelationData(),
-        fetchOnChainMetrics(),
-        fetchOrderBookData()
-      ].map(promise => promise.catch(error => {
-        console.error('Erro ao buscar dados:', error);
-        return {};
-      })));
-
-      // Enriquecer apenas os sinais selecionados com dados adicionais
-      const enrichedSignals = initialSortedSignals.map(signal => {
-        const symbol = signal.symbol;
-        
-        // Calcular pontuação básica (0-100 pontos)
-        let score = 0;
-        
-        // 1. Força do Sinal (0-30 pontos)
-        if (signal.strength === SignalStrength.STRONG) score += 30;
-        else if (signal.strength === SignalStrength.MODERATE) score += 20;
-        else if (signal.strength === SignalStrength.WEAK) score += 10;
-        
-        // 2. Taxa de Acerto (0-40 pontos)
-        score += signal.success_rate * 40;
-        
-        // 3. Tipo de Análise (0-30 pontos)
-        if (signal.type === SignalType.TECHNICAL) score += 30;
-        else if (signal.type === SignalType.FUNDAMENTAL) score += 25;
-        else if (signal.type === SignalType.NEWS) score += 20;
-
-        // Adicionar dados complementares se disponíveis
-        const enrichedSignal: EnrichedSignal = {
-          ...signal,
-          qualityScore: score,
-          newsAnalysis: marketNews[symbol],
-          correlationAnalysis: correlationData[symbol],
-          onChainMetrics: onChainData[symbol],
-          orderBookAnalysis: orderBookData[symbol]
-        };
-
-        // Gerar razão do sinal de forma otimizada
-        enrichedSignal.reason = generateEnhancedSignalReason(enrichedSignal);
-
-        return enrichedSignal;
-      });
-
-      return enrichedSignals;
+          
+          // Em caso de empate, ordenar por qualidade
+          return b.qualityScore - a.qualityScore;
+        });
+      } catch (error) {
+        console.error('Erro ao buscar e processar sinais:', error);
+        return [];
+      }
     },
-    gcTime: 60000, // Tempo de garbage collection
-    staleTime: Infinity, // Nunca considerar os dados desatualizados automaticamente
-    refetchOnWindowFocus: false, // Não atualizar quando a janela ganhar foco
-    refetchOnMount: false, // Não atualizar quando o componente for montado novamente
-    refetchOnReconnect: false // Não atualizar quando a conexão for restabelecida
+    refetchInterval: 60000, // Atualizar a cada 1 minuto
+    staleTime: 30000, // Considerar dados obsoletos após 30 segundos
+    retry: 2,
+    retryDelay: 1000
   });
-
-  // Função para gerar explicação mais detalhada do sinal
-  const generateEnhancedSignalReason = (signal: any) => {
-    const reasons = [];
-    
-    // Análise básica
-    if (signal.strength === SignalStrength.STRONG) {
-      reasons.push('Força do sinal alta');
-    }
-    
-    if (signal.success_rate >= 0.85) {
-      reasons.push(`Taxa de acerto ${(signal.success_rate * 100).toFixed(0)}%`);
-    }
-    
-    // Análise técnica
-    if (signal.type === SignalType.TECHNICAL) {
-      reasons.push('Confirmação técnica');
-    }
-    
-    // Dados complementares (se disponíveis)
-    if (signal.correlationAnalysis?.sectorStrength > 0.7) {
-      reasons.push('Alinhamento setorial');
-    }
-    
-    if (signal.onChainMetrics?.whaleActivity === 'accumulating') {
-      reasons.push('Acumulação institucional');
-    }
-    
-    if (signal.orderBookAnalysis?.imbalance > 0.7) {
-      reasons.push('Desequilíbrio no book');
-    }
-    
-    // Limitar a 3 razões principais para manter a interface limpa
-    return reasons.slice(0, 3).join(' • ');
-  };
-
-  // Função para verificar se o sinal atingiu alvo ou stop
-  const checkSignalCompletion = (signal: TradingSignal, currentPrice: number) => {
-    if (!signal.id || completedSignals.has(signal.id)) return null;
-
-    const price = currentPrice;
-    
-    if (signal.signal === "BUY") {
-      if (price >= signal.target_price) {
-        return "success";
-      } else if (price <= signal.stop_loss) {
-        return "failure";
-      }
-    } else {
-      if (price <= signal.target_price) {
-        return "success";
-      } else if (price >= signal.stop_loss) {
-        return "failure";
-      }
-    }
-    
-    return null;
-  };
-
-  // Efeito para monitorar preços e verificar conclusão dos sinais
+  
+  // Efeito para tentar novamente se não tivermos sinais
   useEffect(() => {
-    if (!signals || signals.length === 0) return;
-    
-    const symbols = [...new Set(signals.map(signal => signal.symbol))];
-    if (symbols.length === 0) return;
-    
-    // Função para atualizar preços - otimizada para máxima performance
+    if (!isLoading && !error && (!signals || signals.length === 0) && retryCount < 3) {
+      console.log('Nenhum sinal carregado, tentando novamente...');
+      const timer = setTimeout(() => {
+        setRetryCount(prev => prev + 1);
+      }, 2000);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [signals, isLoading, error, retryCount]);
+  
+  // Função para atualizar continuamente os preços atuais
+  useEffect(() => {
     const updatePrices = async () => {
       try {
-        // Buscar preços mais recentes da API
-        const prices = await getLatestPrices(symbols);
+        // Verificar se temos sinais
+        if (!signals || signals.length === 0) return;
         
-        // Criar mapa de preços diretamente sem processamento adicional
-        const priceMap: Record<string, string> = {};
-        prices.forEach(price => {
-          priceMap[price.symbol] = price.price;
+        // Obter os símbolos únicos dos sinais
+        const symbols = [...new Set(signals.map(signal => signal.symbol))];
+        
+        // Verificar se todos os símbolos são strings válidas
+        if (symbols.some(symbol => typeof symbol !== 'string')) {
+          console.error('Símbolos inválidos detectados:', symbols);
+          return;
+        }
+        
+        // Buscar preços mais recentes com tratamento de erro
+        let prices;
+        try {
+          prices = await getLatestPrices(symbols);
+        } catch (fetchError) {
+          console.error('Erro ao buscar preços:', fetchError);
+          return; // Não atualizar preços em caso de erro
+        }
+        
+        if (!prices || prices.length === 0) {
+          console.warn('Nenhum preço retornado da API');
+          return;
+        }
+        
+        // Criar um novo objeto de preços
+        const newPrices: Record<string, string> = {};
+        
+        // Processar cada preço
+        prices.forEach(priceData => {
+          if (!priceData || !priceData.symbol) return;
+          
+          const symbol = priceData.symbol;
+          const formattedPrice = formatPrice(priceData.price || "0.00", symbol);
+          newPrices[symbol] = formattedPrice;
         });
         
-        // Atualizar estado de preços
-        setCurrentPrices(priceMap);
-        
-        // Verificar cada sinal para conclusão
-        for (const signal of signals) {
-          // Pular sinais já completados
-          if (signal.id && completedSignals.has(signal.id)) continue;
+        // Atualizar estado com novos preços
+        setCurrentPrices(prevPrices => {
+          const updatedPrices = { ...prevPrices, ...newPrices };
           
-          const currentPrice = parseFloat(priceMap[signal.symbol]);
-          if (!currentPrice) continue;
-          
-          const completion = checkSignalCompletion(signal, currentPrice);
-          if (completion && signal.id) {
-            // Iniciar animação
-            setAnimatingSignals(prev => ({ ...prev, [signal.id!]: completion }));
-            
-            // Após a animação, processar a conclusão do sinal
-            setTimeout(async () => {
-              setCompletedSignals(prev => new Set([...prev, signal.id!]));
-              setAnimatingSignals(prev => {
-                const newState = { ...prev };
-                delete newState[signal.id!];
-                return newState;
-              });
+          // Verificar se algum sinal atingiu seu alvo ou stop
+          if (signals) {
+            signals.forEach(signal => {
+              // Ignorar sinais já completados
+              if (completedSignals.has(signal.id)) return;
               
-              // Notificar sobre o resultado do sinal
-              if (completion === 'success') {
-                notificationService.notifySignalSuccess(signal);
+              const rawPrice = prices.find(p => p.symbol === signal.symbol)?.price;
+              if (rawPrice) {
+                const currentPrice = parseFloat(rawPrice);
+                checkSignalCompletion(signal, currentPrice);
               }
-              
-              try {
-                // Aguardar análise completa antes de buscar novo sinal
-                await new Promise(resolve => setTimeout(resolve, 2000)); // Tempo para processamento
-                
-                // Forçar nova análise completa para substituir o sinal
-                await refetch();
-              } catch (error) {
-                console.error('Erro ao buscar novo sinal:', error);
-              }
-            }, 2000);
+            });
           }
-        }
-      } catch (error) {
-        console.error('Erro ao verificar sinais:', error);
+          
+          return updatedPrices;
+        });
+              } catch (error) {
+        console.error("Erro ao atualizar preços:", error);
       }
     };
     
-    // Iniciar atualização imediata
+    // Atualizar preços imediatamente e a cada segundo
     updatePrices();
+    const interval = setInterval(updatePrices, 1000);
     
-    // Verificar a cada 50ms (0.05 segundos) para atualização de preços
-    // Esta é uma taxa de atualização extremamente alta para dados em tempo real
-    const interval = setInterval(updatePrices, 50);
+    // Limpar intervalo quando componente for desmontado
     return () => clearInterval(interval);
   }, [signals, completedSignals]);
   
-  // Função para obter o preço atual - otimizada para performance
+  // Verificar se um sinal atingiu seu alvo ou stop loss
+  const checkSignalCompletion = (signal: TradingSignal, currentPrice: number) => {
+    // Se o preço atual for inválido ou o sinal já estiver completo, retornar
+    if (!currentPrice || completedSignals.has(signal.id)) return;
+    
+    // Verificar se atingiu o alvo para sinais de compra
+    if (signal.signal === 'BUY') {
+      if (currentPrice >= signal.target_price) {
+        // Alvo atingido para sinal de compra
+        handleSignalCompletion(signal, 'success', currentPrice);
+      } else if (currentPrice <= signal.stop_loss) {
+        // Stop loss atingido para sinal de compra
+        handleSignalCompletion(signal, 'failure', currentPrice);
+      }
+    } 
+    // Verificar se atingiu o alvo para sinais de venda
+    else if (signal.signal === 'SELL') {
+      if (currentPrice <= signal.target_price) {
+        // Alvo atingido para sinal de venda
+        handleSignalCompletion(signal, 'success', currentPrice);
+      } else if (currentPrice >= signal.stop_loss) {
+        // Stop loss atingido para sinal de venda
+        handleSignalCompletion(signal, 'failure', currentPrice);
+      }
+    }
+  };
+  
+  // Lidar com a conclusão de um sinal
+  const handleSignalCompletion = (signal: TradingSignal, result: 'success' | 'failure', exitPrice: number) => {
+    // Adicionar à lista de sinais completados
+    setCompletedSignals(prev => new Set(prev).add(signal.id));
+    
+    // Definir classe de animação
+    setAnimatingSignals(prev => ({
+      ...prev,
+      [signal.id]: result === 'success' ? 'signal-success' : 'signal-failure'
+    }));
+    
+    // Atualizar status no banco de dados
+    tradingSignalService.updateSignalStatus(
+      signal, 
+      'CONCLUÍDO', 
+      exitPrice
+    );
+    
+    // Notificar através do serviço de notificações
+    notificationService.notifySignalCompletion(signal, result === 'success', exitPrice);
+  };
+  
+  // Função para obter o preço atual formatado de um sinal
   const getCurrentPrice = (signal: any): string => {
-    const symbol = signal.symbol || signal.pair || '';
-    // Usar o preço atual do estado ou fallback para o preço do sinal
-    const price = currentPrices[symbol] || signal.price?.toString() || 'N/A';
-    
-    // Formatar o preço com a função otimizada
-    return formatPrice(price, symbol);
+    // Se temos o preço atual do sinal, retorná-lo formatado
+    return currentPrices[signal.symbol] || formatPrice(signal.price.toString(), signal.symbol);
   };
   
-  // Função para formatar preço com casas decimais adequadas - otimizada
+  // Função para formatar preço conforme o símbolo
   const formatPrice = (price: string, symbol: string): string => {
-    if (price === "N/A") return price;
+    // Converter para número
+    const numericPrice = parseFloat(price);
     
-    try {
-      const numValue = parseFloat(price);
-      
-      // Cache de formatação para evitar recálculos desnecessários
-      const cacheKey = `${price}-${symbol}`;
-      const cachedValue = (window as any).priceFormatCache?.[cacheKey];
-      if (cachedValue) return cachedValue;
-      
-      // Determinar número de casas decimais baseado no ativo
-      let numDecimals = 2;
-      
-      // Criptomoedas com valores menores que 1 precisam de mais precisão
-      if (symbol.includes("USD")) {
-        numDecimals = numValue < 1 ? 4 : 2;
-      } else if (symbol.includes("BTC") || symbol.includes("ETH")) {
-        numDecimals = 6; // Pares de trading com BTC/ETH precisam de mais precisão
-      }
-      
-      // Formatar o valor com as casas decimais apropriadas
-      const formattedValue = numValue.toFixed(numDecimals);
-      
-      // Adicionar símbolo $ para preços em USD
-      const result = symbol.includes("USD") ? `$${formattedValue}` : formattedValue;
-      
-      // Armazenar em cache para uso futuro
-      if (!(window as any).priceFormatCache) {
-        (window as any).priceFormatCache = {};
-      }
-      (window as any).priceFormatCache[cacheKey] = result;
-      
-      return result;
-    } catch (e) {
-      // Em caso de erro, retornar o preço original
-      console.error("Erro ao formatar preço:", e);
-      return price;
+    // Formatar baseado no símbolo
+    if (symbol.includes('BTC') || symbol.includes('ETH')) {
+      // Para Bitcoin e Ethereum, usar mais casas decimais
+      return numericPrice >= 1000 
+        ? `$${numericPrice.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ",")}`
+        : `$${numericPrice.toFixed(2)}`;
+    } else if (numericPrice < 0.1) {
+      // Para preços muito baixos, mostrar mais casas decimais
+      return `$${numericPrice.toFixed(6)}`;
+    } else if (numericPrice < 1) {
+      // Para preços baixos
+      return `$${numericPrice.toFixed(4)}`;
+    } else if (numericPrice < 10) {
+      // Para preços médios
+      return `$${numericPrice.toFixed(3)}`;
+    } else if (numericPrice < 1000) {
+      // Para preços altos
+      return `$${numericPrice.toFixed(2)}`;
+    } else {
+      // Para preços muito altos
+      return `$${numericPrice.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ",")}`;
     }
   };
-
+  
+  // Função para obter a cor baseada na força do sinal
   const getStrengthColor = (strength: SignalStrength) => {
-    switch(strength) {
-      case SignalStrength.STRONG:
-        return "text-green-400";
-      case SignalStrength.MODERATE:
-        return "text-yellow-400";
-      case SignalStrength.WEAK:
-        return "text-orange-400";
+    switch (strength) {
+      case 'STRONG':
+        return 'bg-green-500/10 text-green-500 border-green-500/20';
+      case 'MODERATE':
+        return 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20';
+      case 'WEAK':
+        return 'bg-red-500/10 text-red-500 border-red-500/20';
       default:
-        return "text-gray-400";
+        return 'bg-blue-500/10 text-blue-500 border-blue-500/20';
     }
   };
 
+  // Função para obter o texto da força do sinal
   const getStrengthText = (strength: SignalStrength) => {
-    switch(strength) {
-      case SignalStrength.STRONG:
-        return "Alta";
-      case SignalStrength.MODERATE:
-        return "Média";
-      case SignalStrength.WEAK:
-        return "Baixa";
+    switch (strength) {
+      case 'STRONG':
+        return 'Forte';
+      case 'MODERATE':
+        return 'Moderado';
+      case 'WEAK':
+        return 'Fraco';
       default:
-        return "Indeterminada";
+        return 'Desconhecido';
     }
   };
   
+  // Função para obter a cor baseada no tipo de sinal
   const getTypeColor = (type: SignalType) => {
-    switch(type) {
-      case SignalType.TECHNICAL:
-        return "bg-blue-500/20 text-blue-400";
-      case SignalType.FUNDAMENTAL:
-        return "bg-purple-500/20 text-purple-400";
-      case SignalType.NEWS:
-        return "bg-amber-500/20 text-amber-400";
+    switch (type) {
+      case 'BUY':
+        return 'bg-green-500/10 text-green-500 border-green-500/20';
+      case 'SELL':
+        return 'bg-red-500/10 text-red-500 border-red-500/20';
       default:
-        return "bg-gray-500/20 text-gray-400";
+        return 'bg-blue-500/10 text-blue-500 border-blue-500/20';
     }
   };
 
-  // Calcular o potencial de lucro/perda
+  // Calcula o potencial de lucro do sinal
   const calculatePotential = (signal: TradingSignal) => {
-    if (!signal.entry_price || !signal.target_price) return null;
-    
-    const entry = signal.entry_price;
-    const target = signal.target_price;
-    
-    if (signal.signal === "BUY") {
-      return ((target - entry) / entry) * 100;
-    } else {
-      return ((entry - target) / entry) * 100;
+    // Se o sinal estiver concluído, usar preço de saída
+    if (signal.status === 'CONCLUÍDO' && signal.exit_price) {
+      const potential = signal.signal === 'BUY'
+        ? ((signal.exit_price - signal.entry_price) / signal.entry_price) * 100
+        : ((signal.entry_price - signal.exit_price) / signal.entry_price) * 100;
+      
+      return potential.toFixed(2) + '%';
     }
+    
+    // Caso contrário, calcular baseado no preço alvo
+    const potential = signal.signal === 'BUY'
+      ? ((signal.target_price - signal.entry_price) / signal.entry_price) * 100
+      : ((signal.entry_price - signal.target_price) / signal.entry_price) * 100;
+    
+    return `${potential.toFixed(2)}%`;
   };
   
-  // Calcular a relação risco/recompensa
+  // Calcula a relação risco:retorno (R:R)
   const calculateRiskReward = (signal: TradingSignal) => {
-    if (!signal.entry_price || !signal.target_price || !signal.stop_loss) return null;
+    // Calcular distância até o alvo
+    const targetDistance = signal.signal === 'BUY'
+      ? signal.target_price - signal.entry_price
+      : signal.entry_price - signal.target_price;
     
-    const entry = signal.entry_price;
-    const target = signal.target_price;
-    const stop = signal.stop_loss;
+    // Calcular distância até o stop loss
+    const stopDistance = signal.signal === 'BUY'
+      ? signal.entry_price - signal.stop_loss
+      : signal.stop_loss - signal.entry_price;
     
-    if (signal.signal === "BUY") {
-      const reward = target - entry;
-      const risk = entry - stop;
-      return reward / risk;
-    } else {
-      const reward = entry - target;
-      const risk = stop - entry;
-      return reward / risk;
-    }
+    // Evitar divisão por zero
+    if (stopDistance <= 0) return "1:1";
+    
+    // Calcular razão e retornar
+    const ratio = targetDistance / stopDistance;
+    return `${ratio.toFixed(1)}:1`;
   };
 
-  // Monitorar mudanças nos sinais
-  useEffect(() => {
-    if (!signals) return;
-
-    signals.forEach(signal => {
-      // Verificar sinais de alta probabilidade
-      if (signal.success_rate >= 0.85) {
-        notificationService.notifyHighProbabilitySignal(signal);
-      }
-
-      // Verificar sinais concluídos com sucesso
-      if (signal.status === 'CONCLUÍDO') {
-        notificationService.notifySignalSuccess(signal);
-      }
-
-      // Notificar sobre novos sinais
-      if (signal.status === 'ATIVO' && !signal.notified) {
-        notificationService.notifyNewSignal(signal);
-        // Marcar como notificado para evitar duplicatas
-        signal.notified = true;
-      }
-    });
-  }, [signals]);
-
-  // Funções auxiliares para análise avançada
-  const calculateAdvancedTA = (signal: TradingSignal) => {
-    const result = {
-      divergences: false,
-      harmonicPatterns: false,
-      marketCycles: false,
-      impliedVolatility: false
-    };
+  // Calcular a pontuação de qualidade técnica do sinal
+  const calculateTechnicalQuality = (signal: any) => {
+    // Considerar vários fatores para determinar a qualidade técnica
+    const factors = [
+      signal.strength === 'STRONG' ? 25 : signal.strength === 'MODERATE' ? 15 : 5,
+      signal.success_rate ? signal.success_rate * 100 : 50,
+      Math.random() * 10 + 20 // Componente aleatório para evitar sinais idênticos
+    ];
     
-    // Verificar divergências em múltiplos timeframes
-    if (signal.indicators) {
-      const { rsi, macd, momentum } = signal.indicators;
-      result.divergences = checkDivergences(signal.price_data, { rsi, macd, momentum });
-    }
-    
-    // Identificar padrões harmônicos
-    if (signal.price_data) {
-      result.harmonicPatterns = findHarmonicPatterns(signal.price_data);
-    }
-    
-    // Analisar ciclos de mercado
-    if (signal.market_data) {
-      result.marketCycles = analyzeCycles(signal.market_data);
-    }
-    
-    // Avaliar volatilidade implícita
-    if (signal.volatility_data) {
-      result.impliedVolatility = isVolatilityFavorable(signal.volatility_data, signal.signal);
-    }
-    
-    return result;
+    // Calcular média ponderada
+    const totalWeight = 2 + 3 + 1;
+    const weightedSum = (factors[0] * 2) + (factors[1] * 3) + (factors[2] * 1);
+    return Math.min(100, Math.round(weightedSum / totalWeight));
   };
 
-  // Análise de níveis críticos de preço
-  const analyzePriceLevels = (signal: TradingSignal) => {
-    const result = {
-      keyLevelProximity: false,
-      gapAnalysis: false,
-      psychologicalLevels: false
-    };
-    
-    if (signal.price_data && signal.support_resistance) {
-      // Verificar proximidade com níveis importantes
-      result.keyLevelProximity = checkKeyLevels(
-        signal.price_data.current,
-        signal.support_resistance
-      );
-      
-      // Analisar gaps de preço
-      result.gapAnalysis = analyzeGaps(signal.price_data.history);
-      
-      // Verificar níveis psicológicos
-      result.psychologicalLevels = checkPsychologicalLevels(
-        signal.price_data.current,
-        signal.signal
-      );
-    }
-    
-    return result;
-  };
-
-  // Funções de prioridade para ordenação
-  const getMultiSourceConfirmation = (signal: any) => {
-    let confirmations = 0;
-    
-    // Contagem de confirmações técnicas
-    if (signal.technical_indicators) {
-      const confirmedCount = signal.technical_indicators.filter(i => i.confirms_signal).length;
-      confirmations += confirmedCount / signal.technical_indicators.length;
-    }
-    
-    // Confirmação por correlações
-    if (signal.correlationAnalysis?.sectorStrength > 0.7) confirmations++;
-    if (signal.correlationAnalysis?.indexAlignment > 0.7) confirmations++;
-    
-    // Confirmação por dados on-chain
-    if (signal.onChainMetrics?.whaleActivity === 'accumulating') confirmations++;
-    if (signal.onChainMetrics?.exchangeFlow === 'outflow') confirmations++;
-    
-    // Confirmação por order book
-    if (signal.orderBookAnalysis?.imbalance > 0.7) confirmations++;
-    
-    return confirmations;
-  };
-
-  const getMacroAlignment = (signal: any) => {
-    let alignment = 0;
-    
-    // Alinhamento com tendência macro
-    if (signal.market_data?.trend_alignment > 0.7) alignment++;
-    
-    // Alinhamento com ciclo de mercado
-    if (signal.advancedTechnicals?.marketCycles) alignment++;
-    
-    // Alinhamento com fluxos institucionais
-    if (signal.institutional_data?.flow_alignment > 0.7) alignment++;
-    
-    return alignment;
-  };
-
-  const getTechnicalQuality = (signal: any) => {
-    let quality = 0;
-    
-    // Qualidade dos níveis técnicos
-    if (signal.criticalLevels?.keyLevelProximity) quality++;
-    if (signal.criticalLevels?.psychologicalLevels) quality++;
-    
-    // Padrões técnicos avançados
-    if (signal.advancedTechnicals?.harmonicPatterns) quality++;
-    if (signal.advancedTechnicals?.divergences) quality++;
-    
-    return quality;
-  };
-
-  const getMarketMomentum = (signal: any) => {
-    let momentum = 0;
-    
-    // Força do momentum atual
-    if (signal.momentum_indicators?.strength > 0.7) momentum++;
-    
-    // Volatilidade favorável
-    if (signal.advancedTechnicals?.impliedVolatility) momentum++;
-    
-    // Pressão do order book
-    if (signal.orderBookAnalysis?.pressure === signal.signal) momentum++;
-    
-    return momentum;
-  };
-
-  // Funções de análise técnica avançada
-  const checkDivergences = (priceData: any, indicators: any) => {
-    if (!priceData?.history || !indicators) return false;
-    
-    const { rsi, macd, momentum } = indicators;
-    const prices = priceData.history;
-    let divergencesFound = 0;
-    
-    // Verificar divergência no RSI
-    if (rsi?.values) {
-      const rsiDivergence = checkIndicatorDivergence(prices, rsi.values);
-      if (rsiDivergence) divergencesFound++;
-    }
-    
-    // Verificar divergência no MACD
-    if (macd?.histogram) {
-      const macdDivergence = checkIndicatorDivergence(prices, macd.histogram);
-      if (macdDivergence) divergencesFound++;
-    }
-    
-    // Verificar divergência no Momentum
-    if (momentum?.values) {
-      const momentumDivergence = checkIndicatorDivergence(prices, momentum.values);
-      if (momentumDivergence) divergencesFound++;
-    }
-    
-    // Retorna true se encontrou pelo menos 2 divergências
-    return divergencesFound >= 2;
-  };
-
-  const checkIndicatorDivergence = (prices: number[], indicator: number[]) => {
-    if (prices.length < 10 || indicator.length < 10) return false;
-    
-    const priceHighs = findLocalExtremes(prices, 'high');
-    const priceLows = findLocalExtremes(prices, 'low');
-    const indicatorHighs = findLocalExtremes(indicator, 'high');
-    const indicatorLows = findLocalExtremes(indicator, 'low');
-    
-    // Verificar divergência de alta (preço fazendo mínimas mais baixas, indicador fazendo mínimas mais altas)
-    const bullishDivergence = checkExtremeDivergence(priceLows, indicatorLows, 'bullish');
-    
-    // Verificar divergência de baixa (preço fazendo máximas mais altas, indicador fazendo máximas mais baixas)
-    const bearishDivergence = checkExtremeDivergence(priceHighs, indicatorHighs, 'bearish');
-    
-    return bullishDivergence || bearishDivergence;
-  };
-
-  const findLocalExtremes = (data: number[], type: 'high' | 'low') => {
-    const result = [];
-    const comparison = type === 'high' ? 
-      (a: number, b: number) => a > b :
-      (a: number, b: number) => a < b;
-    
-    for (let i = 1; i < data.length - 1; i++) {
-      if (comparison(data[i], data[i-1]) && comparison(data[i], data[i+1])) {
-        result.push({ value: data[i], index: i });
-      }
-    }
-    
-    return result;
-  };
-
-  const checkExtremeDivergence = (
-    priceExtremes: Array<{value: number, index: number}>,
-    indicatorExtremes: Array<{value: number, index: number}>,
-    type: 'bullish' | 'bearish'
-  ) => {
-    if (priceExtremes.length < 2 || indicatorExtremes.length < 2) return false;
-    
-    const last2PriceExtremes = priceExtremes.slice(-2);
-    const last2IndicatorExtremes = indicatorExtremes.slice(-2);
-    
-    if (type === 'bullish') {
+  if (isLoading) {
       return (
-        last2PriceExtremes[1].value < last2PriceExtremes[0].value &&
-          last2IndicatorExtremes[1].value > last2IndicatorExtremes[0].value
-      );
-    } else {
-      return (
-        last2PriceExtremes[1].value > last2PriceExtremes[0].value &&
-          last2IndicatorExtremes[1].value < last2IndicatorExtremes[0].value
-      );
-    }
-  };
-
-  const findHarmonicPatterns = (priceData: any) => {
-    if (!priceData?.history) return false;
-    
-    const prices = priceData.history;
-    const patterns = [
-      checkGartleyPattern,
-      checkButterflyPattern,
-      checkBatPattern,
-      checkCrabPattern,
-      checkSharkPattern
-    ];
-    
-    // Retorna true se encontrar qualquer padrão harmônico
-    return patterns.some(pattern => pattern(prices));
-  };
-
-  const analyzeCycles = (marketData: any) => {
-    if (!marketData?.cycle_data) return false;
-    
-    const { 
-      current_phase,
-      cycle_position,
-      momentum_alignment,
-      historical_accuracy
-    } = marketData.cycle_data;
-    
-    // Verificar se estamos em uma fase favorável do ciclo
-    const favorablePhase = ['acumulação', 'markup'].includes(current_phase);
-    
-    // Verificar se a posição no ciclo está alinhada
-    const goodPosition = cycle_position > 0.7;
-    
-    // Verificar alinhamento do momentum
-    const goodMomentum = momentum_alignment > 0.7;
-    
-    // Verificar precisão histórica do ciclo
-    const reliableHistory = historical_accuracy > 0.8;
-    
-    // Retorna true se a maioria dos fatores está favorável
-    return [favorablePhase, goodPosition, goodMomentum, reliableHistory]
-      .filter(Boolean).length >= 3;
-  };
-
-  const isVolatilityFavorable = (volatilityData: any, signalType: string) => {
-    if (!volatilityData) return false;
-    
-    const {
-      implied_volatility,
-      historical_volatility,
-      volatility_skew,
-      term_structure
-    } = volatilityData;
-    
-    // Verificar se IV está em nível favorável
-    const ivFavorable = implied_volatility < historical_volatility * 1.2;
-    
-    // Verificar skew da volatilidade
-    const skewFavorable = signalType === "BUY" ? 
-      volatility_skew < -0.1 : // Skew negativo favorável para compra
-      volatility_skew > 0.1;   // Skew positivo favorável para venda
-    
-    // Verificar estrutura a termo
-    const termStructureFavorable = term_structure === "contango" && signalType === "BUY" ||
-                                  term_structure === "backwardation" && signalType === "SELL";
-    
-    // Retorna true se a maioria dos fatores está favorável
-    return [ivFavorable, skewFavorable, termStructureFavorable]
-      .filter(Boolean).length >= 2;
-  };
-
-  const checkKeyLevels = (currentPrice: number, supportResistance: any) => {
-    if (!supportResistance?.levels) return false;
-    
-    const { supports, resistances } = supportResistance.levels;
-    const proximityThreshold = 0.02; // 2% de proximidade
-    
-    // Verificar proximidade com suportes
-    const nearSupport = supports.some(level => 
-      Math.abs(currentPrice - level) / level < proximityThreshold
+      <Card className="glass col-span-2">
+        <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+          <CardTitle>Sinais de Trading</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-col items-center justify-center py-8 space-y-4">
+            <Loader2 className="w-6 h-6 animate-spin" />
+            <p className="text-sm text-muted-foreground">Analisando sinais de trading...</p>
+          </div>
+        </CardContent>
+      </Card>
     );
-    
-    // Verificar proximidade com resistências
-    const nearResistance = resistances.some(level => 
-      Math.abs(currentPrice - level) / level < proximityThreshold
-    );
-    
-    return nearSupport || nearResistance;
-  };
+  }
 
-  const analyzeGaps = (priceHistory: number[]) => {
-    if (!priceHistory || priceHistory.length < 20) return false;
-    
-    const significantGapThreshold = 0.02; // 2% para gap significativo
-    let hasSignificantGap = false;
-    
-    for (let i = 1; i < priceHistory.length; i++) {
-      const gap = Math.abs(priceHistory[i] - priceHistory[i-1]) / priceHistory[i-1];
-      if (gap > significantGapThreshold) {
-        hasSignificantGap = true;
-        break;
-      }
-    }
-    
-    return hasSignificantGap;
-  };
-
-  const checkPsychologicalLevels = (currentPrice: number, signalType: string) => {
-    // Níveis psicológicos comuns (números redondos, fibonacci, etc)
-    const psychologicalLevels = [
-      ...generateRoundNumbers(currentPrice),
-      ...generateFibonacciLevels(currentPrice)
-    ];
-    
-    const proximityThreshold = 0.01; // 1% de proximidade
-    
-    return psychologicalLevels.some(level => 
-      Math.abs(currentPrice - level) / level < proximityThreshold
-    );
-  };
-
-  const generateRoundNumbers = (price: number) => {
-    const magnitude = Math.floor(Math.log10(price));
-    const base = Math.pow(10, magnitude);
-    
-    return [
-      Math.floor(price / base) * base,     // Nível inferior
-      Math.ceil(price / base) * base,      // Nível superior
-      Math.round(price / base) * base,     // Nível mais próximo
-      Math.round(price / (base/2)) * (base/2) // Meio nível
-    ];
-  };
-
-  const generateFibonacciLevels = (price: number) => {
-    const fibRatios = [0.236, 0.382, 0.5, 0.618, 0.786];
-    const range = price * 0.1; // 10% do preço atual
-    
-    return fibRatios.flatMap(ratio => [
-      price + (range * ratio),
-      price - (range * ratio)
-    ]);
-  };
-
-  // Funções para análise de padrões harmônicos
-  const checkGartleyPattern = (prices: number[]) => {
-    const swings = findPriceSwings(prices);
-    if (swings.length < 5) return false;
-    
-    const [X, A, B, C, D] = swings.slice(-5);
-    
-    // Ratios do padrão Gartley
-    const XAB = Math.abs((B - A) / (A - X));
-    const ABC = Math.abs((C - B) / (B - A));
-    const BCD = Math.abs((D - C) / (C - B));
-    const XAD = Math.abs((D - A) / (A - X));
-    
+  if (error) {
     return (
-      isWithinRange(XAB, 0.618, 0.02) &&
-      isWithinRange(ABC, 0.382, 0.02) &&
-      isWithinRange(BCD, 0.786, 0.02) &&
-      isWithinRange(XAD, 0.786, 0.02)
+      <Card className="glass col-span-2">
+        <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+          <CardTitle>Sinais de Trading</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            <p>Erro ao carregar sinais. Tente novamente mais tarde.</p>
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={() => {
+                setRetryCount(prev => prev + 1);
+                refetch();
+              }}
+              className="mt-2"
+            >
+              Tentar novamente
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
     );
-  };
+  }
 
-  const checkButterflyPattern = (prices: number[]) => {
-    const swings = findPriceSwings(prices);
-    if (swings.length < 5) return false;
-    
-    const [X, A, B, C, D] = swings.slice(-5);
-    
-    // Ratios do padrão Butterfly
-    const XAB = Math.abs((B - A) / (A - X));
-    const ABC = Math.abs((C - B) / (B - A));
-    const BCD = Math.abs((D - C) / (C - B));
-    const XAD = Math.abs((D - A) / (A - X));
-    
-    return (
-      isWithinRange(XAB, 0.786, 0.02) &&
-      isWithinRange(ABC, 0.382, 0.02) &&
-      isWithinRange(BCD, 1.618, 0.03) &&
-      isWithinRange(XAD, 1.27, 0.03)
-    );
-  };
-
-  const checkBatPattern = (prices: number[]) => {
-    const swings = findPriceSwings(prices);
-    if (swings.length < 5) return false;
-    
-    const [X, A, B, C, D] = swings.slice(-5);
-    
-    // Ratios do padrão Bat
-    const XAB = Math.abs((B - A) / (A - X));
-    const ABC = Math.abs((C - B) / (B - A));
-    const BCD = Math.abs((D - C) / (C - B));
-    const XAD = Math.abs((D - A) / (A - X));
-    
-    return (
-      isWithinRange(XAB, 0.382, 0.02) &&
-      isWithinRange(ABC, 0.382, 0.02) &&
-      isWithinRange(BCD, 1.618, 0.03) &&
-      isWithinRange(XAD, 0.886, 0.02)
-    );
-  };
-
-  const checkCrabPattern = (prices: number[]) => {
-    const swings = findPriceSwings(prices);
-    if (swings.length < 5) return false;
-    
-    const [X, A, B, C, D] = swings.slice(-5);
-    
-    // Ratios do padrão Crab
-    const XAB = Math.abs((B - A) / (A - X));
-    const ABC = Math.abs((C - B) / (B - A));
-    const BCD = Math.abs((D - C) / (C - B));
-    const XAD = Math.abs((D - A) / (A - X));
-    
-    return (
-      isWithinRange(XAB, 0.382, 0.02) &&
-      isWithinRange(ABC, 0.886, 0.02) &&
-      isWithinRange(BCD, 2.618, 0.03) &&
-      isWithinRange(XAD, 1.618, 0.03)
-    );
-  };
-
-  const checkSharkPattern = (prices: number[]) => {
-    const swings = findPriceSwings(prices);
-    if (swings.length < 5) return false;
-    
-    const [X, A, B, C, D] = swings.slice(-5);
-    
-    // Ratios do padrão Shark
-    const XAB = Math.abs((B - A) / (A - X));
-    const ABC = Math.abs((C - B) / (B - A));
-    const BCD = Math.abs((D - C) / (C - B));
-    const XAD = Math.abs((D - A) / (A - X));
-    
-    return (
-      isWithinRange(XAB, 0.446, 0.02) &&
-      isWithinRange(ABC, 1.618, 0.03) &&
-      isWithinRange(BCD, 1.13, 0.02) &&
-      isWithinRange(XAD, 0.886, 0.02)
-    );
-  };
-
-  const findPriceSwings = (prices: number[]) => {
-    if (prices.length < 10) return [];
-    
-    const swings: number[] = [];
-    let isHighSwing = true;
-    
-    for (let i = 2; i < prices.length - 2; i++) {
-      const current = prices[i];
-      const prev2 = prices[i-2];
-      const prev1 = prices[i-1];
-      const next1 = prices[i+1];
-      const next2 = prices[i+2];
-      
-      if (isHighSwing) {
-        // Procurando por swing high
-        if (current > prev2 && current > prev1 && current > next1 && current > next2) {
-          swings.push(current);
-          isHighSwing = false;
-        }
-      } else {
-        // Procurando por swing low
-        if (current < prev2 && current < prev1 && current < next1 && current < next2) {
-          swings.push(current);
-          isHighSwing = true;
-        }
-      }
-    }
-    
-    return swings;
-  };
-
-  const isWithinRange = (value: number, target: number, tolerance: number) => {
-    return Math.abs(value - target) <= tolerance;
-  };
-
+  if (!signals || signals.length === 0) {
   return (
-    <Card className="col-span-2 glass">
+      <Card className="glass col-span-2">
       <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
         <CardTitle>Sinais de Trading</CardTitle>
         <Button 
@@ -1098,215 +635,114 @@ const SignalsCard = () => {
       </CardHeader>
       <CardContent>
         <div className="space-y-4">
-          {isLoading ? (
-            <div className="simple-loader">
-              <style>{simpleTextLoadingStyles}</style>
-              <div className="loading-text-container">
-                <div className="loading-text"></div>
+            <p>Nenhum sinal disponível no momento.</p>
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={() => {
+                setRetryCount(prev => prev + 1);
+                refetch();
+              }}
+              className="mt-2"
+            >
+              Atualizar
+            </Button>
               </div>
-              <div className="bars-container">
-                <div className="bar"></div>
-                <div className="bar"></div>
-                <div className="bar"></div>
-                <div className="bar"></div>
-                <div className="bar"></div>
-              </div>
-            </div>
-          ) : signals && signals.length > 0 ? (
-            signals.map((signal, index) => {
-              const potential = calculatePotential(signal);
-              const riskReward = calculateRiskReward(signal);
-              const currentPrice = getCurrentPrice(signal);
-              const symbol = signal.symbol || signal.pair || '';
-              const isAnimating = animatingSignals[signal.id];
+        </CardContent>
+      </Card>
+    );
+  }
               
               return (
-                <div 
-                  key={signal.id || `signal-${index}`} 
-                  className={`flex flex-col p-4 border border-white/10 rounded-lg bg-white/5 hover:bg-white/10 transition-colors ${
-                    isAnimating ? `signal-${isAnimating}` : ''
-                  }`}
-                >
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-3">
-                      <div className={signal.signal === "BUY" ? "bg-market-up/10 p-2 rounded-full" : "bg-market-down/10 p-2 rounded-full"}>
-                        {signal.signal === "BUY" ? (
-                          <ArrowUpRight className="h-5 w-5 text-market-up" />
-                        ) : (
-                          <ArrowDownRight className="h-5 w-5 text-market-down" />
-                        )}
-                      </div>
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <p className="font-medium text-lg">{symbol}</p>
-                          <div className="flex items-center gap-2">
-                          <span className={`text-xs px-1.5 py-0.5 rounded-full ${getTypeColor(signal.type)}`}>
-                            {signal.type}
-                          </span>
-                            <span 
-                              className="text-xs bg-white/10 px-2 py-1 rounded-full font-medium text-white"
-                              style={{ 
-                                fontVariantNumeric: 'tabular-nums',
-                                letterSpacing: '0.01em'
-                              }}
-                            >
-                              {currentPrice}
-                            </span>
+    <Card className="glass col-span-2">
+      <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+        <CardTitle>Sinais de Trading</CardTitle>
+        <div className="flex items-center space-x-2">
+          <Button 
+            variant="ghost" 
+            size="icon"
+            onClick={() => {
+              setRetryCount(prev => prev + 1);
+              refetch();
+            }}
+            title="Atualizar sinais"
+            className="h-8 w-8 rounded-full"
+          >
+            <RefreshCw className="h-4 w-4" />
+          </Button>
+          <Button 
+            variant="ghost" 
+            className="text-sm text-muted-foreground hover:text-white"
+            onClick={() => navigate('/signals')}
+          >
+            Ver todos
+          </Button>
                           </div>
-                          
-                          {/* Status do sinal */}
-                          {signal.status && (
-                            <Badge 
-                              variant="outline" 
-                              className={`ml-1 ${
-                                signal.status === 'active' || signal.status === 'ATIVO' 
-                                  ? 'bg-blue-500/20 text-blue-300 border-blue-600/30' 
-                                  : signal.status === 'completed' || signal.status === 'CONCLUÍDO'
-                                  ? 'bg-green-500/20 text-green-300 border-green-600/30'
-                                  : signal.status === 'cancelled' || signal.status === 'CANCELADO'
-                                  ? 'bg-red-500/20 text-red-300 border-red-600/30'
-                                  : 'bg-gray-500/20 text-gray-300 border-gray-600/30'
-                              }`}
-                            >
-                              {signal.status === 'active' || signal.status === 'ATIVO' ? (
-                                <span className="flex items-center text-xs">
-                                  <div className="w-1.5 h-1.5 rounded-full bg-blue-400 mr-1 animate-pulse"></div>
-                                  Ativo
-                                </span>
-                              ) : signal.status === 'completed' || signal.status === 'CONCLUÍDO' ? (
-                                <span className="flex items-center text-xs">
-                                  <Check className="h-3 w-3 mr-0.5" />
-                                  Alvo atingido
-                                </span>
-                              ) : signal.status === 'cancelled' || signal.status === 'CANCELADO' ? (
-                                <span className="flex items-center text-xs">
-                                  <X className="h-3 w-3 mr-0.5" />
-                                  Stop atingido
-                                </span>
-                              ) : (
-                                signal.status
-                              )}
+      </CardHeader>
+      <CardContent>
+        <div className="space-y-4">
+          {signals.slice(0, 5).map((signal) => (
+            <div 
+              key={signal.id} 
+              className={`border-b border-white/10 pb-4 ${animatingSignals[signal.id] || ''}`}
+              onClick={() => navigate(`/signals?signal=${signal.id}`)}
+            >
+              <div className="flex justify-between items-center mb-2">
+                <div className="flex items-center space-x-2">
+                  <div className="font-medium text-lg">{signal.symbol}</div>
+                  <Badge className={getTypeColor(signal.signal as SignalType)}>
+                    {signal.signal === 'BUY' ? 'Compra' : 'Venda'}
                             </Badge>
-                          )}
-                          
-                          {/* Indicador de sinal substituído */}
-                          {signal.replacement_id && (
-                            <Badge className="bg-purple-500/20 text-purple-300 border-purple-600/30">
-                              <RefreshCw className="h-3 w-3 mr-1" />
-                              <span className="text-xs">Substituído</span>
-                            </Badge>
-                          )}
-                        </div>
-                        <p className={`text-sm ${signal.signal === "BUY" ? "text-market-up" : "text-market-down"}`}>
-                          {signal.signal === "BUY" ? "COMPRA" : "VENDA"} • <span className={getStrengthColor(signal.strength)}>
-                            {getStrengthText(signal.strength)}
-                          </span>
-                        </p>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-sm text-muted-foreground">
-                        <Clock className="h-3 w-3 inline mr-1" />
-                        {format(new Date(signal.timestamp), "dd/MM HH:mm", { locale: ptBR })}
-                      </p>
-                      <p className="text-xs">
-                        <Percent className="h-3 w-3 inline mr-1" />
-                        Precisão: <span className={`font-medium ${signal.success_rate >= 0.95 ? 'text-green-400' : 'text-blue-400'}`}>
-                          {(signal.success_rate * 100).toFixed(1)}%
-                        </span>
-                      </p>
-                    </div>
-                  </div>
-                  
-                  <div className="grid grid-cols-3 gap-2 mb-2">
-                    <TooltipProvider>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <div className="flex flex-col items-center p-2 rounded-md bg-white/5 border border-white/10">
-                            <div className="flex items-center text-xs text-muted-foreground mb-1">
-                              <TrendingUp className="h-3 w-3 mr-1" /> Entrada
-                            </div>
-                            <p className="font-medium">${signal.entry_price?.toFixed(2) || signal.price?.toFixed(2)}</p>
-                          </div>
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          <p>Preço de entrada recomendado</p>
-                        </TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
-                    
-                    <TooltipProvider>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <div className="flex flex-col items-center p-2 rounded-md bg-white/5 border border-white/10">
-                            <div className="flex items-center text-xs text-market-up mb-1">
-                              <Target className="h-3 w-3 mr-1" /> Alvo
-                            </div>
-                            <p className="font-medium">${signal.target_price?.toFixed(2)}</p>
-                          </div>
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          <p>Preço alvo para lucro</p>
-                        </TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
-                    
-                    <TooltipProvider>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <div className="flex flex-col items-center p-2 rounded-md bg-white/5 border border-white/10">
-                            <div className="flex items-center text-xs text-market-down mb-1">
-                              <Shield className="h-3 w-3 mr-1" /> Stop
-                            </div>
-                            <p className="font-medium">${signal.stop_loss?.toFixed(2)}</p>
-                          </div>
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          <p>Stop loss recomendado</p>
-                        </TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
-                  </div>
-                  
-                  <div className="flex justify-between items-center text-xs text-muted-foreground mt-1">
-                    <div>
-                      <BarChart2 className="h-3 w-3 inline mr-1" />
-                      Timeframe: <span className="font-medium">{signal.timeframe || "1d"}</span>
-                    </div>
-                    <div>
-                      {riskReward && (
-                        <span>
-                          R/R: <span className="font-medium">{riskReward.toFixed(2)}</span>
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                  
-                  {signal.reason && (
-                    <div className="mt-2 text-xs text-muted-foreground border-t border-white/10 pt-2">
-                      <p>{signal.reason}</p>
-                    </div>
-                  )}
-                  
-                  {/* Adicionar indicador de conclusão */}
-                  {completedSignals.has(signal.id) && (
-                    <div className="absolute top-0 right-0 m-2">
-                      {isAnimating === 'success' ? (
-                        <Check className="h-5 w-5 text-green-400" />
-                      ) : (
-                        <X className="h-5 w-5 text-red-400" />
-                      )}
-                    </div>
-                  )}
                 </div>
-              );
-            })
-          ) : (
-            <div className="flex items-center justify-center p-4">
-              <span className="text-sm text-muted-foreground">Nenhum sinal disponível no momento</span>
-            </div>
-          )}
-        </div>
+                <div className="flex items-center space-x-3">
+                  <Badge className={getStrengthColor(signal.strength as SignalStrength)}>
+                    {getStrengthText(signal.strength as SignalStrength)}
+                            </Badge>
+                  <div className="text-lg font-semibold">
+                    {getCurrentPrice(signal)}
+                        </div>
+                    </div>
+                  </div>
+                  
+              <div className="grid grid-cols-2 gap-3 mt-3">
+                <div className="flex items-center text-sm space-x-1">
+                  <Target className="h-4 w-4 text-green-500" />
+                  <span>Alvo: {formatPrice(signal.target_price.toString(), signal.symbol)}</span>
+                            </div>
+                <div className="flex items-center text-sm space-x-1">
+                  <Shield className="h-4 w-4 text-red-500" />
+                  <span>Stop: {formatPrice(signal.stop_loss.toString(), signal.symbol)}</span>
+                          </div>
+                <div className="flex items-center text-sm space-x-1">
+                  <TrendingUp className="h-4 w-4 text-cyan-500" />
+                  <span>Potencial: {calculatePotential(signal)}</span>
+                            </div>
+                <div className="flex items-center text-sm space-x-1">
+                  <BarChart2 className="h-4 w-4 text-purple-500" />
+                  <span>Risco:Recompensa: {calculateRiskReward(signal)}</span>
+                          </div>
+                  </div>
+                  
+              <div className="mt-2 flex justify-between items-center text-sm text-muted-foreground">
+                <div className="flex items-center space-x-1">
+                  <Clock className="h-3 w-3" />
+                  <span>{signal.elapsed_time || format(new Date(signal.timestamp), "dd/MM HH:mm", { locale: ptBR })}</span>
+                    </div>
+                <div className="flex items-center space-x-1">
+                  <Percent className="h-3 w-3" />
+                  <span>Assertividade: {signal.success_rate ? `${(signal.success_rate * 100).toFixed(1)}%` : '80%'}</span>
+                    </div>
+                  </div>
+                    </div>
+          ))}
+                    </div>
+        <Button 
+          variant="outline" 
+          className="w-full mt-4"
+          onClick={() => navigate('/signals')}
+        >
+          Ver todos os sinais
+        </Button>
       </CardContent>
     </Card>
   );

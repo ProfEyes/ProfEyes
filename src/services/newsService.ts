@@ -56,111 +56,95 @@ export async function fetchMarketNews(options: { limit?: number; symbols?: strin
     
     // Se não encontrar no Supabase, buscar de APIs externas
     console.log('Buscando notícias de APIs externas...');
+
+    // Array para armazenar promessas de busca de notícias
+    const newsPromises = [];
     
-    // Tentar buscar do NewsData.io primeiro (notícias reais e atuais)
-    try {
-      // Buscar notícias de negócios e criptomoedas
-      const [businessNews, cryptoNews] = await Promise.all([
-        fetchNewsDataHeadlines('business', 'pt,en', Math.ceil(limit / 2)),
-        fetchCryptoNews('pt,en', Math.ceil(limit / 2))
-      ]);
-      
-      // Combinar os resultados
-      let combinedNews: MarketNews[] = [...businessNews, ...cryptoNews];
-      
-      // Remover possíveis duplicatas (baseado no título)
-      const uniqueNews = combinedNews.filter((news, index, self) =>
-        index === self.findIndex((t) => t.title === news.title)
-      );
-      
-      // Limitar ao número solicitado
-      const news = uniqueNews.slice(0, limit);
-      
-      if (news && news.length > 0) {
-        console.log(`${news.length} notícias encontradas no NewsData.io`);
+    // 1. Buscar do Finnhub (primeira prioridade com a nova API key)
+    newsPromises.push(fetchFinnhubNews());
+    
+    // 2. Buscar da NewsAPI (segunda prioridade)
+    newsPromises.push(fetchNewsApiNews());
+    
+    // 3. Tentar NewsData.io como backup
+    newsPromises.push(fetchNewsDataNews());
+    
+    // Executar todas as buscas em paralelo
+    const results = await Promise.allSettled(newsPromises);
+    
+    // Processar resultados, priorizando as fontes na ordem definida
+    let allNews: MarketNews[] = [];
+    
+    for (const result of results) {
+      if (result.status === 'fulfilled' && result.value && result.value.length > 0) {
+        allNews = [...allNews, ...result.value];
         
-        // Salvar no Supabase para uso futuro
-        try {
-          const newsToInsert = news.map(item => ({
-            title: item.title,
-            content: item.content,
-            summary: item.summary,
-            source: item.source,
-            url: item.url,
-            image_url: item.imageUrl,
-            published_at: item.publishedAt,
-            related_symbols: item.relatedSymbols,
-            sentiment: item.sentiment
-          }));
-          
-          await supabase.from('market_news').insert(newsToInsert);
-        } catch (saveError) {
-          console.error('Erro ao salvar notícias no Supabase:', saveError);
-          // Continuar mesmo com erro de salvamento
-        }
-        
-        return news;
+        // Se já temos notícias suficientes, podemos parar
+        if (allNews.length >= limit) break;
       }
-    } catch (newsDataError) {
-      console.error('Erro ao buscar notícias do NewsData.io:', newsDataError);
     }
     
-    // Se NewsData.io falhar, tentar NewsAPI como alternativa
-    try {
-      const newsApiResults = await fetchNewsHeadlines('business', 'br', 10);
+    // Remover possíveis duplicatas (baseado no título)
+    const uniqueNews = allNews.filter((news, index, self) =>
+      index === self.findIndex((t) => t.title === news.title)
+    );
+    
+    // Limitar ao número solicitado
+    const news = uniqueNews.slice(0, limit);
+    
+    if (news && news.length > 0) {
+      console.log(`${news.length} notícias encontradas de APIs externas`);
       
-      if (newsApiResults && newsApiResults.length > 0) {
-        // Converter para o formato MarketNews
-        const news: MarketNews[] = newsApiResults.map((item, index) => ({
-          id: `news-${Date.now()}-${index}`,
+      // Salvar no Supabase para uso futuro
+      try {
+        const newsToInsert = news.map(item => ({
           title: item.title,
           content: item.content,
-          summary: item.description,
+          summary: item.summary,
           source: item.source,
           url: item.url,
-          imageUrl: item.imageUrl,
-          publishedAt: item.publishedAt,
-          relatedSymbols: item.relatedSymbols || [],
-          sentiment: 0 // Será calculado depois se necessário
+          image_url: item.imageUrl,
+          published_at: item.publishedAt,
+          related_symbols: item.relatedSymbols,
+          sentiment: item.sentiment
         }));
         
-        // Salvar no Supabase para uso futuro
-        try {
-          const newsToInsert = news.map(item => ({
-            title: item.title,
-            content: item.content,
-            summary: item.summary,
-            source: item.source,
-            url: item.url,
-            image_url: item.imageUrl,
-            published_at: item.publishedAt,
-            related_symbols: item.relatedSymbols,
-            sentiment: item.sentiment
-          }));
-          
-          await supabase.from('market_news').insert(newsToInsert);
-        } catch (saveError) {
-          console.error('Erro ao salvar notícias no Supabase:', saveError);
-          // Continuar mesmo com erro de salvamento
-        }
-        
-        return news;
+        await supabase.from('market_news').insert(newsToInsert);
+      } catch (saveError) {
+        console.error('Erro ao salvar notícias no Supabase:', saveError);
+        // Continuar mesmo com erro de salvamento
       }
-    } catch (newsApiError) {
-      console.error('Erro ao buscar notícias da NewsAPI:', newsApiError);
+      
+      return news;
     }
     
-    // Tentar buscar do Finnhub como última alternativa
-    try {
-      const symbols = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'TSLA'];
+    // Se todas as tentativas falharem, retornar array vazio
+    console.log('Não foi possível obter notícias de nenhuma fonte.');
+    return [];
+  } catch (error) {
+    console.error('Erro ao buscar notícias de mercado:', error);
+    return [];
+  }
+}
+
+// Função auxiliar para buscar notícias do Finnhub
+async function fetchFinnhubNews(): Promise<MarketNews[]> {
+  try {
+    // Lista de símbolos populares para buscar notícias
+    const symbols = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'TSLA', 'META', 'NVDA', 'BTC', 'ETH'];
+    let allNews: MarketNews[] = [];
+    
+    // Buscar notícias para cada símbolo
+    for (const symbol of symbols) {
+      if (allNews.length >= 20) break; // Limitar a 20 notícias no total
       
-      for (const symbol of symbols) {
+      try {
         const finnhubResults = await fetchFinnhubCompanyNews(symbol);
         
         if (finnhubResults && finnhubResults.length > 0) {
           // Converter para o formato MarketNews
-          const news: MarketNews[] = finnhubResults.slice(0, 10).map((item, index) => ({
-            id: `finnhub-${Date.now()}-${index}`,
+          const symbolNews: MarketNews[] = finnhubResults.slice(0, 5).map((item, index) => ({
+            id: `finnhub-${Date.now()}-${symbol}-${index}`,
             title: item.headline,
             content: item.summary,
             summary: item.summary,
@@ -172,38 +156,72 @@ export async function fetchMarketNews(options: { limit?: number; symbols?: strin
             sentiment: 0 // Será calculado depois se necessário
           }));
           
-          // Salvar no Supabase para uso futuro
-          try {
-            const newsToInsert = news.map(item => ({
-              title: item.title,
-              content: item.content,
-              summary: item.summary,
-              source: item.source,
-              url: item.url,
-              image_url: item.imageUrl,
-              published_at: item.publishedAt,
-              related_symbols: item.relatedSymbols,
-              sentiment: item.sentiment
-            }));
-            
-            await supabase.from('market_news').insert(newsToInsert);
-          } catch (saveError) {
-            console.error('Erro ao salvar notícias do Finnhub no Supabase:', saveError);
-            // Continuar mesmo com erro de salvamento
-          }
-          
-          return news;
+          allNews = [...allNews, ...symbolNews];
         }
+      } catch (err) {
+        console.warn(`Erro ao buscar notícias do Finnhub para ${symbol}:`, err);
+        // Continuar com próximo símbolo
       }
-    } catch (finnhubError) {
-      console.error('Erro ao buscar notícias do Finnhub:', finnhubError);
     }
     
-    // Se todas as tentativas falharem, retornar array vazio
-    console.log('Não foi possível obter notícias de nenhuma fonte.');
+    return allNews;
+  } catch (error) {
+    console.error('Erro geral ao buscar notícias do Finnhub:', error);
+    return [];
+  }
+}
+
+// Função auxiliar para buscar notícias da NewsAPI
+async function fetchNewsApiNews(): Promise<MarketNews[]> {
+  try {
+    // Buscar notícias de negócios
+    const newsApiResults = await fetchNewsHeadlines('business', 'br', 10);
+    
+    if (newsApiResults && newsApiResults.length > 0) {
+      // Converter para o formato MarketNews
+      const news: MarketNews[] = newsApiResults.map((item, index) => ({
+        id: `newsapi-${Date.now()}-${index}`,
+        title: item.title,
+        content: item.content,
+        summary: item.description,
+        source: item.source,
+        url: item.url,
+        imageUrl: item.imageUrl,
+        publishedAt: item.publishedAt,
+        relatedSymbols: item.relatedSymbols || [],
+        sentiment: 0 // Será calculado depois se necessário
+      }));
+      
+      return news;
+    }
+    
     return [];
   } catch (error) {
-    console.error('Erro ao buscar notícias de mercado:', error);
+    console.error('Erro ao buscar notícias da NewsAPI:', error);
+    return [];
+  }
+}
+
+// Função auxiliar para buscar notícias do NewsData.io
+async function fetchNewsDataNews(): Promise<MarketNews[]> {
+  try {
+    // Buscar notícias de negócios e criptomoedas
+    const [businessNews, cryptoNews] = await Promise.all([
+      fetchNewsDataHeadlines('business', 'pt,en', 5),
+      fetchCryptoNews('pt,en', 5)
+    ]);
+    
+    // Combinar os resultados
+    let combinedNews: MarketNews[] = [...businessNews, ...cryptoNews];
+    
+    // Remover possíveis duplicatas (baseado no título)
+    const uniqueNews = combinedNews.filter((news, index, self) =>
+      index === self.findIndex((t) => t.title === news.title)
+    );
+    
+    return uniqueNews;
+  } catch (error) {
+    console.error('Erro ao buscar notícias do NewsData.io:', error);
     return [];
   }
 }
@@ -247,94 +265,14 @@ export async function fetchNewsForSymbol(symbol: string): Promise<MarketNews[]> 
     // Se não encontrar no Supabase, buscar de APIs externas
     console.log(`Buscando notícias para ${symbol} de APIs externas...`);
     
-    // Tentar buscar do NewsData.io primeiro (notícias reais e atuais)
+    // Tentar buscar do Finnhub primeiro (notícias mais específicas para ações)
     try {
-      const newsDataResults = await fetchNewsDataSymbolNews(symbol, 'pt,en', 5);
-      
-      if (newsDataResults && newsDataResults.length > 0) {
-        // Salvar no Supabase para uso futuro
-        try {
-          const newsToInsert = newsDataResults.map(item => ({
-            title: item.title,
-            content: item.content,
-            summary: item.summary,
-            source: item.source,
-            url: item.url,
-            image_url: item.imageUrl,
-            published_at: item.publishedAt,
-            related_symbols: item.relatedSymbols,
-            sentiment: item.sentiment
-          }));
-          
-          await supabase.from('market_news').insert(newsToInsert);
-        } catch (saveError) {
-          console.error(`Erro ao salvar notícias para ${symbol} no Supabase:`, saveError);
-          // Continuar mesmo com erro de salvamento
-        }
-        
-        return newsDataResults;
-      }
-    } catch (newsDataError) {
-      console.error(`Erro ao buscar notícias para ${symbol} do NewsData.io:`, newsDataError);
-    }
-    
-    // Se NewsData.io falhar, tentar NewsAPI como alternativa
-    try {
-      // Adaptar símbolo para busca
-      const searchSymbol = symbol.replace('USDT', '');
-      const newsApiResults = await fetchNewsApiSymbolNews(searchSymbol, 5);
-      
-      if (newsApiResults && newsApiResults.length > 0) {
-        // Converter para o formato MarketNews
-        const news: MarketNews[] = newsApiResults.map((item, index) => ({
-          id: `news-symbol-${Date.now()}-${index}`,
-          title: item.title,
-          content: item.content,
-          summary: item.description,
-          source: item.source,
-          url: item.url,
-          imageUrl: item.imageUrl,
-          publishedAt: item.publishedAt,
-          relatedSymbols: [symbol],
-          sentiment: 0 // Será calculado depois se necessário
-        }));
-        
-        // Salvar no Supabase para uso futuro
-        try {
-          const newsToInsert = news.map(item => ({
-            title: item.title,
-            content: item.content,
-            summary: item.summary,
-            source: item.source,
-            url: item.url,
-            image_url: item.imageUrl,
-            published_at: item.publishedAt,
-            related_symbols: item.relatedSymbols,
-            sentiment: item.sentiment
-          }));
-          
-          await supabase.from('market_news').insert(newsToInsert);
-        } catch (saveError) {
-          console.error(`Erro ao salvar notícias para ${symbol} no Supabase:`, saveError);
-          // Continuar mesmo com erro de salvamento
-        }
-        
-        return news;
-      }
-    } catch (newsApiError) {
-      console.error(`Erro ao buscar notícias para ${symbol} da NewsAPI:`, newsApiError);
-    }
-    
-    // Tentar buscar do Finnhub como última alternativa
-    try {
-      // Adaptar símbolo para Finnhub (remover .SA para ações brasileiras)
-      const finnhubSymbol = symbol.replace('.SA', '').replace('USDT', '');
-      const finnhubResults = await fetchFinnhubCompanyNews(finnhubSymbol);
+      const finnhubResults = await fetchFinnhubCompanyNews(symbol);
       
       if (finnhubResults && finnhubResults.length > 0) {
         // Converter para o formato MarketNews
         const news: MarketNews[] = finnhubResults.slice(0, 5).map((item, index) => ({
-          id: `finnhub-symbol-${Date.now()}-${index}`,
+          id: `finnhub-${Date.now()}-${index}`,
           title: item.headline,
           content: item.summary,
           summary: item.summary,
@@ -362,21 +300,67 @@ export async function fetchNewsForSymbol(symbol: string): Promise<MarketNews[]> 
           
           await supabase.from('market_news').insert(newsToInsert);
         } catch (saveError) {
-          console.error(`Erro ao salvar notícias para ${symbol} do Finnhub no Supabase:`, saveError);
+          console.error(`Erro ao salvar notícias para ${symbol} no Supabase:`, saveError);
           // Continuar mesmo com erro de salvamento
         }
         
         return news;
       }
     } catch (finnhubError) {
-      console.error(`Erro ao buscar notícias para ${symbol} do Finnhub:`, finnhubError);
+      console.error(`Erro ao buscar notícias do Finnhub para ${symbol}:`, finnhubError);
     }
     
-    // Se todas as tentativas falharem, retornar array vazio
+    // Se Finnhub falhar, tentar NewsAPI (que tem mais notícias gerais de negócios)
+    try {
+      const query = `${symbol} stock OR ${symbol} market OR ${symbol} investing`;
+      const newsApiResults = await fetchFinancialNews(query, undefined, undefined, 'pt,en', 5);
+      
+      if (newsApiResults && newsApiResults.length > 0) {
+        // Converter para o formato MarketNews
+        const news: MarketNews[] = newsApiResults.map((item, index) => ({
+          id: `newsapi-${Date.now()}-${index}`,
+          title: item.title,
+          content: item.content,
+          summary: item.description,
+          source: item.source,
+          url: item.url,
+          imageUrl: item.imageUrl,
+          publishedAt: item.publishedAt,
+          relatedSymbols: [symbol, ...(item.relatedSymbols || [])],
+          sentiment: item.sentiment || 0
+        }));
+        
+        // Salvar no Supabase para uso futuro
+        try {
+          const newsToInsert = news.map(item => ({
+            title: item.title,
+            content: item.content,
+            summary: item.summary,
+            source: item.source,
+            url: item.url,
+            image_url: item.imageUrl,
+            published_at: item.publishedAt,
+            related_symbols: item.relatedSymbols,
+            sentiment: item.sentiment
+          }));
+          
+          await supabase.from('market_news').insert(newsToInsert);
+        } catch (saveError) {
+          console.error(`Erro ao salvar notícias para ${symbol} no Supabase:`, saveError);
+          // Continuar mesmo com erro de salvamento
+        }
+        
+        return news;
+      }
+    } catch (newsApiError) {
+      console.error(`Erro ao buscar notícias da NewsAPI para ${symbol}:`, newsApiError);
+    }
+    
+    // Se todas as APIs falharem, retornar array vazio
     console.log(`Não foi possível obter notícias para ${symbol} de nenhuma fonte.`);
     return [];
   } catch (error) {
-    console.error(`Erro ao buscar notícias para ${symbol}:`, error);
+    console.error(`Erro geral ao buscar notícias para ${symbol}:`, error);
     return [];
   }
 } 

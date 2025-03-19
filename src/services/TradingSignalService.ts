@@ -1,6 +1,11 @@
 import { SignalType } from '@/types/signals';
 import { MarketData } from '@/types/marketData';
 import { TradingSignal, SignalAnalysis } from '@/types/tradingSignals';
+import { supabase } from "@/integrations/supabase/client";
+import { formatDistance } from "date-fns";
+import { ptBR } from "date-fns/locale";
+import { getLatestPrices } from "./binanceApi";
+import { toast } from "sonner";
 
 // Interfaces para uso interno na classe
 interface AdvancedSignalAnalysis extends SignalAnalysis {
@@ -32,9 +37,12 @@ interface MarketAnalysis {
 export class TradingSignalService {
   private binanceService: any; // Na implementação real, usar o tipo correto
   private priceUpdateIntervals: Map<string, NodeJS.Timeout> = new Map();
+  private signalCache: TradingSignal[] = [];
+  private lastFetchTime: number = 0;
+  private readonly CACHE_DURATION = 5 * 60 * 1000; // 5 minutos em ms
 
-  constructor(binanceService) {
-    this.binanceService = binanceService;
+  constructor(binanceService?: any) {
+    this.binanceService = binanceService || {};
   }
 
   private async analyzeMarketData(marketData: MarketData): Promise<AdvancedSignalAnalysis> {
@@ -237,49 +245,272 @@ export class TradingSignalService {
     ]; // Implementação fictícia
   }
   
-  public async fetchTradingSignals(): Promise<TradingSignal[]> {
+  public async fetchTradingSignals(forceRefresh: boolean = false): Promise<TradingSignal[]> {
     try {
-      const allSignals: TradingSignal[] = [];
-      const marketData = await this.binanceService.getMarketData();
+      console.log('TradingSignalService: Iniciando busca por sinais');
       
-      for (const data of marketData) {
-        const analysis = await this.analyzeMarketData(data);
-        if (!analysis || analysis.score < 75) continue;
-        
-        const signal: TradingSignal = {
-          id: `${data.symbol}-${Date.now()}`,
-          symbol: data.symbol,
-          signal: analysis.type,
-          entry_price: analysis.targets.entry,
-          current_price: analysis.targets.entry,
-          target_price: analysis.targets.target,
-          stop_loss: analysis.targets.stop,
-          timeframe: '1m',
-          timestamp: Date.now(),
-          expiry: Date.now() + (5 * 60 * 1000),
-          reasons: analysis.reasons,
-          assertiveness: `${(analysis.probability * 100).toFixed(1)}%`,
-          status: 'ATIVO',
-          type: SignalType.TECHNICAL,
-          priority: analysis.score >= 90 ? 'HIGH' : 'NORMAL'
-        };
-        
-        // Validar R:R e adicionar apenas se for viável
-        const rr = Math.abs(signal.target_price - signal.entry_price) / 
-                  Math.abs(signal.stop_loss - signal.entry_price);
-                  
-        if (rr >= 1.3 && rr <= 2.0) {
-          allSignals.push(signal);
-        }
+      // Verificar se podemos usar o cache
+      const now = Date.now();
+      const cacheValid = !forceRefresh && 
+                         this.signalCache.length > 0 && 
+                         (now - this.lastFetchTime) < this.CACHE_DURATION;
+      
+      if (cacheValid) {
+        console.log('TradingSignalService: Usando sinais em cache', this.signalCache.length);
+        return this.signalCache;
       }
       
-      // Retornar apenas os melhores sinais
-      return allSignals
-        .sort((a, b) => parseFloat(b.assertiveness) - parseFloat(a.assertiveness))
-        .slice(0, 10);
+      console.log('TradingSignalService: Cache inválido, buscando novos sinais');
+      
+      // Buscar sinais ativos
+      let { data: signals, error } = await supabase
+        .from('trading_signals')
+        .select('*')
+        .in('status', ['ATIVO', 'PENDENTE'])
+        .order('created_at', { ascending: false });
+      
+      if (error) {
+        console.error('Erro ao buscar sinais de trading do Supabase:', error);
+        // Retornar cache mesmo que expirado em caso de erro
+        if (this.signalCache.length > 0) {
+          return this.signalCache;
+        }
+        return [];
+      }
+      
+      // Verificar se temos sinais
+      if (!signals || signals.length === 0) {
+        console.log('TradingSignalService: Nenhum sinal encontrado no banco de dados');
+        
+        // Manter cache atual se existir e não forçar atualização
+        if (this.signalCache.length > 0 && !forceRefresh) {
+          return this.signalCache;
+        }
+        
+        // Caso contrário, limpar cache
+        this.signalCache = [];
+        return [];
+      }
+      
+      // Formatar sinais
+      const formattedSignals: TradingSignal[] = signals.map(signal => {
+        // Determinar timestamp para ordenação
+        const timestamp = new Date(signal.created_at).getTime();
+        
+        // Calcular tempo decorrido em formato amigável
+        const elapsedTime = formatDistance(
+          new Date(signal.created_at),
+          new Date(),
+          { addSuffix: true, locale: ptBR }
+        );
+        
+        return {
+          id: signal.id,
+          symbol: signal.symbol,
+          signal: signal.signal_type,
+          reason: signal.reason,
+          strength: signal.strength,
+          timestamp: timestamp,
+          price: signal.current_price,
+          entry_price: signal.entry_price,
+          stop_loss: signal.stop_loss,
+          target_price: signal.target_price,
+          take_profit: signal.take_profit,
+          status: signal.status,
+          success_rate: signal.success_rate,
+          type: signal.signal_category,
+          exit_price: signal.exit_price,
+          elapsed_time: elapsedTime,
+          created_at: signal.created_at,
+          updated_at: signal.updated_at,
+          exchange: signal.exchange || 'binance'
+        };
+      });
+      
+      // Atualizar cache e timestamp
+      this.signalCache = formattedSignals;
+      this.lastFetchTime = now;
+      
+      console.log(`TradingSignalService: ${formattedSignals.length} sinais encontrados`);
+      return formattedSignals;
     } catch (error) {
-      console.error('Erro ao buscar sinais:', error);
+      console.error('Erro geral ao buscar sinais de trading:', error);
+      
+      // Retornar cache mesmo que expirado em caso de erro
+      if (this.signalCache.length > 0) {
+        return this.signalCache;
+      }
+      
       return [];
     }
   }
-} 
+  
+  // Atualizar preço atual de um sinal
+  async updateSignalCurrentPrice(signal: TradingSignal): Promise<TradingSignal> {
+    try {
+      const prices = await getLatestPrices([signal.symbol]);
+      if (prices && prices.length > 0) {
+        // Atualizar preço no objeto do sinal
+        return {
+          ...signal,
+          price: parseFloat(prices[0].price)
+        };
+      }
+      return signal;
+    } catch (error) {
+      console.error(`Erro ao atualizar preço para ${signal.symbol}:`, error);
+      return signal;
+    }
+  }
+  
+  // Atualizar status de um sinal
+  async updateSignalStatus(
+    signal: TradingSignal, 
+    status: 'ATIVO' | 'PENDENTE' | 'CONCLUÍDO' | 'CANCELADO', 
+    exitPrice?: number
+  ): Promise<TradingSignal> {
+    try {
+      const { data, error } = await supabase
+        .from('trading_signals')
+        .update({ 
+          status, 
+          exit_price: exitPrice, 
+          updated_at: new Date().toISOString() 
+        })
+        .eq('id', signal.id)
+        .select()
+        .single();
+      
+      if (error) {
+        console.error('Erro ao atualizar status do sinal:', error);
+        return signal;
+      }
+      
+      // Invalidar cache para próxima busca
+      this.lastFetchTime = 0;
+      
+      // Notificar o usuário
+      if (status === 'CONCLUÍDO') {
+        const isProfit = signal.signal === 'BUY' 
+          ? exitPrice! > signal.entry_price
+          : exitPrice! < signal.entry_price;
+          
+        if (isProfit) {
+          toast.success(`Alvo atingido para ${signal.symbol}!`);
+        } else {
+          toast.error(`Stop loss atingido para ${signal.symbol}.`);
+        }
+      } else if (status === 'CANCELADO') {
+        toast.info(`Sinal para ${signal.symbol} foi cancelado.`);
+      }
+      
+      // Formatar e retornar o sinal atualizado
+      return {
+        ...signal,
+        status,
+        exit_price: exitPrice,
+        updated_at: data.updated_at
+      };
+    } catch (error) {
+      console.error('Erro geral ao atualizar status do sinal:', error);
+      return signal;
+    }
+  }
+  
+  // Criar um novo sinal de trading
+  async createTradingSignal(signalData: Omit<TradingSignal, 'id' | 'timestamp' | 'created_at' | 'updated_at' | 'elapsed_time'>): Promise<TradingSignal | null> {
+    try {
+      const now = new Date().toISOString();
+      
+      const { data, error } = await supabase
+        .from('trading_signals')
+        .insert({
+          symbol: signalData.symbol,
+          signal_type: signalData.signal,
+          reason: signalData.reason,
+          strength: signalData.strength,
+          current_price: signalData.price,
+          entry_price: signalData.entry_price,
+          stop_loss: signalData.stop_loss,
+          target_price: signalData.target_price,
+          take_profit: signalData.take_profit,
+          status: signalData.status || 'ATIVO',
+          success_rate: signalData.success_rate,
+          signal_category: signalData.type,
+          exchange: signalData.exchange || 'binance',
+          created_at: now,
+          updated_at: now
+        })
+        .select()
+        .single();
+      
+      if (error) {
+        console.error('Erro ao criar novo sinal:', error);
+        return null;
+      }
+      
+      // Invalidar cache para próxima busca
+      this.lastFetchTime = 0;
+      
+      // Notificar usuário sobre novo sinal
+      toast.success(`Novo sinal de ${signalData.signal === 'BUY' ? 'compra' : 'venda'} para ${signalData.symbol}!`);
+      
+      // Retornar sinal formatado
+      return {
+        id: data.id,
+        symbol: data.symbol,
+        signal: data.signal_type,
+        reason: data.reason,
+        strength: data.strength,
+        timestamp: new Date(data.created_at).getTime(),
+        price: data.current_price,
+        entry_price: data.entry_price,
+        stop_loss: data.stop_loss,
+        target_price: data.target_price,
+        take_profit: data.take_profit,
+        status: data.status,
+        success_rate: data.success_rate,
+        type: data.signal_category,
+        exit_price: data.exit_price,
+        elapsed_time: 'agora mesmo',
+        created_at: data.created_at,
+        updated_at: data.updated_at,
+        exchange: data.exchange
+      };
+    } catch (error) {
+      console.error('Erro geral ao criar novo sinal:', error);
+      return null;
+    }
+  }
+  
+  // Verificar se um sinal para um símbolo específico já existe
+  async signalExists(symbol: string, signalType: 'BUY' | 'SELL'): Promise<boolean> {
+    try {
+      const { count, error } = await supabase
+        .from('trading_signals')
+        .select('id', { count: 'exact' })
+        .eq('symbol', symbol)
+        .eq('signal_type', signalType)
+        .in('status', ['ATIVO', 'PENDENTE']);
+      
+      if (error) {
+        console.error('Erro ao verificar existência de sinal:', error);
+        return false;
+      }
+      
+      return count! > 0;
+    } catch (error) {
+      console.error('Erro geral ao verificar existência de sinal:', error);
+      return false;
+    }
+  }
+  
+  // Limpar o cache e forçar próxima busca
+  invalidateCache() {
+    this.lastFetchTime = 0;
+    this.signalCache = [];
+  }
+}
+
+// Criar uma instância da classe e exportá-la
+export const tradingSignalService = new TradingSignalService(); 

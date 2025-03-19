@@ -202,7 +202,7 @@ const Index = () => {
   
   // Efeito para atualizar dados de variação quando marketData for atualizado
   useEffect(() => {
-    if (marketData) {
+    if (marketData && Array.isArray(marketData)) {
       setRealtimeData(prev => {
         const updated = { ...prev };
         

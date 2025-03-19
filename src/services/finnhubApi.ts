@@ -11,9 +11,10 @@ export async function fetchStockQuote(symbol: string): Promise<{
   previousClose: number;
 }> {
   try {
-    const response = await fetch(
-      `https://finnhub.io/api/v1/quote?symbol=${symbol}&token=${API_KEYS.FINNHUB.API_KEY}`
-    );
+    const url = `https://finnhub.io/api/v1/quote?symbol=${symbol}&token=${API_KEYS.FINNHUB.API_KEY}`;
+    console.log(`Buscando cotação para ${symbol} em ${url.replace(API_KEYS.FINNHUB.API_KEY, '***')}`);
+    
+    const response = await fetch(url);
     
     if (!response.ok) {
       throw new Error(`Erro HTTP: ${response.status}`);
@@ -59,12 +60,14 @@ export async function fetchCompanyNews(
   related: string;
 }>> {
   try {
-    const response = await fetch(
-      `https://finnhub.io/api/v1/company-news?symbol=${symbol}&from=${from}&to=${to}&token=${API_KEYS.FINNHUB.API_KEY}`
-    );
+    const url = `https://finnhub.io/api/v1/company-news?symbol=${symbol}&from=${from}&to=${to}&token=${API_KEYS.FINNHUB.API_KEY}`;
+    console.log(`Buscando notícias para ${symbol} de ${from} até ${to} em ${url.replace(API_KEYS.FINNHUB.API_KEY, '***')}`);
+    
+    const response = await fetch(url);
     
     if (!response.ok) {
-      throw new Error(`Erro HTTP: ${response.status}`);
+      const errorText = await response.text();
+      throw new Error(`Erro HTTP: ${response.status} - ${errorText}`);
     }
     
     const data = await response.json();
@@ -76,19 +79,20 @@ export async function fetchCompanyNews(
     return data;
   } catch (error) {
     console.error(`Erro ao buscar notícias para ${symbol}:`, error);
-    throw error;
+    return []; // Retorna array vazio em vez de lançar erro para evitar interrupção do fluxo
   }
 }
 
 // Função para buscar dados financeiros da empresa
 export async function fetchCompanyFinancials(symbol: string): Promise<any> {
   try {
-    const response = await fetch(
-      `https://finnhub.io/api/v1/stock/metric?symbol=${symbol}&metric=all&token=${API_KEYS.FINNHUB.API_KEY}`
-    );
+    const url = `https://finnhub.io/api/v1/stock/metric?symbol=${symbol}&metric=all&token=${API_KEYS.FINNHUB.API_KEY}`;
+    
+    const response = await fetch(url);
     
     if (!response.ok) {
-      throw new Error(`Erro HTTP: ${response.status}`);
+      const errorText = await response.text();
+      throw new Error(`Erro HTTP: ${response.status} - ${errorText}`);
     }
     
     const data = await response.json();
@@ -100,31 +104,33 @@ export async function fetchCompanyFinancials(symbol: string): Promise<any> {
     return data;
   } catch (error) {
     console.error(`Erro ao buscar dados financeiros de ${symbol}:`, error);
-    throw error;
+    return null; // Retorna null em vez de lançar erro para evitar interrupção do fluxo
   }
 }
 
 // Função para buscar recomendações de analistas
 export async function fetchAnalystRecommendations(symbol: string): Promise<any> {
   try {
-    const response = await fetch(
-      `https://finnhub.io/api/v1/stock/recommendation?symbol=${symbol}&token=${API_KEYS.FINNHUB.API_KEY}`
-    );
+    const url = `https://finnhub.io/api/v1/stock/recommendation?symbol=${symbol}&token=${API_KEYS.FINNHUB.API_KEY}`;
+    
+    const response = await fetch(url);
     
     if (!response.ok) {
-      throw new Error(`Erro HTTP: ${response.status}`);
+      const errorText = await response.text();
+      throw new Error(`Erro HTTP: ${response.status} - ${errorText}`);
     }
     
     const data = await response.json();
     
     if (!Array.isArray(data) || data.length === 0) {
-      throw new Error('Nenhuma recomendação encontrada');
+      console.warn(`Nenhuma recomendação encontrada para ${symbol}`);
+      return [];
     }
     
     return data;
   } catch (error) {
     console.error(`Erro ao buscar recomendações de analistas para ${symbol}:`, error);
-    throw error;
+    return []; // Retorna array vazio em vez de lançar erro para evitar interrupção do fluxo
   }
 }
 
@@ -135,14 +141,15 @@ export async function fetchPriceTarget(symbol: string): Promise<{
   targetMean: number;
   targetMedian: number;
   lastUpdated: string;
-}> {
+} | null> {
   try {
-    const response = await fetch(
-      `https://finnhub.io/api/v1/stock/price-target?symbol=${symbol}&token=${API_KEYS.FINNHUB.API_KEY}`
-    );
+    const url = `https://finnhub.io/api/v1/stock/price-target?symbol=${symbol}&token=${API_KEYS.FINNHUB.API_KEY}`;
+    
+    const response = await fetch(url);
     
     if (!response.ok) {
-      throw new Error(`Erro HTTP: ${response.status}`);
+      const errorText = await response.text();
+      throw new Error(`Erro HTTP: ${response.status} - ${errorText}`);
     }
     
     const data = await response.json();
@@ -160,7 +167,7 @@ export async function fetchPriceTarget(symbol: string): Promise<{
     };
   } catch (error) {
     console.error(`Erro ao buscar price target para ${symbol}:`, error);
-    throw error;
+    return null; // Retorna null em vez de lançar erro para evitar interrupção do fluxo
   }
 }
 
@@ -177,20 +184,22 @@ export async function fetchCandles(
   lows: number[];
   closes: number[];
   volumes: number[];
-}> {
+} | null> {
   try {
-    const response = await fetch(
-      `https://finnhub.io/api/v1/stock/candle?symbol=${symbol}&resolution=${resolution}&from=${from}&to=${to}&token=${API_KEYS.FINNHUB.API_KEY}`
-    );
+    const url = `https://finnhub.io/api/v1/stock/candle?symbol=${symbol}&resolution=${resolution}&from=${from}&to=${to}&token=${API_KEYS.FINNHUB.API_KEY}`;
+    
+    const response = await fetch(url);
     
     if (!response.ok) {
-      throw new Error(`Erro HTTP: ${response.status}`);
+      const errorText = await response.text();
+      throw new Error(`Erro HTTP: ${response.status} - ${errorText}`);
     }
     
     const data = await response.json();
     
     if (data.s === 'no_data') {
-      throw new Error('Nenhum dado encontrado para o período selecionado');
+      console.warn(`Nenhum dado de candle encontrado para ${symbol} no período selecionado`);
+      return null;
     }
     
     if (data.s !== 'ok' || !data.t || !data.o || !data.h || !data.l || !data.c || !data.v) {
@@ -207,6 +216,41 @@ export async function fetchCandles(
     };
   } catch (error) {
     console.error(`Erro ao buscar candles para ${symbol}:`, error);
-    throw error;
+    return null; // Retorna null em vez de lançar erro para evitar interrupção do fluxo
+  }
+}
+
+// Função para buscar notícias gerais
+export async function fetchMarketNews(category: string = 'general'): Promise<Array<{
+  category: string;
+  datetime: number;
+  headline: string;
+  id: number;
+  image: string;
+  related: string;
+  source: string;
+  summary: string;
+  url: string;
+}>> {
+  try {
+    const url = `https://finnhub.io/api/v1/news?category=${category}&token=${API_KEYS.FINNHUB.API_KEY}`;
+    
+    const response = await fetch(url);
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Erro HTTP: ${response.status} - ${errorText}`);
+    }
+    
+    const data = await response.json();
+    
+    if (!Array.isArray(data)) {
+      throw new Error('Formato de dados inválido');
+    }
+    
+    return data;
+  } catch (error) {
+    console.error(`Erro ao buscar notícias de mercado para categoria ${category}:`, error);
+    return []; // Retorna array vazio em vez de lançar erro para evitar interrupção do fluxo
   }
 } 
