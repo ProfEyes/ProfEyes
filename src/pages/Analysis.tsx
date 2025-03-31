@@ -163,7 +163,7 @@ const PatternCard = ({ pattern }: { pattern: CandlestickPattern }) => {
       </div>
       <p className="text-zinc-400 text-sm mb-2">{pattern.description}</p>
       <div className="flex items-center justify-between text-xs text-zinc-500">
-        <span>Confiabilidade: {pattern.reliability}/5</span>
+        <span>Confiabilidade: {pattern.accuracy >= 0.8 ? '5' : pattern.accuracy >= 0.7 ? '4' : pattern.accuracy >= 0.6 ? '3' : pattern.accuracy >= 0.5 ? '2' : '1'}/5</span>
         <span>{formatTimestamp(pattern.timestamp)}</span>
       </div>
     </div>
@@ -221,8 +221,6 @@ const Analysis = () => {
     priceData, 
     patterns, 
     orderbook,
-    correlations,
-    onChainData,
     loading, 
     error 
   } = useMarketData({

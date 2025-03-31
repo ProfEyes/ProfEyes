@@ -29,11 +29,10 @@ export function MarketOverview({ marketData, isLoading }: MarketOverviewProps) {
       const newUpdatedItems: {[key: string]: boolean} = {};
       
       marketData.forEach(data => {
-        if (prevPrices[data.symbol] && prevPrices[data.symbol] !== data.price) {
+        if (prevPrices[data.symbol] && parseFloat(prevPrices[data.symbol]) !== parseFloat(data.price.toString())) {
           newUpdatedItems[data.symbol] = true;
         }
       });
-      
       // Definir quais itens foram atualizados
       if (Object.keys(newUpdatedItems).length > 0) {
         setUpdatedItems(newUpdatedItems);
@@ -47,15 +46,15 @@ export function MarketOverview({ marketData, isLoading }: MarketOverviewProps) {
       // Atualizar preços anteriores
       const newPrevPrices: {[key: string]: string} = {};
       marketData.forEach(data => {
-        newPrevPrices[data.symbol] = data.price;
+        newPrevPrices[data.symbol] = data.price.toString();
       });
       setPrevPrices(newPrevPrices);
     }
   }, [marketData]);
 
   const renderMarketCard = (data: MarketData) => {
-    const isUp = parseFloat(data.change) > 0;
-    const isDown = parseFloat(data.change) < 0;
+    const isUp = parseFloat(data.change.toString()) > 0;
+    const isDown = parseFloat(data.change.toString()) < 0;
     const TrendIcon = isUp ? ArrowUpRight : ArrowDownRight;
     const wasUpdated = updatedItems[data.symbol];
 
@@ -75,7 +74,7 @@ export function MarketOverview({ marketData, isLoading }: MarketOverviewProps) {
             )}
           </CardTitle>
           <CardDescription>
-            {data.volume && parseInt(data.volume) > 0 ? `Vol: ${parseInt(data.volume).toLocaleString()}` : ''}
+            {(data as any).volume24h && parseInt((data as any).volume24h) > 0 ? `Vol: ${parseInt((data as any).volume24h).toLocaleString()}` : ''}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -91,8 +90,8 @@ export function MarketOverview({ marketData, isLoading }: MarketOverviewProps) {
             <span className="text-sm">({data.changePercent})</span>
           </div>
           <div className="text-xs text-muted-foreground mt-2 flex justify-between">
-            <span>L: {data.low24h || '-'}</span>
-            <span>H: {data.high24h || '-'}</span>
+            <span>L: {(data as any).dayLow || '-'}</span>
+            <span>H: {(data as any).dayHigh || '-'}</span>
           </div>
         </CardContent>
       </Card>

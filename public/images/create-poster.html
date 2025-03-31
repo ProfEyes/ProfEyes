@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Capas para Vídeos de Instruções</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background-color: #000;
+      color: white;
+      margin: 0;
+      padding: 40px;
+    }
+    
+    .poster {
+      width: 1280px;
+      height: 720px;
+      position: relative;
+      overflow: hidden;
+      margin-bottom: 40px;
+      border-radius: 12px;
+      background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+    }
+    
+    .poster-pt {
+      background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+    }
+    
+    .poster-en {
+      background: linear-gradient(135deg, #1a2e44 0%, #234876 100%);
+    }
+    
+    .poster-es {
+      background: linear-gradient(135deg, #3b1048 0%, #5b1e6e 100%);
+    }
+    
+    .title {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 64px;
+      font-weight: bold;
+      text-align: center;
+      color: white;
+      text-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+      width: 100%;
+      padding: 0 60px;
+      box-sizing: border-box;
+    }
+    
+    .subtitle {
+      position: absolute;
+      top: 62%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 32px;
+      font-weight: normal;
+      text-align: center;
+      color: rgba(255, 255, 255, 0.7);
+      width: 100%;
+      padding: 0 60px;
+      box-sizing: border-box;
+    }
+    
+    .logo {
+      position: absolute;
+      bottom: 40px;
+      right: 40px;
+      font-size: 30px;
+      font-weight: bold;
+      color: rgba(255, 255, 255, 0.8);
+    }
+    
+    .decorative-element {
+      position: absolute;
+      border-radius: 50%;
+      opacity: 0.4;
+      filter: blur(40px);
+    }
+    
+    .circle-1 {
+      width: 300px;
+      height: 300px;
+      background: linear-gradient(45deg, #38bdf8, #818cf8);
+      top: -100px;
+      left: -100px;
+    }
+    
+    .circle-2 {
+      width: 400px;
+      height: 400px;
+      background: linear-gradient(45deg, #38bdf8, #6366f1);
+      bottom: -150px;
+      right: -150px;
+    }
+    
+    .circle-3 {
+      width: 200px;
+      height: 200px;
+      background: linear-gradient(45deg, #c084fc, #f472b6);
+      top: 150px;
+      right: 100px;
+    }
+    
+    .play-button {
+      position: absolute;
+      top: 40%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 100px;
+      height: 100px;
+      background-color: rgba(255, 255, 255, 0.2);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    
+    .play-button::after {
+      content: '';
+      width: 0;
+      height: 0;
+      border-top: 20px solid transparent;
+      border-bottom: 20px solid transparent;
+      border-left: 35px solid white;
+      margin-left: 10px;
+    }
+    
+    .instructions {
+      margin-top: 30px;
+      max-width: 800px;
+      background-color: #1e293b;
+      padding: 20px;
+      border-radius: 8px;
+      font-size: 16px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Capas para Vídeos de Instruções</h1>
+  <p>Use a captura de tela para salvar cada uma das imagens abaixo e use-as como capas dos vídeos de instruções.</p>
+  
+  <div class="instructions">
+    <h3>Como usar:</h3>
+    <ol>
+      <li>Faça captura de tela (screenshot) de cada poster abaixo</li>
+      <li>Salve cada imagem como:
+        <ul>
+          <li>instructions-poster-pt.jpg</li>
+          <li>instructions-poster-en.jpg</li>
+          <li>instructions-poster-es.jpg</li>
+        </ul>
+      </li>
+      <li>Coloque as imagens no diretório <code>public/images/</code></li>
+    </ol>
+  </div>
+  
+  <h2>Poster em Português</h2>
+  <div class="poster poster-pt">
+    <div class="decorative-element circle-1"></div>
+    <div class="decorative-element circle-2"></div>
+    <div class="decorative-element circle-3"></div>
+    
+    <div class="play-button"></div>
+    
+    <div class="title">Instruções</div>
+    <div class="subtitle">Aprenda a utilizar a plataforma</div>
+    
+    <div class="logo">NP Exclusive Signals</div>
+  </div>
+  
+  <h2>Poster em Inglês</h2>
+  <div class="poster poster-en">
+    <div class="decorative-element circle-1"></div>
+    <div class="decorative-element circle-2"></div>
+    <div class="decorative-element circle-3"></div>
+    
+    <div class="play-button"></div>
+    
+    <div class="title">Instructions</div>
+    <div class="subtitle">Learn how to use the platform</div>
+    
+    <div class="logo">NP Exclusive Signals</div>
+  </div>
+  
+  <h2>Poster em Espanhol</h2>
+  <div class="poster poster-es">
+    <div class="decorative-element circle-1"></div>
+    <div class="decorative-element circle-2"></div>
+    <div class="decorative-element circle-3"></div>
+    
+    <div class="play-button"></div>
+    
+    <div class="title">Instrucciones</div>
+    <div class="subtitle">Aprenda a utilizar la plataforma</div>
+    
+    <div class="logo">NP Exclusive Signals</div>
+  </div>
+</body>
+</html> 

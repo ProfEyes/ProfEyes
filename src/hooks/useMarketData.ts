@@ -67,7 +67,11 @@ export function useMarketData({
             indicators: technicalData,
             priceData: prices,
             patterns: detectedPatterns,
-            orderbook,
+            orderbook: orderbook ? {
+              bids: orderbook.bids,
+              asks: orderbook.asks,
+              chartData: orderbook.chartData
+            } : null,
             loading: false,
             error: null
           });
@@ -99,4 +103,4 @@ export function useMarketData({
   }, [symbol, timeframe, updateInterval, historyLimit]);
 
   return data;
-} 
+}

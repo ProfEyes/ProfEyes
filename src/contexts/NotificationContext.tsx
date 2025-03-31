@@ -95,11 +95,15 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
     });
     
     // Mostrar toast
-    toast({
-      title: notification.title,
-      description: notification.message,
-      duration: 5000,
-    });
+    toast(
+      <div className="p-3 bg-white rounded-md shadow-md">
+        <h3 className="text-sm font-semibold">{notification.title}</h3>
+        <p className="mt-1">{notification.message}</p>
+      </div>,
+      {
+        duration: 5000,
+      }
+    );
   };
   
   // Marcar uma notificação como lida

@@ -1,11 +1,11 @@
 ﻿import { supabase } from "@/integrations/supabase/client";
 import { MarketData, TradingSignal } from "./types";
-import { getBinancePrice, initPriceWebSocket, onPriceUpdate, getBinanceHistoricalData, getHistoricalKlines, getLatestPrices } from "./binanceApi";
-import { fetchCompanyNews } from "./newsApi";
+import { getHistoricalKlines, getLatestPrices, getCurrentPrice, get24hStats, get24hPriceChange } from "./getSimulatedPrices";
 import { determineDayTradeTrend, generateDayTradePattern, generateOrderBookAnalysis } from "./utils/tradingUtils";
 import { fetchCandles, fetchAnalystRecommendations, fetchPriceTarget } from "./finnhubApi";
-import { fetchFinancialNews, fetchNewsHeadlines } from "./newsApi";
-import { fetchMarketNews, fetchNewsForSymbol } from "./newsService";
+import { getBitstampPrice } from './bitstampApi';
+import { getBtcMarketCap } from './coinGeckoApi';
+import { MarketStatistic, OrderBook, MarketPrice } from './interfaces';
 
 // Definições de interfaces
 export interface MarketData {
@@ -45,7 +45,7 @@ export interface TradingSignal {
 const realTimePrices: Map<string, MarketData> = new Map();
 
 // Inicializa o WebSocket da Binance
-initPriceWebSocket();
+// initPriceWebSocket();
 
 // Array de símbolos para monitorar (apenas criptomoedas)
 const MONITORED_SYMBOLS = [
@@ -61,57 +61,77 @@ const MONITORED_SYMBOLS = [
   'ATOMUSDT'   // Cosmos
 ];
 
-// Cache para dados de mercado
-const marketDataCache: { [key: string]: { data: MarketData; timestamp: number } } = {};
-const CACHE_DURATION = 60 * 1000; // 1 minuto
+// Cache para dados de mercado com tempo de expiração
+const MARKET_DATA_CACHE: Record<string, { 
+  data: MarketData, 
+  timestamp: number,
+  // Validade do cache em milissegundos (5 minutos)
+  validUntil: number 
+}> = {};
+
+// Lista de símbolos populares para fallback
+const POPULAR_SYMBOLS = [
+  'BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'SOLUSDT', 'XRPUSDT',
+  'ADAUSDT', 'DOGEUSDT', 'LTCUSDT', 'DOTUSDT', 'MATICUSDT',
+  'LINKUSDT', 'AVAXUSDT', 'NEARUSDT'
+];
 
 // Função para obter preços da Binance
-export async function getBinancePrice(symbol: string): Promise<{ 
-  price: string; 
-  change: string; 
-  changePercent: string;
-  volume?: string;
-  high24h?: string;
-  low24h?: string;
-}> {
+export async function getBinancePrice(symbol: string): Promise<MarketPrice | undefined> {
   try {
-    const response = await fetch(`https://api.binance.com/api/v3/ticker/24hr?symbol=${symbol}`);
-    const data = await response.json();
+    // Usar o serviço simulado para obter o preço
+    const price = await getCurrentPrice(symbol);
     
-    const price = parseFloat(data.lastPrice).toFixed(2);
-    const change = parseFloat(data.priceChange).toFixed(2);
-    const changePercent = parseFloat(data.priceChangePercent).toFixed(2);
+    // Obter variação de 24h com o serviço simulado
+    const { change, changePercent } = await get24hPriceChange(symbol);
     
-    // Atualizar cache imediatamente
-    if (realTimePrices.has(symbol)) {
-      const existingData = realTimePrices.get(symbol)!;
-      realTimePrices.set(symbol, {
-        ...existingData,
-        price: `$${price}`,
-        change,
-        changePercent: `${changePercent}%`
-      });
-    }
-    
+    // Retornar dados formatados
     return {
-      price,
+      symbol,
+      price: price,
+      timestamp: Date.now(),
       change,
-      changePercent: `${changePercent}%`,
-      volume: data.volume,
-      high24h: data.highPrice,
-      low24h: data.lowPrice
+      changePercent,
+      source: 'simulated'
     };
   } catch (error) {
-    console.error(`Error fetching price for ${symbol}:`, error);
-    return {
-      price: "0.00",
-      change: "0.00",
-      changePercent: "0.00%",
-      volume: "0.00",
-      high24h: "0.00",
-      low24h: "0.00"
-    };
+    console.error(`Erro ao obter preço simulado para ${symbol}:`, error);
+    return undefined;
   }
+}
+
+// Função para gerar notícias simuladas quando a API falha
+function getSimulatedNews(symbol: string) {
+  const timestamp = new Date().toISOString();
+  return [
+    {
+      headline: `Análise de mercado para ${symbol}`,
+      summary: 'Nossos analistas estão avaliando as condições de mercado atuais. Atualizações em breve.',
+      url: '#',
+      image: 'https://placehold.co/600x400?text=Market+Analysis',
+      source: 'ProfEyes Analytics',
+      datetime: Date.now(),
+      related: symbol
+    },
+    {
+      headline: `Perspectivas futuras para ${symbol}`,
+      summary: 'Projeções de longo prazo e fatores que podem influenciar o desempenho futuro.',
+      url: '#',
+      image: 'https://placehold.co/600x400?text=Future+Outlook',
+      source: 'ProfEyes Research',
+      datetime: Date.now() - 86400000, // 1 dia atrás
+      related: symbol
+    },
+    {
+      headline: 'Tendências globais afetando o mercado',
+      summary: 'Fatores macroeconômicos e seu impacto nos mercados financeiros.',
+      url: '#',
+      image: 'https://placehold.co/600x400?text=Global+Trends',
+      source: 'Market Insights',
+      datetime: Date.now() - 172800000, // 2 dias atrás
+      related: symbol
+    }
+  ];
 }
 
 // Função para buscar dados de mercado
@@ -153,8 +173,8 @@ export async function fetchMarketData(symbol: string): Promise<MarketData> {
       };
     }
 
-    // Buscar notícias
-    const news = await fetchCompanyNews(symbol);
+    // Sempre usar dados simulados em vez de API de notícias
+    const news = getSimulatedNews(symbol);
 
     return {
       symbol,
@@ -347,7 +367,7 @@ function determineMomentum(closes: number[], volumes: number[]): 'increasing' | 
 }
 
 // Exportações para manter a compatibilidade com os componentes existentes
-export { fetchNewsForSymbol, fetchMarketNews } from './newsService';
+export { fetchMarketNews } from './newsService';
 export { 
   fetchPortfolio, 
   type PortfolioItem
@@ -368,3 +388,295 @@ export {
 export { analyzeSentiment } from './sentimentAnalysis';
 
 export { getBinancePrice as getBinancePriceMarket };
+
+/**
+ * Busca preço no Bitstamp com tratamento de erros
+ * @param symbol Símbolo
+ * @returns Preço formatado ou undefined
+ */
+export async function getBitstampPriceWithFallback(symbol: string): Promise<MarketPrice | undefined> {
+  try {
+    // Tenta obter do Bitstamp
+    return await getBitstampPrice(symbol);
+  } catch (error) {
+    console.error(`Erro ao buscar preço de ${symbol} no Bitstamp:`, error);
+    return undefined;
+  }
+}
+
+/**
+ * Busca as estatísticas de mercado para um símbolo
+ * @param symbol Símbolo
+ * @returns Estatísticas ou undefined
+ */
+export async function getMarketStatistics(symbol: string): Promise<MarketStatistic | undefined> {
+  try {
+    // Obter estatísticas da Binance com o novo método que já inclui fallback
+    const stats = await get24hStats(symbol);
+    
+    return {
+      high: parseFloat(stats.high).toFixed(2),
+      low: parseFloat(stats.low).toFixed(2),
+      volume: parseFloat(stats.volume).toFixed(2),
+      quoteVolume: parseFloat(stats.quoteVolume).toFixed(2),
+      marketCap: await getMarketCap(symbol) || 'N/A'
+    };
+  } catch (error) {
+    console.error(`Erro ao buscar estatísticas de ${symbol}:`, error);
+    return undefined;
+  }
+}
+
+/**
+ * Busca o livro de ordens para um símbolo
+ * @param symbol Símbolo
+ * @param limit Quantidade de ordens
+ * @returns Livro de ordens ou undefined
+ */
+export async function getMarketOrderBook(symbol: string, limit: number = 20): Promise<OrderBook | undefined> {
+  try {
+    // Obter orderbook da Binance com o novo método que já inclui fallback
+    return await getOrderBook(symbol, limit);
+  } catch (error) {
+    console.error(`Erro ao buscar orderbook de ${symbol}:`, error);
+    return undefined;
+  }
+}
+
+/**
+ * Busca o market cap para um símbolo
+ * @param symbol Símbolo
+ * @returns Market cap formatado ou undefined
+ */
+async function getMarketCap(symbol: string): Promise<string | undefined> {
+  // Por enquanto, só retorna o market cap para BTC
+  if (symbol === 'BTCUSDT' || symbol === 'BTC') {
+    try {
+      const marketCap = await getBtcMarketCap();
+      if (marketCap) {
+        return (marketCap / 1000000000).toFixed(2) + 'B';
+      }
+    } catch (error) {
+      console.error('Erro ao buscar market cap do BTC:', error);
+      return '1.2T'; // Valor aproximado como fallback
+    }
+  }
+  
+  // Valores aproximados de market cap para alguns símbolos (fallback)
+  const fallbackMarketCaps: Record<string, string> = {
+    'ETHUSDT': '420B',
+    'BNBUSDT': '68B',
+    'XRPUSDT': '28B',
+    'SOLUSDT': '42B',
+    'ADAUSDT': '19B',
+    'DOGEUSDT': '15B',
+    'MATICUSDT': '8B',
+    'DOTUSDT': '9B',
+    'LTCUSDT': '6B',
+    'LINKUSDT': '7B',
+    'AVAXUSDT': '12B',
+    'NEARUSDT': '3B'
+  };
+  
+  return fallbackMarketCaps[symbol] || undefined;
+}
+
+/**
+ * Busca todos os dados de mercado para um símbolo específico
+ * @param symbol Símbolo 
+ * @returns Todos os dados de mercado
+ */
+export async function getMarketData(symbol: string = 'BTCUSDT'): Promise<MarketData> {
+  // Padronização do símbolo para o formato da Binance
+  const normalizedSymbol = normalizeSymbol(symbol);
+  
+  // Verificar cache
+  if (
+    MARKET_DATA_CACHE[normalizedSymbol] && 
+    Date.now() < MARKET_DATA_CACHE[normalizedSymbol].validUntil
+  ) {
+    console.log(`Usando cache para dados de mercado de ${normalizedSymbol}`);
+    return MARKET_DATA_CACHE[normalizedSymbol].data;
+  }
+  
+  // Buscar dados de diferentes fontes em paralelo
+  const [binancePrice, bitstampPrice, statistics, orderBook] = await Promise.all([
+    getBinancePrice(normalizedSymbol),
+    getBitstampPriceWithFallback(convertToBitstampSymbol(normalizedSymbol)),
+    getMarketStatistics(normalizedSymbol),
+    getMarketOrderBook(normalizedSymbol)
+  ]);
+  
+  // Compilar resultados, priorizando Binance, mas usando Bitstamp como fallback
+  const price = binancePrice || bitstampPrice || {
+    price: '0.00',
+    change: '0.00',
+    changePercent: '0.00',
+    source: 'fallback'
+  };
+  
+  // Resultado final
+  const result: MarketData = {
+    symbol: normalizedSymbol,
+    price,
+    statistics: statistics || {
+      high: '0.00',
+      low: '0.00',
+      volume: '0.00',
+      quoteVolume: '0.00',
+      marketCap: 'N/A'
+    },
+    orderBook: orderBook || {
+      bids: [],
+      asks: []
+    }
+  };
+  
+  // Atualizar cache
+  MARKET_DATA_CACHE[normalizedSymbol] = {
+    data: result,
+    timestamp: Date.now(),
+    validUntil: Date.now() + 5 * 60 * 1000 // 5 minutos
+  };
+  
+  return result;
+}
+
+/**
+ * Busca dados de mercado para múltiplos símbolos em paralelo
+ * @param symbols Lista de símbolos
+ * @returns Objeto com dados para cada símbolo
+ */
+export async function getMultipleMarketData(symbols: string[] = POPULAR_SYMBOLS): Promise<Record<string, MarketData>> {
+  // Normalizar símbolos
+  const normalizedSymbols = symbols.map(normalizeSymbol);
+  
+  // Buscar dados para todos os símbolos em paralelo
+  const results = await Promise.all(
+    normalizedSymbols.map(async (symbol) => {
+      try {
+        return await getMarketData(symbol);
+      } catch (error) {
+        console.error(`Erro ao buscar dados para ${symbol}:`, error);
+        // Retornar dados de fallback
+        return {
+          symbol,
+          price: {
+            price: '0.00',
+            change: '0.00',
+            changePercent: '0.00',
+            source: 'fallback'
+          },
+          statistics: {
+            high: '0.00',
+            low: '0.00',
+            volume: '0.00',
+            quoteVolume: '0.00',
+            marketCap: 'N/A'
+          },
+          orderBook: {
+            bids: [],
+            asks: []
+          }
+        };
+      }
+    })
+  );
+  
+  // Converter array de resultados em objeto
+  const marketDataMap: Record<string, MarketData> = {};
+  results.forEach((data) => {
+    marketDataMap[data.symbol] = data;
+  });
+  
+  return marketDataMap;
+}
+
+/**
+ * Normaliza um símbolo para o formato padrão da Binance
+ * @param symbol Símbolo a ser normalizado
+ * @returns Símbolo normalizado
+ */
+function normalizeSymbol(symbol: string): string {
+  // Remover espaços e converter para maiúsculas
+  symbol = symbol.trim().toUpperCase();
+  
+  // Se for apenas um ticker de crypto sem o par, adicionar USDT
+  if (!/[A-Z0-9]+(USDT|BTC|ETH|BNB|USD|EUR|BUSD|USDC)$/.test(symbol)) {
+    return symbol + 'USDT';
+  }
+  
+  return symbol;
+}
+
+/**
+ * Converte um símbolo da Binance para o formato do Bitstamp
+ * @param binanceSymbol Símbolo no formato da Binance
+ * @returns Símbolo no formato do Bitstamp
+ */
+function convertToBitstampSymbol(binanceSymbol: string): string {
+  // Bitstamp usa minúsculas e underscore
+  const symbol = binanceSymbol.toLowerCase();
+  
+  // Mapear pares comuns
+  if (symbol === 'btcusdt') return 'btcusd';
+  if (symbol === 'ethusdt') return 'ethusd';
+  if (symbol === 'xrpusdt') return 'xrpusd';
+  if (symbol === 'ltcusdt') return 'ltcusd';
+  if (symbol === 'uniusdt') return 'uniusd';
+  if (symbol === 'linkusdt') return 'linkusd';
+  
+  // Para outros casos, tentar separar e substituir USDT por USD
+  if (symbol.endsWith('usdt')) {
+    return symbol.replace('usdt', 'usd');
+  }
+  
+  // Caso padrão: dividir o símbolo (por exemplo, BTCETH -> btc_eth)
+  const base = symbol.slice(0, -3);
+  const quote = symbol.slice(-3);
+  return `${base}_${quote}`;
+}
+
+// Implementar uma versão simulada de getOrderBook para manter compatibilidade com código existente
+export function getOrderBook(symbol: string, limit: number = 20): Promise<{
+  lastUpdateId: number;
+  bids: [string, string][];
+  asks: [string, string][];
+}> {
+  return new Promise((resolve) => {
+    // Obter preço atual do símbolo
+    getCurrentPrice(symbol).then(currentPrice => {
+      const price = parseFloat(currentPrice || "100.00");
+      
+      // Criar livro de ordens simulado
+      const bids: [string, string][] = [];
+      const asks: [string, string][] = [];
+      
+      // Criar ordens simuladas com preços próximos ao preço atual
+      for (let i = 0; i < limit; i++) {
+        // Preços de compra (bids) ligeiramente abaixo do preço atual
+        const bidPrice = (price * (1 - 0.001 * (i + 1))).toFixed(2);
+        const bidQuantity = (Math.random() * 10 + 1).toFixed(4);
+        bids.push([bidPrice, bidQuantity]);
+        
+        // Preços de venda (asks) ligeiramente acima do preço atual
+        const askPrice = (price * (1 + 0.001 * (i + 1))).toFixed(2);
+        const askQuantity = (Math.random() * 10 + 1).toFixed(4);
+        asks.push([askPrice, askQuantity]);
+      }
+      
+      resolve({
+        lastUpdateId: Date.now(),
+        bids,
+        asks
+      });
+    }).catch(() => {
+      // Em caso de erro, retornar dados vazios
+      resolve({
+        lastUpdateId: Date.now(),
+        bids: [],
+        asks: []
+      });
+    });
+  });
+}

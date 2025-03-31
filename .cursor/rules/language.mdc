@@ -8,4 +8,9 @@ description:
 globs: 
 alwaysApply: false
 ---
+---
+description: 
+globs: 
+alwaysApply: false
+---
 Always output answers in Portuguese

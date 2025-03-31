@@ -227,13 +227,43 @@ export function AuthProvider({ children }: AuthProviderProps) {
     try {
       setLoading(true);
       
+      // Verificar se existe uma sessão armazenada em cache para este usuário
+      const cachedSession = localStorage.getItem(`auth_cache_${email}`);
+      if (cachedSession) {
+        try {
+          const sessionData = JSON.parse(cachedSession);
+          // Verificar se o cache ainda é válido (menos de 12 horas)
+          const now = new Date().getTime();
+          if (sessionData.timestamp && (now - sessionData.timestamp < 12 * 60 * 60 * 1000)) {
+            // Usar os dados em cache para login mais rápido
+            console.log('Usando dados em cache para login mais rápido');
+            setSession(sessionData.session);
+            setUser(sessionData.user);
+            
+            // Fazer uma verificação da sessão em segundo plano para atualizar o cache
+            supabase.auth.getSession().then(({ data }) => {
+              if (data?.session) {
+                // Atualizar cache silenciosamente
+                localStorage.setItem(`auth_cache_${email}`, JSON.stringify({
+                  session: data.session,
+                  user: data.session.user,
+                  timestamp: new Date().getTime()
+                }));
+              }
+            });
+            
+            return { data: sessionData };
+          }
+        } catch (e) {
+          // Ignorar erros de parsing do cache
+          console.warn('Erro ao processar cache de autenticação:', e);
+        }
+      }
+      
       // Fazer login utilizando o Supabase
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
-        password,
-        options: {
-          persistSession: rememberMe
-        }
+        password
       });
       
       if (error) {
@@ -270,6 +300,15 @@ export function AuthProvider({ children }: AuthProviderProps) {
         };
       }
       
+      // Salvar dados em cache para login rápido futuro se 'rememberMe' estiver ativado
+      if (rememberMe) {
+        localStorage.setItem(`auth_cache_${email}`, JSON.stringify({
+          session: data.session,
+          user: data.user,
+          timestamp: new Date().getTime()
+        }));
+      }
+      
       // Atualizar o estado com os dados do usuário
       setSession(data.session);
       setUser(data.user);
@@ -288,82 +327,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }
   };
 
-  // Função para cadastro com email e senha via Supabase
-  const signUp = async (email: string, password: string, birthdate?: string) => {
-    try {
-      setLoading(true);
-      
-      // Verificar se a senha é forte
-      const passwordCheck = isStrongPassword(password);
-      if (!passwordCheck.isStrong) {
-        return {
-          error: {
-            message: passwordCheck.message,
-            name: 'WeakPassword'
-          } as any
-        };
-      }
-      
-      // Verificar se a data de nascimento foi fornecida
-      if (!birthdate) {
-        return {
-          error: {
-            message: 'A data de nascimento é obrigatória.',
-            name: 'MissingBirthdate'
-          } as any
-        };
-      }
-      
-      // Realizar o cadastro utilizando o Supabase
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          // Configurar o redirecionamento para a página de confirmação
-          emailRedirectTo: `${window.location.origin}/auth`,
-          // Dados adicionais do usuário
-          data: {
-            display_name: email.split('@')[0],
-            birthdate: birthdate,
-          }
-        }
-      });
-      
-      if (error) {
-        console.error('Erro ao criar conta:', error);
-        
-        // Traduzir as mensagens de erro comuns do Supabase
-        if (error.message.includes('already registered')) {
-          return { 
-            error: {
-              message: 'Este email já está cadastrado. Tente fazer login.',
-              name: 'UserExists'
-            } as any 
-          };
-        }
-        
-        return { error };
-      }
-      
-      // Verificar se o email de confirmação foi enviado
-      if (data?.user && !data.user.email_confirmed_at) {
-        toast.success('Conta criada com sucesso!', {
-          description: 'Um email de confirmação foi enviado para o seu endereço. Por favor, verifique sua caixa de entrada e spam.'
-        });
-      } else {
-        toast.success('Conta criada com sucesso!');
-      }
-      
-      return { error: null };
-    } catch (error: any) {
-      console.error('Erro ao criar conta:', error);
-      toast.error(`Erro ao criar conta: ${error.message}`);
-      return { error: error as any };
-    } finally {
-      setLoading(false);
-    }
-  };
-  
   // Função para verificar email via Supabase (enviar email de verificação)
   const verifyEmail = async (email: string) => {
     try {
@@ -492,6 +455,139 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }
   };
 
+  // Função para cadastro via Supabase
+  const signUp = async (email: string, password: string, birthdate?: string) => {
+    try {
+      setLoading(true);
+      
+      // Verificar se o email é válido
+      const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailPattern.test(email)) {
+        return { 
+          error: {
+            message: 'Por favor, forneça um email válido.',
+            name: 'InvalidEmail'
+          } as any
+        };
+      }
+      
+      // Verificar se a senha é forte o suficiente
+      const passwordCheck = isStrongPassword(password);
+      if (!passwordCheck.isStrong) {
+        return { 
+          error: {
+            message: passwordCheck.message,
+            name: 'WeakPassword'
+          } as any
+        };
+      }
+      
+      // Verificar se a data de nascimento foi fornecida
+      if (!birthdate) {
+        return {
+          error: {
+            message: 'A data de nascimento é obrigatória.',
+            name: 'MissingBirthdate'
+          } as any
+        };
+      }
+      
+      // Verificar se o email já existe usando o endpoint auth.signInWithOtp
+      // Esta é uma forma indireta de verificar se o email existe, sem realmente fazer login
+      const { error: existingUserError } = await supabase.auth.signInWithOtp({
+        email,
+        options: {
+          shouldCreateUser: false, // Não criar usuário se não existir
+        }
+      });
+      
+      // Se não retornar erro de "user not found", é porque o usuário já existe
+      // No Supabase, se tentarmos enviar OTP para um email inexistente, dará erro
+      if (!existingUserError || !existingUserError.message.includes('not found')) {
+        console.log('Email já existe:', email);
+        return { 
+          error: {
+            message: 'Este email já está cadastrado. Por favor, faça login com sua conta existente.',
+            name: 'UserExists'
+          } as any 
+        };
+      }
+      
+      // Realizar o cadastro utilizando o Supabase
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          // Configurar o redirecionamento para a página de confirmação - URL absoluta
+          emailRedirectTo: `${window.location.origin}/auth`,
+          data: {
+            display_name: email.split('@')[0],
+            birthdate: birthdate,
+          }
+        }
+      });
+      
+      if (error) {
+        console.error('Erro ao criar conta:', error);
+        
+        // Traduzir as mensagens de erro comuns do Supabase
+        if (error.message.includes('already registered') || 
+            error.message.includes('User already registered') ||
+            error.message.includes('already exists') ||
+            error.message.includes('email taken')) {
+          return { 
+            error: {
+              message: 'Este email já está cadastrado. Por favor, faça login com sua conta existente.',
+              name: 'UserExists'
+            } as any 
+          };
+        }
+        
+        return { error };
+      }
+      
+      // Verificar se o email de confirmação foi enviado
+      if (data?.user && !data.user.email_confirmed_at) {
+        // Sempre enviar email de confirmação manualmente após o cadastro
+        // para garantir que chegue ao usuário
+        const { error: resendError } = await supabase.auth.resend({
+          type: 'signup',
+          email,
+          options: {
+            emailRedirectTo: `${window.location.origin}/auth`,
+          }
+        });
+        
+        if (resendError) {
+          console.warn('Erro ao reenviar email de confirmação:', resendError);
+        }
+      }
+      
+      return { error: null };
+    } catch (error: any) {
+      console.error('Erro ao criar conta:', error);
+      
+      // Verificar se é um erro de usuário já existente
+      if (error.message && (
+          error.message.includes('already registered') || 
+          error.message.includes('already exists') ||
+          error.message.includes('já existe') ||
+          error.message.includes('já cadastrado')
+        )) {
+        return { 
+          error: {
+            message: 'Este email já está cadastrado. Por favor, faça login com sua conta existente.',
+            name: 'UserExists'
+          } as any 
+        };
+      }
+      
+      return { error: error as any };
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Valor do contexto a ser fornecido
   const value = {
     session,
@@ -505,7 +601,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     updateProfile,
     verifyEmail,
     isStrongPassword
-  };
+  } as AuthContextType;
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

@@ -1,4 +1,4 @@
-import { getMarketDepth } from './binanceApi';
+import { getMarketDepth, getHistoricalKlines } from './binanceApi';
 import axios from 'axios';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -54,8 +54,15 @@ export async function getOrderBook(symbol: string) {
     const depth = await getMarketDepth(symbol);
     
     // Processar os dados do orderbook
-    const bids = depth.bids.slice(0, 20); // Top 20 ofertas de compra
-    const asks = depth.asks.slice(0, 20); // Top 20 ofertas de venda
+    // Garantir que cada item em bids e asks seja uma tupla [string, string]
+    const bids = depth.bids.slice(0, 20).map(bid => {
+      // Garantir que cada bid tem 2 elementos
+      return [bid[0], bid[1]] as [string, string];
+    });
+    const asks = depth.asks.slice(0, 20).map(ask => {
+      // Garantir que cada ask tem 2 elementos
+      return [ask[0], ask[1]] as [string, string];
+    });
     
     // Calcular totais acumulados para o gráfico
     const chartData = [];

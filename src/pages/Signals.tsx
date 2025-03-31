@@ -16,8 +16,7 @@ import {
   ExternalLink,
   Filter,
   Zap,
-  Sparkles,
-  Circle
+  Sparkles
 } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { TradingSignal, fetchTradingSignals, getLatestPrices } from "@/services";
@@ -30,74 +29,78 @@ import { motion, AnimatePresence } from "framer-motion";
 
 // Estilos para as animações
 const styles = `
-  @keyframes subtlePulse {
-    0%, 100% { opacity: 0.8; transform: scale(1); }
-    50% { opacity: 1; transform: scale(1.01); }
+  @keyframes pulse {
+    0%, 100% { opacity: 0.6; transform: scale(0.98); }
+    50% { opacity: 1; transform: scale(1); }
   }
   
-  @keyframes softGlow {
-    0%, 100% { box-shadow: 0 0 5px rgba(255, 255, 255, 0.03); }
-    50% { box-shadow: 0 0 12px rgba(255, 255, 255, 0.08); }
+  @keyframes glowPulse {
+    0%, 100% { box-shadow: 0 0 8px rgba(255, 255, 255, 0.05); }
+    50% { box-shadow: 0 0 18px rgba(255, 255, 255, 0.12); }
   }
   
-  @keyframes gentleGradient {
+  @keyframes gradientShift {
     0% { background-position: 0% 50%; }
     50% { background-position: 100% 50%; }
     100% { background-position: 0% 50%; }
   }
   
-  @keyframes delicateFloat {
+  @keyframes rotateGlow {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
+  
+  @keyframes slowFloat {
     0%, 100% { transform: translateY(0); }
-    50% { transform: translateY(-3px); }
+    50% { transform: translateY(-5px); }
   }
   
   @keyframes subtleBreathing {
-    0%, 100% { opacity: 0.9; }
+    0%, 100% { opacity: 0.85; }
     50% { opacity: 1; }
   }
   
   .gradient-text {
-    background: linear-gradient(90deg, #f8f8f8, #ececec, #f8f8f8);
+    background: linear-gradient(90deg, #f0f0f0, #d5d5d5, #f0f0f0);
     background-size: 200% auto;
     color: transparent;
     background-clip: text;
     -webkit-background-clip: text;
-    animation: gentleGradient 4s ease infinite;
+    animation: gradientShift 3s ease infinite;
   }
 
-  .elegant-badge {
+  .signal-badge {
     position: relative;
     overflow: hidden;
-    transition: all 0.3s ease;
   }
   
-  .elegant-badge::after {
+  .signal-badge::after {
     content: '';
     position: absolute;
     top: 0;
     left: 0;
     width: 100%;
     height: 100%;
-    background: linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.04) 50%, rgba(255,255,255,0) 100%);
+    background: linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.06) 50%, rgba(255,255,255,0) 100%);
     transform: translateX(-100%);
-    animation: elegantShine 4s infinite ease-in-out;
+    animation: shine 3s infinite;
   }
   
-  @keyframes elegantShine {
+  @keyframes shine {
     100% {
       transform: translateX(100%);
     }
   }
   
-  .minimal-hover {
-    transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
-    backdrop-filter: blur(6px);
+  .glow-hover {
+    transition: all 0.5s ease;
+    backdrop-filter: blur(8px);
   }
   
-  .minimal-hover:hover {
-    box-shadow: 0 0 15px rgba(255, 255, 255, 0.05);
-    transform: translateY(-2px);
-    backdrop-filter: blur(8px);
+  .glow-hover:hover {
+    box-shadow: 0 0 20px rgba(255, 255, 255, 0.08);
+    transform: translateY(-3px) scale(1.02);
+    backdrop-filter: blur(12px);
   }
   
   .loading-container {
@@ -105,83 +108,73 @@ const styles = `
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    padding: 4rem 2rem;
-    background: rgba(18, 18, 22, 0.3);
+    padding: 5rem 2rem;
+    background: rgba(15, 15, 25, 0.4);
     border-radius: 1rem;
-    backdrop-filter: blur(12px);
-    border: 1px solid rgba(255, 255, 255, 0.05);
-    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
-    animation: softGlow 3s ease-in-out infinite;
+    backdrop-filter: blur(15px);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+    animation: glowPulse 3s ease-in-out infinite;
   }
   
   .light-accent {
     position: absolute;
-    width: 250px;
-    height: 250px;
+    width: 200px;
+    height: 200px;
     border-radius: 50%;
-    background: radial-gradient(circle, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0) 70%);
-    animation: subtleBreathing 5s infinite ease-in-out;
+    background: radial-gradient(circle, rgba(255,255,255,0.07) 0%, rgba(255,255,255,0) 70%);
+    animation: subtleBreathing 4s infinite ease-in-out;
     z-index: 0;
   }
   
   .color-accent {
     position: absolute;
-    width: 300px;
-    height: 300px;
+    width: 250px;
+    height: 250px;
     border-radius: 50%;
-    filter: blur(90px);
-    opacity: 0.06;
+    filter: blur(70px);
+    opacity: 0.08;
     z-index: 0;
-    animation: subtleBreathing 6s infinite ease-in-out alternate;
+    animation: subtleBreathing 5s infinite ease-in-out alternate;
   }
   
   .floating-element {
-    animation: delicateFloat 5s ease-in-out infinite;
+    animation: slowFloat 5s ease-in-out infinite;
   }
   
-  .card-minimal {
-    background: rgba(20, 20, 25, 0.25);
-    backdrop-filter: blur(12px);
-    border: 1px solid rgba(255, 255, 255, 0.03);
-    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  .card-glass {
+    background: rgba(22, 22, 30, 0.35);
+    backdrop-filter: blur(15px);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    transition: all 0.3s ease;
   }
   
-  .card-minimal:hover {
-    background: rgba(22, 22, 28, 0.3);
-    border-color: rgba(255, 255, 255, 0.06);
+  .card-glass:hover {
+    background: rgba(25, 25, 35, 0.45);
+    border-color: rgba(255, 255, 255, 0.1);
   }
   
-  .elegant-shimmer {
+  .shimmer-effect {
     overflow: hidden;
     position: relative;
   }
   
-  .elegant-shimmer::before {
+  .shimmer-effect::before {
     content: '';
     position: absolute;
     top: 0;
     left: -150%;
     width: 150%;
     height: 100%;
-    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.02), transparent);
-    animation: elegantShimmer 4s infinite ease-out;
-    transform: skewX(-15deg);
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.03), transparent);
+    animation: shimmer 3s infinite;
+    transform: skewX(-20deg);
     z-index: 1;
   }
   
-  @keyframes elegantShimmer {
+  @keyframes shimmer {
     0% { left: -150%; }
     100% { left: 150%; }
-  }
-  
-  .text-shadow-sm {
-    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
-  }
-  
-  .bg-glass {
-    background: rgba(20, 20, 25, 0.2);
-    backdrop-filter: blur(8px);
-    border: 1px solid rgba(255, 255, 255, 0.03);
   }
 `;
 
@@ -192,7 +185,7 @@ const Signals = () => {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [showExpiredSignals, setShowExpiredSignals] = useState(false);
   const [activePage, setActivePage] = useState(1);
-  const [signalsPerPage] = useState(8);
+  const [signalsPerPage] = useState(7);
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [showFilters, setShowFilters] = useState(false);
   const queryClient = useQueryClient();
@@ -485,25 +478,25 @@ const Signals = () => {
   return (
     <Layout>
       <div className="space-y-6 relative">
-        {/* Efeitos sutis de fundo */}
-        <div className="light-accent top-40 left-20 opacity-40"></div>
-        <div className="light-accent bottom-60 right-30 opacity-30"></div>
-        <div className="light-accent top-1/2 left-1/3 opacity-25"></div>
+        {/* Efeitos de luz de fundo */}
+        <div className="light-accent top-20 left-20"></div>
+        <div className="light-accent bottom-40 right-20"></div>
+        <div className="light-accent top-1/2 left-1/2"></div>
         
-        {/* Acentos coloridos suaves */}
-        <div className="color-accent top-10 left-20" style={{ background: 'linear-gradient(135deg, #7c3aed, #6366f1)' }}></div>
-        <div className="color-accent bottom-40 right-20" style={{ background: 'linear-gradient(135deg, #3b82f6, #4f46e5)' }}></div>
-        <div className="color-accent top-60 right-60" style={{ background: 'linear-gradient(135deg, #ec4899, #8b5cf6)' }}></div>
+        {/* Acentos coloridos sutis */}
+        <div className="color-accent top-0 left-10" style={{ background: '#8b5cf6' }}></div>
+        <div className="color-accent bottom-20 right-10" style={{ background: '#3b82f6' }}></div>
+        <div className="color-accent top-40 right-40" style={{ background: '#ec4899' }}></div>
         
-        {/* Cabeçalho minimalista da página */}
-        <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4 z-10 relative mb-8">
+        {/* Cabeçalho da página */}
+        <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4 z-10 relative">
           <div className="floating-element">
-            <h1 className="text-2xl md:text-3xl font-light tracking-wide bg-gradient-to-r from-white/95 via-white to-white/95 bg-clip-text text-transparent flex items-center">
-              <Sparkles className="w-5 h-5 mr-2 text-indigo-200/70" />
+            <h1 className="text-2xl md:text-3xl font-bold tracking-tight bg-gradient-to-r from-indigo-100/90 via-white/90 to-pink-100/90 bg-clip-text text-transparent flex items-center">
+              <Sparkles className="w-6 h-6 mr-2 text-indigo-200/70" />
               Sinais de Trading
             </h1>
-            <p className="text-white/60 mt-1 font-light tracking-wide">
-              Oportunidades de mercado baseadas em análise avançada de dados
+            <p className="text-white/70 mt-1">
+              Oportunidades de mercado baseadas em análise de dados em tempo real
             </p>
           </div>
           
@@ -511,10 +504,10 @@ const Signals = () => {
             <button
               onClick={handleRefresh}
               disabled={isRefreshing}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-[14px] font-light transition-all
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-[14px] font-medium transition-all
                 ${isRefreshing 
                   ? 'bg-white/5 text-white/40 cursor-not-allowed' 
-                  : 'bg-glass hover:bg-white/10 text-white/80 hover:text-white minimal-hover'
+                  : 'bg-white/5 hover:bg-white/10 text-white/80 hover:text-white card-glass'
                 }`}
               title="Atualizar sinais"
             >
@@ -524,10 +517,10 @@ const Signals = () => {
             
             <button
               onClick={() => setShowFilters(!showFilters)}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-[14px] font-light transition-all
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-[14px] font-medium transition-all
                 ${showFilters 
-                  ? 'bg-white/10 text-white border border-white/5' 
-                  : 'bg-glass hover:bg-white/10 text-white/80 hover:text-white minimal-hover'
+                  ? 'bg-white/10 text-white' 
+                  : 'bg-white/5 hover:bg-white/10 text-white/80 hover:text-white card-glass'
                 }`}
             >
               <Filter className="w-4 h-4" />
@@ -537,97 +530,97 @@ const Signals = () => {
           </div>
         </div>
         
-        {/* Área de filtros com animação suave */}
+        {/* Área de filtros */}
         <AnimatePresence>
           {showFilters && (
             <motion.div 
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: 'auto' }}
               exit={{ opacity: 0, height: 0 }}
-              transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
-              className="overflow-hidden z-10 relative mb-6"
+              transition={{ duration: 0.3 }}
+              className="overflow-hidden z-10 relative"
             >
-              <div className="p-5 rounded-xl bg-glass">
+              <div className="p-5 rounded-xl card-glass">
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-5">
-                  {/* Filtro por tipo de sinal */}
+          {/* Filtro por tipo de sinal */}
                   <div className="space-y-2">
-                    <p className="text-sm text-white/70 font-light">Tipo de sinal</p>
+                    <p className="text-sm text-white/70 font-medium">Tipo de sinal</p>
                     <div className="flex flex-wrap gap-2">
-                      <button
-                        onClick={() => setFilterType('ALL')}
-                        className={`px-4 py-2 rounded-lg text-[14px] font-light tracking-wide transition-all ${
-                          filterType === 'ALL' 
-                            ? 'bg-white/10 text-white elegant-shimmer border border-white/5' 
-                            : 'bg-white/5 text-white/70 hover:bg-white/8'
-                        }`}
-                      >
-                        Todos
-                      </button>
-                      <button
-                        onClick={() => setFilterType(SignalType.TECHNICAL)}
-                        className={`px-4 py-2 rounded-lg text-[14px] font-light tracking-wide transition-all ${
-                          filterType === SignalType.TECHNICAL 
-                            ? 'bg-indigo-500/10 text-indigo-200 border border-indigo-500/10 elegant-shimmer' 
-                            : 'bg-white/5 text-white/70 hover:bg-white/8'
-                        }`}
-                      >
+            <button
+              onClick={() => setFilterType('ALL')}
+                        className={`px-4 py-2 rounded-lg text-[14px] font-medium transition-all ${
+                filterType === 'ALL' 
+                            ? 'bg-white/20 text-white shimmer-effect' 
+                            : 'bg-white/10 text-white/70 hover:bg-white/15'
+              }`}
+            >
+              Todos
+            </button>
+            <button
+              onClick={() => setFilterType(SignalType.TECHNICAL)}
+                        className={`px-4 py-2 rounded-lg text-[14px] font-medium transition-all ${
+                filterType === SignalType.TECHNICAL 
+                            ? 'bg-blue-500/20 text-blue-200 border border-blue-500/20 shimmer-effect' 
+                            : 'bg-white/10 text-white/70 hover:bg-white/15'
+              }`}
+            >
                         <BarChart3 className="w-4 h-4 inline mr-1.5 opacity-70" />
-                        Técnicos
-                      </button>
-                      <button
-                        onClick={() => setFilterType(SignalType.FUNDAMENTAL)}
-                        className={`px-4 py-2 rounded-lg text-[14px] font-light tracking-wide transition-all ${
-                          filterType === SignalType.FUNDAMENTAL 
-                            ? 'bg-violet-500/10 text-violet-200 border border-violet-500/10 elegant-shimmer' 
-                            : 'bg-white/5 text-white/70 hover:bg-white/8'
-                        }`}
-                      >
+              Técnicos
+            </button>
+            <button
+              onClick={() => setFilterType(SignalType.FUNDAMENTAL)}
+                        className={`px-4 py-2 rounded-lg text-[14px] font-medium transition-all ${
+                filterType === SignalType.FUNDAMENTAL 
+                            ? 'bg-purple-500/20 text-purple-200 border border-purple-500/20 shimmer-effect' 
+                            : 'bg-white/10 text-white/70 hover:bg-white/15'
+              }`}
+            >
                         <TrendingUp className="w-4 h-4 inline mr-1.5 opacity-70" />
-                        Fundamentalistas
-                      </button>
-                      <button
-                        onClick={() => setFilterType(SignalType.NEWS)}
-                        className={`px-4 py-2 rounded-lg text-[14px] font-light tracking-wide transition-all ${
-                          filterType === SignalType.NEWS 
-                            ? 'bg-amber-500/10 text-amber-200 border border-amber-500/10 elegant-shimmer' 
-                            : 'bg-white/5 text-white/70 hover:bg-white/8'
-                        }`}
-                      >
+              Fundamentalistas
+            </button>
+            <button
+              onClick={() => setFilterType(SignalType.NEWS)}
+                        className={`px-4 py-2 rounded-lg text-[14px] font-medium transition-all ${
+                filterType === SignalType.NEWS 
+                            ? 'bg-amber-500/20 text-amber-200 border border-amber-500/20 shimmer-effect' 
+                            : 'bg-white/10 text-white/70 hover:bg-white/15'
+              }`}
+            >
                         <Clock4 className="w-4 h-4 inline mr-1.5 opacity-70" />
-                        Notícias
-                      </button>
+              Notícias
+            </button>
                     </div>
-                  </div>
+          </div>
 
                   {/* Opções adicionais */}
                   <div className="flex flex-col gap-2">
-                    <p className="text-sm text-white/70 font-light">Opções</p>
+                    <p className="text-sm text-white/70 font-medium">Opções</p>
                     <div className="flex flex-wrap gap-2">
-                      <button
-                        onClick={() => setShowExpiredSignals(!showExpiredSignals)}
-                        className={`flex items-center px-4 py-2 rounded-lg text-[14px] font-light tracking-wide transition-all ${
-                          showExpiredSignals
-                            ? 'bg-gray-500/10 text-gray-300 border border-gray-500/10 elegant-shimmer' 
-                            : 'bg-white/5 text-white/70 hover:bg-white/8'
-                        }`}
-                      >
+            <button
+              onClick={() => setShowExpiredSignals(!showExpiredSignals)}
+                        className={`flex items-center px-4 py-2 rounded-lg text-[14px] font-medium transition-all ${
+                showExpiredSignals
+                            ? 'bg-gray-500/20 text-gray-300 border border-gray-500/20 shimmer-effect' 
+                            : 'bg-white/10 text-white/70 hover:bg-white/15'
+              }`}
+            >
                         <Clock className="w-4 h-4 mr-1.5 opacity-70" />
-                        {showExpiredSignals ? 'Ocultar Expirados' : 'Mostrar Expirados'}
-                      </button>
+              {showExpiredSignals ? 'Ocultar Expirados' : 'Mostrar Expirados'}
+            </button>
                       
                       <button
                         onClick={() => setAutoRefresh(!autoRefresh)}
-                        className={`flex items-center px-4 py-2 rounded-lg text-[14px] font-light tracking-wide transition-all ${
+                        className={`flex items-center px-4 py-2 rounded-lg text-[14px] font-medium transition-all ${
                           autoRefresh 
-                            ? 'bg-teal-500/10 text-teal-200 border border-teal-500/10 elegant-shimmer' 
-                            : 'bg-white/5 text-white/70 hover:bg-white/8'
+                            ? 'bg-teal-500/20 text-teal-200 border border-teal-500/20 shimmer-effect' 
+                            : 'bg-white/10 text-white/70 hover:bg-white/15'
                         }`}
                       >
                         <RefreshCw className="w-4 h-4 mr-1.5 opacity-70" />
                         Auto-atualizar
                       </button>
-                    </div>
-                  </div>
+          </div>
+        </div>
                 </div>
               </div>
             </motion.div>
@@ -643,13 +636,13 @@ const Signals = () => {
             <div className="loading-container">
               <div className="flex items-center justify-center mb-6">
                 <div className="relative">
-                  <div className="w-16 h-16 border border-white/5 border-t-white/20 rounded-full animate-spin"></div>
-                  <div className="w-10 h-10 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 border border-white/5 border-b-white/20 rounded-full animate-spin"></div>
-                </div>
+                  <div className="w-16 h-16 border-2 border-white/10 border-t-gray-300/30 rounded-full animate-spin"></div>
+                  <div className="w-12 h-12 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 border-2 border-white/10 border-b-gray-300/30 rounded-full animate-spin"></div>
               </div>
-              <h3 className="gradient-text font-light text-lg mb-2">Analisando mercado</h3>
-              <p className="text-sm text-white/50 text-center max-w-xs font-light">
-                Processando sinais e identificando oportunidades de trading
+              </div>
+              <h3 className="gradient-text font-medium text-lg mb-2">Analisando mercado</h3>
+              <p className="text-sm text-white/50 text-center max-w-xs">
+                Processando sinais e identificando as melhores oportunidades de trading
               </p>
             </div>
           ) : filteredSignals && filteredSignals.length > 0 ? (
@@ -661,124 +654,124 @@ const Signals = () => {
                 return (
                   <motion.div 
                     key={signal.id || `signal-${index}`}
-                    initial={{ opacity: 0, y: 15 }}
+                    initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.4, delay: index * 0.05, ease: [0.16, 1, 0.3, 1] }}
-                    className={`flex flex-col rounded-xl overflow-hidden transition-all duration-300 minimal-hover
+                    transition={{ duration: 0.3, delay: index * 0.05 }}
+                    className={`flex flex-col rounded-xl overflow-hidden transition-all duration-300 glow-hover
                       ${signal.status === 'active' 
-                        ? 'card-minimal' 
-                        : 'bg-black/20 border border-white/3 opacity-70'
+                        ? 'card-glass' 
+                        : 'bg-black/30 border border-white/5 opacity-75'
                       }
-                      ${isNew ? 'ring-1 ring-indigo-500/20' : ''}
+                      ${isNew ? 'ring-1 ring-indigo-500/30' : ''}
                     `}
                   >
-                    <div className="p-4 bg-black/15 border-b border-white/5 flex justify-between items-center relative overflow-hidden">
-                      <div className="absolute top-0 right-0 w-36 h-36 opacity-15 -mt-20 -mr-20 rounded-full" 
+                    <div className="p-4 bg-black/25 border-b border-white/10 flex justify-between items-center relative overflow-hidden">
+                      <div className="absolute top-0 right-0 w-24 h-24 opacity-25 -mt-12 -mr-12 rounded-full" 
                            style={{ 
                              background: signal.signal === 'BUY' 
-                               ? 'radial-gradient(circle, rgba(52,211,153,0.2) 0%, rgba(52,211,153,0) 70%)' 
-                               : 'radial-gradient(circle, rgba(248,113,113,0.2) 0%, rgba(248,113,113,0) 70%)' 
+                               ? 'radial-gradient(circle, rgba(52,211,153,0.3) 0%, rgba(52,211,153,0) 70%)' 
+                               : 'radial-gradient(circle, rgba(248,113,113,0.3) 0%, rgba(248,113,113,0) 70%)' 
                            }}>
                       </div>
                       <div className="flex items-center z-10">
-                        <div className={`p-2.5 rounded-lg ${
+                        <div className={`p-2 rounded-lg ${
                           signal.signal === 'BUY' 
-                            ? 'bg-gradient-to-br from-emerald-500/10 to-emerald-600/5' 
-                            : 'bg-gradient-to-br from-rose-500/10 to-rose-600/5'
-                          } border ${
-                          signal.signal === 'BUY' 
-                            ? 'border-emerald-500/10' 
-                            : 'border-rose-500/10'
+                            ? 'bg-gradient-to-br from-emerald-500/20 to-emerald-600/10' 
+                            : 'bg-gradient-to-br from-rose-500/20 to-rose-600/10'
                           }`}>
                           {signal.signal === 'BUY' ? (
-                            <ArrowUpRight className="w-4 h-4 text-emerald-300" />
+                            <ArrowUpRight className="w-5 h-5 text-emerald-300" />
                           ) : (
-                            <ArrowDownRight className="w-4 h-4 text-rose-300" />
+                            <ArrowDownRight className="w-5 h-5 text-rose-300" />
                           )}
                         </div>
                         <div className="ml-3">
-                          <h3 className="text-base font-light tracking-wide flex items-center text-white/95">
+                          <h3 className="text-base font-bold flex items-center">
                             {signal.symbol || signal.pair || "Google (OTC)"}
                           </h3>
-                          <p className="text-sm text-white/60 font-light">{signal.exchange || "Blitz"}</p>
+                          <p className="text-sm text-white/70">{signal.exchange || "Blitz"}</p>
                         </div>
                       </div>
                       
-                      <div>
-                        <span className={`elegant-badge inline-block px-3 py-1 rounded-full text-xs font-light tracking-wide ${
+                        <div>
+                        <span className={`signal-badge inline-block px-3 py-1 rounded-full text-sm font-medium ${
                           signal.signal === 'BUY' 
-                            ? 'bg-emerald-500/10 text-emerald-200 border border-emerald-500/10' 
-                            : 'bg-rose-500/10 text-rose-200 border border-rose-500/10'
+                            ? 'bg-emerald-500/20 text-emerald-200 border border-emerald-500/20' 
+                            : 'bg-rose-500/20 text-rose-200 border border-rose-500/20'
                         }`}>
                           {signal.signal === 'BUY' ? 'COMPRA' : 'VENDA'}
                         </span>
                       </div>
                     </div>
                     
-                    <div className="p-4 flex-grow relative backdrop-blur-md bg-black/5">
+                    <div className="p-4 flex-grow relative backdrop-blur-md bg-black/10">
                       {/* Indicadores de status */}
-                      <div className="flex gap-2 mb-4 flex-wrap">
-                        {isNew && (
-                          <span className="text-xs px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-200 border border-indigo-500/10 flex items-center">
+                      <div className="flex gap-2 mb-4">
+                              {isNew && (
+                          <span className="text-xs px-2 py-1 rounded-full bg-indigo-500/20 text-indigo-200 border border-indigo-500/20 flex items-center">
                             <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 mr-1.5 animate-pulse"></span>
-                            NOVO
-                          </span>
-                        )}
-                        {isExpiring && (
-                          <span className="text-xs px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-200 border border-amber-500/10 flex items-center">
+                                  NOVO
+                                </span>
+                              )}
+                              {isExpiring && (
+                          <span className="text-xs px-2 py-1 rounded-full bg-amber-500/20 text-amber-200 border border-amber-500/20 flex items-center">
                             <Clock className="w-3 h-3 mr-1" />
                             EXPIRANDO
-                          </span>
-                        )}
-                        <span className={`text-xs px-2 py-0.5 rounded-full flex items-center text-teal-200 bg-teal-500/10 border border-teal-500/10`}>
+                                </span>
+                              )}
+                        <span className={`text-xs px-2 py-1 rounded-full flex items-center text-teal-200 bg-teal-500/15 border border-teal-500/15`}>
                           <CheckCheck className="w-3 h-3 mr-1" />
                           {getStrengthText(signal.strength)}
-                        </span>
+                            </span>
                       </div>
                       
-                      {/* Dados do sinal com design minimalista */}
+                      {/* Dados do sinal */}
                       <div className="grid grid-cols-2 gap-3 mb-4">
-                        <div className="bg-black/15 backdrop-blur-md rounded-lg p-3 border border-white/5">
-                          <p className="text-[11px] text-white/50 mb-1 font-light uppercase tracking-wider">Entrada</p>
-                          <p className="text-lg font-light tracking-wide text-white/95">{signal.entry_time || "00:27"}</p>
-                        </div>
+                        <div className="bg-black/20 backdrop-blur-md rounded-lg p-3 border border-white/10">
+                          <p className="text-xs text-white/60 mb-1">Entrada</p>
+                          <p className="text-lg font-semibold">{signal.entry_time || "00:27"}</p>
+                    </div>
                     
-                        <div className="bg-black/15 backdrop-blur-md rounded-lg p-3 border border-white/5">
-                          <p className="text-[11px] text-white/50 mb-1 font-light uppercase tracking-wider">Expiração</p>
-                          <p className="text-lg font-light tracking-wide text-white/95">
+                        <div className="bg-black/20 backdrop-blur-md rounded-lg p-3 border border-white/10">
+                          <p className="text-xs text-white/60 mb-1">Expiração</p>
+                          <p className="text-lg font-semibold">
                             {signal.timeframe || "30s"}
-                            <span className="text-sm ml-2 text-white/50">
+                            <span className="text-sm ml-2 text-white/60">
                               ({signal.expiry_time_str || "00:28"})
                             </span>
                           </p>
                         </div>
-                      </div>
+                        </div>
                         
-                      <div className="grid grid-cols-2 gap-3 mt-4">
-                        <div className="bg-black/15 backdrop-blur-md rounded-lg p-3 border border-white/5">
-                          <p className="text-[11px] text-white/50 mb-1 font-light uppercase tracking-wider">Reentrada 1</p>
-                          <p className="text-base font-light tracking-wide text-white/90">{signal.gale1_time || "00:29"}</p>
+                      <div className="grid grid-cols-1 gap-3 mt-4">
+                        <div className="flex items-center justify-between bg-black/20 backdrop-blur-md rounded-lg p-3 border border-white/10">
+                          <div>
+                            <p className="text-sm font-medium">Reentrada 1</p>
                         </div>
+                          <p className="text-base font-semibold text-white/90">{signal.gale1_time || "00:29"}</p>
+                      </div>
                       
-                        <div className="bg-black/15 backdrop-blur-md rounded-lg p-3 border border-white/5">
-                          <p className="text-[11px] text-white/50 mb-1 font-light uppercase tracking-wider">Reentrada 2</p>
-                          <p className="text-base font-light tracking-wide text-white/90">{signal.gale2_time || "00:30"}</p>
+                        <div className="flex items-center justify-between bg-black/20 backdrop-blur-md rounded-lg p-3 border border-white/10">
+                          <div>
+                            <p className="text-sm font-medium">Reentrada 2</p>
+                        </div>
+                          <p className="text-base font-semibold text-white/90">{signal.gale2_time || "00:30"}</p>
+                        </div>
                         </div>
                       </div>
-                    </div>
                       
-                    {/* Botão de ação minimalista e elegante */}
-                    <div className="p-4 border-t border-white/5 bg-black/15">
+                    {/* Botão de ação */}
+                    <div className="p-4 border-t border-white/10 bg-black/25">
                       <button
-                        className="w-full py-3 px-4 rounded-lg bg-gradient-to-r from-indigo-500/80 to-violet-500/80 hover:from-indigo-500/90 hover:to-violet-500/90 text-white/95 font-light tracking-wide transition-all duration-300 flex items-center justify-center relative overflow-hidden shadow-sm group"
+                        className="w-full py-3 px-4 rounded-lg bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-medium transition-all duration-300 flex items-center justify-center relative overflow-hidden shadow-md group"
                         onClick={() => window.open('https://trade.xxbroker.com/register?aff=751924&aff_model=revenue&afftrack=', '_blank')}
                       >
-                        <span className="absolute inset-0 w-full h-full bg-white opacity-0 group-hover:opacity-5 transition-opacity duration-300"></span>
-                        <span className="relative z-10 flex items-center text-shadow-sm">
+                        <span className="absolute inset-0 w-full h-full bg-white opacity-0 group-hover:opacity-10 transition-opacity duration-300"></span>
+                        <span className="relative z-10 flex items-center">
                           <Zap className="w-4 h-4 mr-2" />
                           Realizar Trade
-                        </span>
-                        <ExternalLink className="w-3.5 h-3.5 ml-2 relative z-10 opacity-70" />
+                          </span>
+                        <ExternalLink className="w-4 h-4 ml-2 relative z-10" />
                       </button>
                     </div>
                   </motion.div>
@@ -786,12 +779,12 @@ const Signals = () => {
               })}
             </div>
           ) : (
-            <div className="flex flex-col items-center justify-center p-10 card-minimal rounded-xl">
+            <div className="flex flex-col items-center justify-center p-10 card-glass rounded-xl">
               <div className="bg-white/5 p-4 rounded-full mb-4">
-                <ListFilter className="w-8 h-8 text-white/30" />
+                <ListFilter className="w-10 h-10 text-white/30" />
               </div>
-              <h3 className="text-xl font-light tracking-wide mb-2 text-white/90">Nenhum sinal encontrado</h3>
-              <p className="text-white/60 text-center max-w-md mb-6 font-light">
+              <h3 className="text-xl font-medium mb-2">Nenhum sinal encontrado</h3>
+              <p className="text-white/60 text-center max-w-md mb-6">
                 {filterType !== 'ALL' 
                   ? `Não encontramos sinais do tipo ${filterType} com os filtros atuais.` 
                   : 'Não encontramos sinais de trading ativos no momento.'}
@@ -801,23 +794,23 @@ const Signals = () => {
                   setFilterType('ALL');
                   setShowExpiredSignals(true);
                 }}
-                className="px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-white/80 hover:text-white transition-all border border-white/5"
+                className="px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white/80 hover:text-white transition-all"
               >
                 Mostrar todos os sinais
               </button>
             </div>
           )}
           
-          {/* Paginação com design minimalista */}
+          {/* Paginação */}
           {totalPages > 1 && (
             <div className="flex justify-center items-center mt-8 gap-2">
               <button 
                 onClick={() => setActivePage(prev => Math.max(1, prev - 1))}
                 disabled={activePage === 1}
-                className="p-2 rounded-lg bg-glass hover:bg-white/10 disabled:opacity-40 disabled:pointer-events-none transition-all border border-white/5"
+                className="p-2 rounded-lg card-glass hover:bg-white/10 disabled:opacity-50 disabled:pointer-events-none transition-all"
                 aria-label="Página anterior"
               >
-                <ChevronRight className="w-4 h-4 rotate-180" />
+                <ChevronRight className="w-5 h-5 rotate-180" />
               </button>
               
               <div className="flex gap-1">
@@ -828,22 +821,22 @@ const Signals = () => {
                       index === totalPages - 1 || 
                       (index >= activePage - 2 && index <= activePage)) {
                     return (
-                      <button 
-                        key={`page-${index + 1}`}
-                        onClick={() => setActivePage(index + 1)}
-                        className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all ${
-                          activePage === index + 1 
-                            ? 'bg-gradient-to-r from-indigo-500/20 to-violet-500/20 text-white/95 font-light border border-white/10 elegant-shimmer' 
-                            : 'bg-glass hover:bg-white/10 text-white/70 border border-white/5'
-                        }`}
-                      >
-                        {index + 1}
-                      </button>
+                <button 
+                  key={`page-${index + 1}`}
+                  onClick={() => setActivePage(index + 1)}
+                        className={`w-9 h-9 rounded-lg flex items-center justify-center transition-all ${
+                    activePage === index + 1 
+                            ? 'bg-gradient-to-r from-indigo-500/20 to-purple-500/20 text-white font-medium border border-white/10 shimmer-effect' 
+                            : 'card-glass hover:bg-white/10 text-white/70'
+                  }`}
+                >
+                  {index + 1}
+                </button>
                     );
                   } else if (index === 1 && activePage > 3) {
-                    return <span key="ellipsis-start" className="px-1 self-end text-white/40 font-light">...</span>;
+                    return <span key="ellipsis-start" className="px-1 self-end text-white/50">...</span>;
                   } else if (index === totalPages - 2 && activePage < totalPages - 2) {
-                    return <span key="ellipsis-end" className="px-1 self-end text-white/40 font-light">...</span>;
+                    return <span key="ellipsis-end" className="px-1 self-end text-white/50">...</span>;
                   }
                   return null;
                 })}
@@ -852,10 +845,10 @@ const Signals = () => {
               <button 
                 onClick={() => setActivePage(prev => Math.min(totalPages, prev + 1))}
                 disabled={activePage === totalPages}
-                className="p-2 rounded-lg bg-glass hover:bg-white/10 disabled:opacity-40 disabled:pointer-events-none transition-all border border-white/5"
+                className="p-2 rounded-lg card-glass hover:bg-white/10 disabled:opacity-50 disabled:pointer-events-none transition-all"
                 aria-label="Próxima página"
               >
-                <ChevronRight className="w-4 h-4" />
+                <ChevronRight className="w-5 h-5" />
               </button>
             </div>
           )}

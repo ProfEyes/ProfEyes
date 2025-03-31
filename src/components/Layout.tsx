@@ -4,15 +4,12 @@ import { Button } from "@/components/ui/button";
 import { 
   Menu, 
   LayoutDashboard, 
-  LineChart, 
   Newspaper, 
-  PieChart, 
   Settings, 
   Signal,
   Bell,
   Check,
-  Divide,
-  TrendingUp
+  HelpCircle
 } from "lucide-react";
 import { useNavigate } from 'react-router-dom';
 import { Logo } from "@/components/ui/logo";
@@ -67,7 +64,9 @@ export default function Layout({ children }: LayoutProps) {
       <div className="min-h-screen flex w-full bg-background">
         <Sidebar className="border-r border-white/5">
           <SidebarHeader className="flex items-center justify-between p-4">
-            <Logo />
+            <div className="flex items-center gap-2">
+              <Logo />
+            </div>
             <Avatar className="h-8 w-8 ring-1 ring-white/10 hover:ring-white/20 transition-all">
               <AvatarImage src={avatarUrl || "/placeholder.svg"} alt={userName} />
               <AvatarFallback className="bg-black/20 text-white/80">{userName?.charAt(0) || "U"}</AvatarFallback>
@@ -111,21 +110,6 @@ export default function Layout({ children }: LayoutProps) {
                 className={cn(
                   "w-full justify-start gap-3 py-3 text-sm font-medium transition-all",
                   "hover:bg-white/5 text-white/80 hover:text-white",
-                  isActive('/analysis') 
-                    ? "bg-white/5 text-white border-l-2 border-white/60 pl-3" 
-                    : "pl-4"
-                )} 
-                onClick={() => navigate('/analysis')}
-              >
-                <LineChart className="h-4 w-4 opacity-70" />
-                Análises
-              </Button>
-               
-              <Button 
-                variant="ghost" 
-                className={cn(
-                  "w-full justify-start gap-3 py-3 text-sm font-medium transition-all",
-                  "hover:bg-white/5 text-white/80 hover:text-white",
                   isActive('/news') 
                     ? "bg-white/5 text-white border-l-2 border-white/60 pl-3" 
                     : "pl-4"
@@ -135,35 +119,20 @@ export default function Layout({ children }: LayoutProps) {
                 <Newspaper className="h-4 w-4 opacity-70" />
                 Notícias
               </Button>
-               
-              <Button 
-                variant="ghost" 
-                className={cn(
-                  "w-full justify-start gap-3 py-3 text-sm font-medium transition-all",
-                  "hover:bg-white/5 text-white/80 hover:text-white",
-                  isActive('/portfolio') 
-                    ? "bg-white/5 text-white border-l-2 border-white/60 pl-3" 
-                    : "pl-4"
-                )} 
-                onClick={() => navigate('/portfolio')}
-              >
-                <PieChart className="h-4 w-4 opacity-70" />
-                Portfólio
-              </Button>
               
               <Button 
                 variant="ghost" 
                 className={cn(
                   "w-full justify-start gap-3 py-3 text-sm font-medium transition-all",
                   "hover:bg-white/5 text-white/80 hover:text-white",
-                  isActive('/stocks') 
+                  isActive('/instructions') 
                     ? "bg-white/5 text-white border-l-2 border-white/60 pl-3" 
                     : "pl-4"
                 )} 
-                onClick={() => navigate('/stocks')}
+                onClick={() => navigate('/instructions')}
               >
-                <TrendingUp className="h-4 w-4 opacity-70" />
-                Ações
+                <HelpCircle className="h-4 w-4 opacity-70" />
+                Instruções
               </Button>
             </nav>
             
@@ -191,8 +160,12 @@ export default function Layout({ children }: LayoutProps) {
                   <Bell className="h-4 w-4 opacity-70 group-hover:opacity-0 transition-opacity" />
                   <motion.div 
                     className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity"
-                    animate={{ rotate: [0, -10, 10, -5, 5, 0] }}
-                    transition={{ duration: 0.5, repeat: unreadCount > 0 ? Infinity : 0, repeatDelay: 4 }}
+                    animate={isActive('/notifications') || false ? { rotate: [0, -10, 10, -5, 5, 0] } : { rotate: 0 }}
+                    transition={{ 
+                      duration: 0.5, 
+                      repeat: (isActive('/notifications') && unreadCount > 0) ? Infinity : 0, 
+                      repeatDelay: 4 
+                    }}
                   >
                     <Bell className="h-4 w-4 text-white" />
                   </motion.div>
@@ -248,24 +221,26 @@ export default function Layout({ children }: LayoutProps) {
               <div className="rounded-lg bg-black/20 p-3">
                 <p className="text-xs text-white/60 mb-2">Status do sistema</p>
                 <div className="flex items-center gap-2">
-                  <div className="h-1.5 w-1.5 rounded-full bg-emerald-500/80"></div>
-                  <span className="text-xs font-medium text-white/80">Online</span>
+                  <div className="h-2 w-2 rounded-full bg-emerald-500/80 animate-pulse"></div>
+                  <span className="text-xs text-white/80">Online</span>
                 </div>
               </div>
             </div>
           </SidebarContent>
         </Sidebar>
-        <main className="flex-1 overflow-auto">
-          <div className="sticky top-0 z-10 bg-background/80 backdrop-blur-sm border-b border-white/5">
-            <header className="h-14 flex items-center px-6">
-              <SidebarTrigger>
-                <Button variant="ghost" size="icon" className="hover:bg-white/5">
-                  <Menu className="h-5 w-5 text-white/80" />
-                </Button>
-              </SidebarTrigger>
-            </header>
+        
+        <main className="flex-1 p-4 md:p-6 overflow-y-auto">
+          <div className="md:hidden flex items-center mb-4">
+            <SidebarTrigger className="h-9 w-9 border-white/10 bg-black/20" />
+            <span className="ml-3 text-sm font-medium">{location.pathname === '/' ? 'Dashboard' : location.pathname.substring(1).charAt(0).toUpperCase() + location.pathname.substring(2)}</span>
           </div>
-          <div className="p-6">{children}</div>
+          
+          {/* Botão flutuante para ocultar/mostrar a barra lateral */}
+          <div className="fixed top-6 right-6 z-50 hidden md:block">
+            <SidebarTrigger className="h-10 w-10 border border-white/10 bg-black/70 shadow-lg hover:bg-black/90 transition-all duration-200 rounded-full" />
+          </div>
+          
+          {children}
         </main>
       </div>
     </SidebarProvider>

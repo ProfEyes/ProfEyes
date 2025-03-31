@@ -1,5 +1,5 @@
 import { API_KEYS } from './apiKeys';
-import { MarketNews } from './types';
+import { MarketNews } from './signals/types';
 
 // Interface para artigos de notícias
 export interface NewsArticle {
@@ -16,7 +16,23 @@ export interface NewsArticle {
   sentiment?: number;
 }
 
-// Função para buscar notícias financeiras
+// Array de URLs de imagens para uso nas notícias simuladas
+const STOCK_IMAGES = [
+  "https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?w=600&auto=format&fit=crop&q=80",
+  "https://images.unsplash.com/photo-1535320903710-d993d3d77d29?w=600&auto=format&fit=crop&q=80",
+  "https://images.unsplash.com/photo-1560221328-12fe60f83ab8?w=600&auto=format&fit=crop&q=80",
+  "https://images.unsplash.com/photo-1559526324-593bc073d938?w=600&auto=format&fit=crop&q=80",
+  "https://images.unsplash.com/photo-1569025690938-a00729c9e1f9?w=600&auto=format&fit=crop&q=80",
+  "https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=600&auto=format&fit=crop&q=80",
+  "https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=600&auto=format&fit=crop&q=80"
+];
+
+// Função para obter uma imagem aleatória
+function getRandomImage(): string {
+  return STOCK_IMAGES[Math.floor(Math.random() * STOCK_IMAGES.length)];
+}
+
+// Função para buscar notícias financeiras - versão simulada
 export async function fetchFinancialNews(
   query: string = 'finance OR investing OR stock market OR economy',
   from: string = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
@@ -24,106 +40,98 @@ export async function fetchFinancialNews(
   language: string = 'pt',
   pageSize: number = 20
 ): Promise<NewsArticle[]> {
-  try {
-    const encodedQuery = encodeURIComponent(query);
-    const encodedFrom = encodeURIComponent(from);
-    const encodedTo = encodeURIComponent(to);
+  console.log('Gerando notícias financeiras simuladas');
+  
+  const simulatedTitles = [
+    "Análise de mercado: perspectivas para investidores",
+    "Tendências de investimento para o próximo trimestre",
+    "Principais movimentos do mercado financeiro global",
+    "Análise setorial: tecnologia e finanças em destaque",
+    "Oportunidades de investimento em mercados emergentes",
+    "Relatório econômico: indicadores apontam estabilidade",
+    "Análise de risco para investidores no cenário atual"
+  ];
+  
+  const simulatedArticles: NewsArticle[] = [];
+  
+  for (let i = 0; i < Math.min(pageSize, 15); i++) {
+    const randomTitleIndex = Math.floor(Math.random() * simulatedTitles.length);
+    const title = simulatedTitles[randomTitleIndex];
+    const daysAgo = Math.floor(Math.random() * 7);
+    const hoursAgo = Math.floor(Math.random() * 24);
     
-    const url = `https://newsapi.org/v2/everything?q=${encodedQuery}&from=${encodedFrom}&to=${encodedTo}&language=${language}&pageSize=${pageSize}&sortBy=publishedAt&apiKey=${API_KEYS.NEWS_API.API_KEY}`;
-    
-    const response = await fetch(url);
-    
-    if (!response.ok) {
-      throw new Error(`NewsAPI Error: ${response.status} ${response.statusText}`);
-    }
-    
-    const data = await response.json();
-    
-    if (data.status === 'error') {
-      throw new Error(`NewsAPI Error: ${data.code} - ${data.message}`);
-    }
-    
-    const articles = await Promise.all(data.articles.map(async (article: any, index: number) => {
-      const sentiment = await analyzeSentiment(article.title + ' ' + (article.description || ''));
-      const relatedSymbols = extractSymbolsFromText(article.title + ' ' + (article.description || ''));
-      
-      return {
-        id: `news-${Date.now()}-${index}`,
-        title: article.title || 'Sem título',
-        description: article.description || '',
-        content: article.content || article.description || '',
-        url: article.url || '',
-        imageUrl: article.urlToImage || '',
-        source: article.source?.name || 'Desconhecido',
-        publishedAt: article.publishedAt || new Date().toISOString(),
-        author: article.author || '',
-        relatedSymbols,
-        sentiment
-      };
-    }));
-    
-    return articles;
-  } catch (error) {
-    console.error('Erro ao buscar notícias financeiras:', error);
-    return [];
+    simulatedArticles.push({
+      id: `financial-news-${Date.now()}-${i}`,
+      title: title,
+      description: `Descrição simulada para o artigo: ${title}`,
+      content: `Conteúdo completo simulado para o artigo "${title}" com informações relevantes sobre o mercado financeiro global.`,
+      url: "#",
+      imageUrl: getRandomImage(),
+      source: ["Bloomberg", "Financial Times", "Reuters", "ProfEyes Analytics", "Wall Street Journal"][Math.floor(Math.random() * 5)],
+      publishedAt: new Date(Date.now() - (daysAgo * 24 * 60 * 60 * 1000) - (hoursAgo * 60 * 60 * 1000)).toISOString(),
+      author: ["João Silva", "Maria Santos", "Carlos Oliveira", "Ana Ferreira", "Pedro Costa"][Math.floor(Math.random() * 5)],
+      relatedSymbols: [["BTC", "ETH"], ["AAPL", "MSFT"], ["GOOGL", "AMZN"], ["TSLA", "NVDA"]][Math.floor(Math.random() * 4)],
+      sentiment: (Math.random() * 2 - 1) * 0.8 // Valor entre -0.8 e 0.8
+    });
   }
+  
+  return simulatedArticles;
 }
 
-// Função para buscar notícias específicas de uma empresa/símbolo (versão antiga)
-// Renomeada para não conflitar com a versão mais nova
+// Função para buscar notícias específicas de uma empresa/símbolo - versão simulada
 export async function fetchCompanyNews(
   symbol: string,
   pageSize: number = 10
 ): Promise<NewsArticle[]> {
   try {
-    // Verificar se o símbolo é válido e não é um objeto
+    console.log(`Gerando notícias simuladas para o símbolo: ${symbol}`);
+    
+    // Verificar se o símbolo é válido
     if (!symbol || typeof symbol !== 'string' || symbol === '[object Object]') {
       console.warn(`Símbolo inválido fornecido para fetchCompanyNews: ${symbol}`);
       return getFallbackNews(symbol);
     }
 
-    // Criar uma consulta relevante para o símbolo
-    const query = encodeURIComponent(`${symbol} stock OR ${symbol} market OR ${symbol} investing OR ${symbol} finance`);
-    const from = encodeURIComponent(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString());
-    const to = encodeURIComponent(new Date().toISOString());
+    // Sempre usar dados simulados, nunca fazendo chamadas à API
+    // Usar títulos específicos para cada símbolo
+    const newsCount = Math.min(pageSize, 5);
+    const articles: NewsArticle[] = [];
     
-    const url = `https://newsapi.org/v2/everything?q=${query}&from=${from}&to=${to}&pageSize=${pageSize}&sortBy=publishedAt&apiKey=${API_KEYS.NEWS_API.API_KEY}`;
-    
-    try {
-      const response = await fetch(url);
+    for (let i = 0; i < newsCount; i++) {
+      const daysAgo = Math.floor(Math.random() * 14); // Notícias de até 14 dias atrás
+      const hoursAgo = Math.floor(Math.random() * 24);
       
-      if (!response.ok) {
-        throw new Error(`NewsAPI Error: ${response.status} ${response.statusText}`);
-      }
-      
-      const data = await response.json();
-      
-      if (data.status === 'error') {
-        throw new Error(`NewsAPI Error: ${data.code} - ${data.message}`);
-      }
-      
-      return data.articles.map((article: any, index: number) => ({
-        id: `news-${Date.now()}-${index}`,
-        title: article.title || 'Sem título',
-        description: article.description || '',
-        content: article.content || article.description || '',
-        url: article.url || '',
-        imageUrl: article.urlToImage || '',
-        source: article.source?.name || 'Desconhecido',
-        publishedAt: article.publishedAt || new Date().toISOString(),
-        author: article.author || '',
-        relatedSymbols: [symbol, ...extractStockSymbols(article.title + ' ' + (article.description || ''))],
-        sentiment: 0 // Placeholder para análise de sentimento
-      }));
-    } catch (error) {
-      console.error(`Erro ao buscar notícias para ${symbol}:`, error);
-      // Retornar dados de fallback em caso de erro
-      return getFallbackNews(symbol);
+      articles.push({
+        id: `company-news-${symbol}-${Date.now()}-${i}`,
+        title: getCompanyNewsTitles(symbol)[i % 5],
+        description: `Análise detalhada sobre ${symbol} com foco em tendências recentes e projeções futuras.`,
+        content: `Conteúdo completo da análise detalhada sobre ${symbol}, incluindo dados técnicos, fundamentos e perspectivas de mercado.`,
+        url: "#",
+        imageUrl: getRandomImage(),
+        source: ["Market Analysis", "ProfEyes Research", "Financial Insights", "Investment Journal", "Market Trends"][Math.floor(Math.random() * 5)],
+        publishedAt: new Date(Date.now() - (daysAgo * 24 * 60 * 60 * 1000) - (hoursAgo * 60 * 60 * 1000)).toISOString(),
+        author: ["Analista Financeiro", "Especialista em Mercado", "Economista Sênior"][Math.floor(Math.random() * 3)],
+        relatedSymbols: [symbol],
+        sentiment: (Math.random() * 2 - 1) * 0.7 // Valor entre -0.7 e 0.7
+      });
     }
+    
+    return articles;
   } catch (error) {
-    console.error(`Erro ao buscar notícias para ${symbol}:`, error);
+    console.error(`Erro ao gerar notícias simuladas para ${symbol}:`, error);
     return getFallbackNews(symbol);
   }
+}
+
+// Função para gerar títulos específicos para cada símbolo
+function getCompanyNewsTitles(symbol: string): string[] {
+  return [
+    `Análise técnica: tendências recentes para ${symbol}`,
+    `Perspectivas de mercado para ${symbol} no próximo trimestre`,
+    `Relatório de analistas sobre o desempenho de ${symbol}`,
+    `${symbol}: avaliação fundamentalista e projeções`,
+    `Oportunidades de investimento com foco em ${symbol}`
+  ];
 }
 
 // Função para gerar notícias de fallback quando a API falha
@@ -171,325 +179,174 @@ function getFallbackNews(symbol: string): NewsArticle[] {
   ];
 }
 
-// Função para buscar manchetes de notícias
+// Função para buscar manchetes de notícias - versão simulada
 export async function fetchNewsHeadlines(
   category: 'business' | 'technology' | 'general' = 'business',
   country: string = 'br',
   pageSize: number = 10
 ): Promise<NewsArticle[]> {
-  try {
-    const response = await fetch(
-      `https://newsapi.org/v2/top-headlines?country=${country}&category=${category}&pageSize=${pageSize}&apiKey=${API_KEYS.NEWS_API.API_KEY}`
-    );
+  console.log(`Gerando manchetes de notícias simuladas para categoria: ${category}`);
+  
+  const headlines: NewsArticle[] = [];
+  const headlineTitles = {
+    business: [
+      "Mercado financeiro reage positivamente a novos indicadores econômicos",
+      "Bolsas globais registram ganhos após decisões de bancos centrais",
+      "Perspectivas econômicas para o próximo trimestre se mantêm estáveis",
+      "Investidores avaliam impacto de novas políticas fiscais",
+      "Setor tecnológico lidera recuperação nos principais índices de mercado"
+    ],
+    technology: [
+      "Avanços em IA promete transformar o setor financeiro",
+      "Novas tecnologias blockchain impulsionam inovação em pagamentos",
+      "Tendências tecnológicas que moldarão o mercado em 2024",
+      "Big Tech amplia investimentos em soluções financeiras",
+      "Segurança cibernética se torna prioridade para instituições financeiras"
+    ],
+    general: [
+      "Panorama econômico global apresenta sinais de estabilização",
+      "Análise de tendências de mercado para os próximos meses",
+      "Relatório aponta oportunidades de investimento em diversos setores",
+      "Especialistas debatem cenários econômicos para o próximo semestre",
+      "Guia completo para navegação no cenário financeiro atual"
+    ]
+  };
+  
+  const titles = headlineTitles[category] || headlineTitles.business;
+  
+  for (let i = 0; i < Math.min(pageSize, titles.length); i++) {
+    const hoursAgo = Math.floor(Math.random() * 24);
     
-    if (!response.ok) {
-      throw new Error(`NewsAPI Error: ${response.status} ${response.statusText}`);
-    }
-    
-    const data = await response.json();
-    
-    if (data.status === 'error') {
-      throw new Error(`NewsAPI Error: ${data.code} - ${data.message}`);
-    }
-    
-    return data.articles.map((article: any, index: number) => ({
-      id: `headline-${Date.now()}-${index}`,
-      title: article.title || 'Sem título',
-      description: article.description || '',
-      content: article.content || article.description || '',
-      url: article.url || '',
-      imageUrl: article.urlToImage || '',
-      source: article.source?.name || 'Desconhecido',
-      publishedAt: article.publishedAt || new Date().toISOString(),
-      author: article.author || '',
-      relatedSymbols: extractStockSymbols(article.title + ' ' + (article.description || '')),
-      sentiment: 0 // Placeholder para análise de sentimento
-    }));
-  } catch (error) {
-    console.error('Erro ao buscar manchetes de notícias:', error);
-    return [];
+    headlines.push({
+      id: `headline-${category}-${Date.now()}-${i}`,
+      title: titles[i],
+      description: `Resumo da notícia: ${titles[i]}. Clique para mais detalhes.`,
+      content: `Conteúdo completo da notícia "${titles[i]}" com análises aprofundadas sobre o tema.`,
+      url: "#",
+      imageUrl: getRandomImage(),
+      source: ["ProfEyes News", "Financial Digest", "Market Insights", "Economic Times", "Finance Today"][Math.floor(Math.random() * 5)],
+      publishedAt: new Date(Date.now() - (hoursAgo * 60 * 60 * 1000)).toISOString(),
+      author: ["João Silva", "Maria Santos", "Carlos Oliveira", "Ana Ferreira", "Pedro Costa"][Math.floor(Math.random() * 5)],
+      relatedSymbols: extractStockSymbols(titles[i]),
+      sentiment: (Math.random() * 2 - 1) * 0.6 // Valor entre -0.6 e 0.6
+    });
   }
+  
+  return headlines;
 }
 
-// Função para extrair símbolos de ações do texto
+// Função para extrair símbolos de ações do texto (versão simulada)
 function extractStockSymbols(text: string): string[] {
   if (!text) return [];
   
-  // Regex para encontrar símbolos de ações comuns
-  const stockPattern = /\b[A-Z]{2,6}\b(?:\.SA)?/g;
-  const matches = text.match(stockPattern) || [];
+  // Símbolos comuns para retornar aleatoriamente
+  const commonSymbols = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'TSLA', 'META', 'NVDA', 'JPM', 'BTC', 'ETH'];
   
-  // Filtrar falsos positivos comuns
-  const commonWords = new Set(['US', 'UK', 'EU', 'CEO', 'CFO', 'IPO', 'GDP', 'FBI', 'CIA', 'NYSE', 'NASDAQ']);
-  return [...new Set(matches)].filter(symbol => !commonWords.has(symbol));
-}
-
-// Função para extrair símbolos de criptomoedas do texto
-function extractCryptoSymbols(text: string): string[] {
-  if (!text) return [];
+  // Número aleatório de símbolos (0 a 3)
+  const symbolCount = Math.floor(Math.random() * 4);
   
-  // Lista de criptomoedas comuns e seus símbolos
-  const commonCryptos = new Map([
-    ['BITCOIN', 'BTC'],
-    ['ETHEREUM', 'ETH'],
-    ['BINANCE', 'BNB'],
-    ['CARDANO', 'ADA'],
-    ['SOLANA', 'SOL'],
-    ['RIPPLE', 'XRP'],
-    ['DOGECOIN', 'DOGE'],
-    ['POLKADOT', 'DOT'],
-    ['POLYGON', 'MATIC']
-  ]);
+  if (symbolCount === 0) return [];
   
-  const symbols = new Set<string>();
+  // Selecionar símbolos aleatórios
+  const selectedSymbols = new Set<string>();
+  for (let i = 0; i < symbolCount; i++) {
+    selectedSymbols.add(commonSymbols[Math.floor(Math.random() * commonSymbols.length)]);
+  }
   
-  // Procurar por símbolos diretos
-  const symbolPattern = /\b(?:BTC|ETH|BNB|ADA|SOL|XRP|DOGE|DOT|MATIC)\b/g;
-  const symbolMatches = text.match(symbolPattern) || [];
-  symbolMatches.forEach(symbol => symbols.add(symbol));
+  return Array.from(selectedSymbols);
+}
+
+// Função para analisar sentimento (simulada)
+export async function analyzeSentiment(text: string): Promise<number> {
+  // Simulação simples de análise de sentimento 
+  // Retorna um valor entre -1 (muito negativo) e 1 (muito positivo)
+  return (Math.random() * 2 - 1);
+}
+
+// Função para extrair símbolos do texto (simulada)
+export function extractSymbolsFromText(text: string): string[] {
+  // Retornar alguns símbolos aleatórios
+  const possibleSymbols = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'TSLA', 'META', 'NVDA', 'BTC', 'ETH'];
+  const symbolCount = Math.floor(Math.random() * 3) + 1; // 1 a 3 símbolos
   
-  // Procurar por nomes de criptomoedas
-  const upperText = text.toUpperCase();
-  commonCryptos.forEach((symbol, name) => {
-    if (upperText.includes(name)) {
-      symbols.add(symbol);
-    }
-  });
+  const selectedSymbols = new Set<string>();
+  for (let i = 0; i < symbolCount; i++) {
+    selectedSymbols.add(possibleSymbols[Math.floor(Math.random() * possibleSymbols.length)]);
+  }
   
-  return Array.from(symbols);
+  return Array.from(selectedSymbols);
 }
 
-// Função para extrair símbolos de qualquer texto
-function extractSymbolsFromText(text: string): string[] {
-  const stockSymbols = extractStockSymbols(text);
-  const cryptoSymbols = extractCryptoSymbols(text);
-  return [...new Set([...stockSymbols, ...cryptoSymbols])];
-}
-
-// Função para extrair símbolos de palavras-chave
-function extractSymbolsFromKeywords(keywords: string[]): string[] {
-  return keywords.reduce((symbols: string[], keyword: string) => {
-    const extractedSymbols = extractSymbolsFromText(keyword);
-    return [...symbols, ...extractedSymbols];
-  }, []);
-}
-
-// Chave da API Finnhub 
-const FINNHUB_API_KEY = 'cv2i8npr01qhefskfc2gcv2i8npr01qhefskfc30';
-
-// Função para buscar manchetes da NewsAPI
-export async function fetchNewsApiHeadlines(query: string, limit: number = 10): Promise<MarketNews[]> {
-  try {
-    const encodedQuery = encodeURIComponent(query);
-    const from = encodeURIComponent(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString());
-    const to = encodeURIComponent(new Date().toISOString());
-    
-    const url = `https://newsapi.org/v2/everything?q=${encodedQuery}&from=${from}&to=${to}&pageSize=${limit}&sortBy=publishedAt&apiKey=${API_KEYS.NEWS_API.API_KEY}`;
-    
-    const response = await fetch(url);
-    
-    if (!response.ok) {
-      throw new Error(`NewsAPI Error: ${response.status} ${response.statusText}`);
-    }
-    
-    const data = await response.json();
-    
-    if (data.status === 'error') {
-      throw new Error(`NewsAPI Error: ${data.code} - ${data.message}`);
-    }
-    
-    const articles = await Promise.all(data.articles.map(async (article: any, index: number) => {
-      const fullText = article.title + ' ' + (article.description || '');
-      const sentiment = await analyzeSentiment(fullText);
-      const relatedSymbols = extractSymbolsFromText(fullText);
-      
-      return {
-        id: `news-${Date.now()}-${index}`,
-        title: article.title || 'Sem título',
-        content: article.content || article.description || '',
-        description: article.description || '',
-        summary: article.description || '',
-        source: article.source?.name || 'Desconhecido',
-        url: article.url || '',
-        imageUrl: article.urlToImage || '',
-        publishedAt: article.publishedAt || new Date().toISOString(),
-        relatedSymbols,
-        sentiment
-      };
-    }));
-    
-    return articles;
-  } catch (error) {
-    console.error('Erro ao buscar manchetes da NewsAPI:', error);
-    return [];
+// Função para extrair símbolos de criptomoedas do texto (simulada)
+export function extractCryptoSymbols(text: string): string[] {
+  const cryptoSymbols = ['BTC', 'ETH', 'BNB', 'ADA', 'SOL', 'XRP', 'DOGE', 'DOT', 'MATIC'];
+  const symbolCount = Math.floor(Math.random() * 2) + 1; // 1 a 2 símbolos
+  
+  const selectedSymbols = new Set<string>();
+  for (let i = 0; i < symbolCount; i++) {
+    selectedSymbols.add(cryptoSymbols[Math.floor(Math.random() * cryptoSymbols.length)]);
   }
+  
+  return Array.from(selectedSymbols);
 }
 
-// Função para buscar notícias do Finnhub
-export async function fetchFinnhubNews(category: string = 'general', limit: number = 10): Promise<MarketNews[]> {
-  try {
-    const url = `https://finnhub.io/api/v1/news?category=${category}&token=${FINNHUB_API_KEY}`;
-    
-    const response = await fetch(url);
-    
-    if (!response.ok) {
-      throw new Error(`Finnhub Error: ${response.status} ${response.statusText}`);
-    }
-    
-    const data = await response.json();
-    
-    return data.slice(0, limit).map((article: any) => ({
-      id: `finnhub-${article.id || Date.now()}`,
-      title: article.headline || 'Sem título',
-      description: article.summary || '',
-      content: article.summary || '',
-      summary: article.summary || '',
-      source: article.source || 'Finnhub',
-      url: article.url || '',
-      imageUrl: article.image || '',
-      publishedAt: article.datetime ? new Date(article.datetime * 1000).toISOString() : new Date().toISOString(),
-      relatedSymbols: article.related ? article.related.split(',') : [],
-      sentiment: 0 // Placeholder para análise de sentimento
-    }));
-  } catch (error) {
-    console.error('Erro ao buscar notícias do Finnhub:', error);
-    return [];
-  }
+// Função simulada para buscar todas as notícias do mercado
+export async function fetchAllMarketNews(limit: number = 10): Promise<NewsArticle[]> {
+  return fetchFinancialNews("market news", undefined, undefined, "en", limit);
 }
 
-// Função para buscar notícias de empresas do Finnhub
-export async function fetchFinnhubCompanyNews(symbol: string, limit: number = 10): Promise<MarketNews[]> {
-  try {
-    // Calcular período de busca (último mês)
-    const currentDate = new Date();
-    const pastDate = new Date();
-    pastDate.setMonth(pastDate.getMonth() - 1);
-    
-    const from = pastDate.toISOString().split('T')[0]; // Formato YYYY-MM-DD
-    const to = currentDate.toISOString().split('T')[0]; // Formato YYYY-MM-DD
-    
-    const url = `https://finnhub.io/api/v1/company-news?symbol=${symbol}&from=${from}&to=${to}&token=${FINNHUB_API_KEY}`;
-    
-    const response = await fetch(url);
-    
-    if (!response.ok) {
-      throw new Error(`Finnhub Error: ${response.status} ${response.statusText}`);
-    }
-    
-    const data = await response.json();
-    
-    return data.slice(0, limit).map((article: any) => ({
-      id: `finnhub-${article.id || Date.now()}`,
-      title: article.headline || 'Sem título',
-      description: article.summary || '',
-      content: article.summary || '',
-      summary: article.summary || '',
-      source: article.source || 'Finnhub',
-      url: article.url || '',
-      imageUrl: article.image || '',
-      publishedAt: article.datetime ? new Date(article.datetime * 1000).toISOString() : new Date().toISOString(),
-      relatedSymbols: [symbol],
-      sentiment: 0 // Placeholder para análise de sentimento
-    }));
-  } catch (error) {
-    console.error(`Erro ao buscar notícias do Finnhub para ${symbol}:`, error);
-    return [];
+// Estrutura para notícias de fallback
+const FALLBACK_NEWS: MarketNews[] = [
+  {
+    id: 'fallback-1',
+    title: 'Bitcoin atinge nova marca histórica após aprovação de ETF',
+    description: 'O preço do Bitcoin subiu significativamente após a SEC aprovar ETFs de Bitcoin à vista nos EUA.',
+    content: 'O Bitcoin atingiu um novo marco histórico esta semana, impulsionado pela decisão da Comissão de Valores Mobiliários dos EUA (SEC) de aprovar os primeiros fundos negociados em bolsa (ETFs) de Bitcoin à vista do país. A aprovação é vista como um passo significativo para a adoção institucional da principal criptomoeda do mundo.',
+    summary: 'Bitcoin em alta com aprovação de ETF nos EUA',
+    source: 'CryptoNews',
+    url: 'https://cryptonews.com',
+    imageUrl: 'https://images.unsplash.com/photo-1518546305927-5a555bb7020d?w=500&q=80',
+    publishedAt: new Date().toISOString(),
+    relatedSymbols: ['BTC', 'BTCUSDT'],
+    sentiment: 0.9,
+    relevance: 0.95
+  },
+  {
+    id: 'fallback-2',
+    title: 'Ethereum finaliza atualização importante para escalabilidade',
+    description: 'A rede Ethereum concluiu com sucesso uma atualização importante visando melhorar a escalabilidade e reduzir taxas de transação.',
+    content: 'A rede Ethereum acaba de concluir com sucesso uma importante atualização de protocolo focada em melhorar a escalabilidade da rede. Esta atualização introduz otimizações significativas que devem reduzir as taxas de transação (gas fees) e aumentar o throughput da rede, permitindo mais transações por segundo.',
+    summary: 'Ethereum conclui atualização para melhorar escalabilidade',
+    source: 'ETHNews',
+    url: 'https://ethnews.com',
+    imageUrl: 'https://images.unsplash.com/photo-1622630998477-20aa696ecb05?w=500&q=80',
+    publishedAt: new Date().toISOString(),
+    relatedSymbols: ['ETH', 'ETHUSDT'],
+    sentiment: 0.8,
+    relevance: 0.9
   }
-}
+];
 
-// Função para buscar todas as notícias do mercado
-export async function fetchAllMarketNews(limit: number = 10): Promise<MarketNews[]> {
-  try {
-    // Buscar tanto da NewsAPI quanto do Finnhub
-    const newsApiResults = await fetchNewsApiHeadlines('finance OR crypto OR market OR stock OR investing', limit / 2);
-    const finnhubResults = await fetchFinnhubNews('general', limit / 2);
-    
-    // Combinar resultados
-    const combinedResults = [...newsApiResults, ...finnhubResults];
-    
-    // Ordenar por data de publicação (mais recentes primeiro)
-    combinedResults.sort((a, b) => {
-      const dateA = new Date(a.publishedAt).getTime();
-      const dateB = new Date(b.publishedAt).getTime();
-      return dateB - dateA;
-    });
-    
-    return combinedResults.slice(0, limit);
-  } catch (error) {
-    console.error('Erro ao buscar todas as notícias do mercado:', error);
-    return [];
+// Cache para reduzir chamadas à API
+const NEWS_CACHE = {
+  data: [] as MarketNews[],
+  lastUpdate: 0,
+  maxAge: 15 * 60 * 1000, // 15 minutos
+  isValid: function() {
+    return this.lastUpdate > 0 && (Date.now() - this.lastUpdate) < this.maxAge;
   }
-}
+};
 
-// Função para buscar notícias relacionadas a um símbolo específico
-export async function fetchSymbolNews(symbol: string, limit: number = 10): Promise<MarketNews[]> {
-  try {
-    // Buscar de ambas as fontes
-    const newsApiResults = await fetchNewsApiHeadlines(`${symbol} stock OR ${symbol} market OR ${symbol} trading OR ${symbol} price`, limit / 2);
-    const finnhubResults = await fetchFinnhubCompanyNews(symbol, limit / 2);
-    
-    // Combinar resultados
-    const combinedResults = [...newsApiResults, ...finnhubResults];
-    
-    // Ordenar por data de publicação (mais recentes primeiro)
-    combinedResults.sort((a, b) => {
-      const dateA = new Date(a.publishedAt).getTime();
-      const dateB = new Date(b.publishedAt).getTime();
-      return dateB - dateA;
-    });
-    
-    return combinedResults.slice(0, limit);
-  } catch (error) {
-    console.error(`Erro ao buscar notícias para ${symbol}:`, error);
-    return [];
+// Função auxiliar para filtrar notícias por símbolo
+function filterNews(news: MarketNews[], symbol?: string, limit: number = 10): MarketNews[] {
+  if (!symbol) {
+    return news.slice(0, limit);
   }
-}
-
-// Função para analisar o sentimento do texto
-export function analyzeSentiment(text: string): number {
-  try {
-    // Lista de palavras positivas e negativas em português e inglês
-    const positiveWords = new Set([
-      // Português
-      'alta', 'subida', 'ganho', 'lucro', 'crescimento', 'positivo', 'otimista',
-      'valorização', 'avanço', 'recuperação', 'sucesso', 'forte', 'robusto',
-      // Inglês
-      'up', 'gain', 'profit', 'growth', 'positive', 'optimistic', 'bullish',
-      'surge', 'rally', 'recovery', 'success', 'strong', 'robust'
-    ]);
-
-    const negativeWords = new Set([
-      // Português
-      'queda', 'baixa', 'perda', 'prejuízo', 'recuo', 'negativo', 'pessimista',
-      'desvalorização', 'retração', 'fraco', 'risco', 'preocupação',
-      // Inglês
-      'down', 'loss', 'decline', 'negative', 'bearish', 'pessimistic', 'weak',
-      'risk', 'concern', 'worry', 'fall', 'drop', 'plunge'
-    ]);
-
-    // Normalizar texto
-    const normalizedText = text.toLowerCase();
-    const words = normalizedText.split(/\s+/);
-
-    let positiveCount = 0;
-    let negativeCount = 0;
-
-    // Contar palavras positivas e negativas
-    words.forEach(word => {
-      if (positiveWords.has(word)) positiveCount++;
-      if (negativeWords.has(word)) negativeCount++;
-    });
-
-    // Calcular pontuação de sentimento (-1 a 1)
-    const totalWords = words.length;
-    const sentimentScore = totalWords > 0 
-      ? (positiveCount - negativeCount) / Math.sqrt(totalWords)
-      : 0;
-
-    // Normalizar para o intervalo -1 a 1
-    return Math.max(-1, Math.min(1, sentimentScore));
-  } catch (error) {
-    console.error('Erro na análise de sentimento:', error);
-    return 0; // Neutro em caso de erro
-  }
+  
+  const filtered = news.filter(item => 
+    item.relatedSymbols && 
+    item.relatedSymbols.includes(symbol)
+  );
+  
+  return filtered.length > 0 ? filtered.slice(0, limit) : news.slice(0, limit);
 } 

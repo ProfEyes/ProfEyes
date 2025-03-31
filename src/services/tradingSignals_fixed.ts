@@ -117,7 +117,7 @@ export async function fetchTradingSignals(): Promise<TradingSignal[]> {
     );
     
     const newsSignalsPromises = marketDataList.map(marketData => 
-      generateNewsSignals(marketData, marketNews)
+      generateNewsSignals(marketData, marketNews as any)
     );
     
     // Aguardar todas as promessas
@@ -209,7 +209,6 @@ async function generateTechnicalSignals(marketData: MarketData): Promise<Trading
         const successRate = 0.65; // Taxa base de sucesso para sinais técnicos fortes
         
         signals.push({
-          id: `tech-${symbol}-${Date.now()}`,
           symbol,
           type: SignalType.TECHNICAL,
           signal: 'BUY',
@@ -241,7 +240,6 @@ async function generateTechnicalSignals(marketData: MarketData): Promise<Trading
         const successRate = 0.65;
         
         signals.push({
-          id: `tech-${symbol}-${Date.now()}`,
           symbol,
           type: SignalType.TECHNICAL,
           signal: 'SELL',
@@ -268,7 +266,6 @@ async function generateTechnicalSignals(marketData: MarketData): Promise<Trading
         const successRate = 0.55;
         
         signals.push({
-          id: `tech-${symbol}-${Date.now()}`,
           symbol,
           type: SignalType.TECHNICAL,
           signal: 'BUY',
@@ -292,7 +289,6 @@ async function generateTechnicalSignals(marketData: MarketData): Promise<Trading
         const successRate = 0.55;
         
         signals.push({
-          id: `tech-${symbol}-${Date.now()}`,
           symbol,
           type: SignalType.TECHNICAL,
           signal: 'SELL',
@@ -360,12 +356,11 @@ async function generateNewsSignals(marketData: MarketData, marketNews: MarketNew
     
     if (assetNews && assetNews.length > 0) {
       // Analisar sentimento das notícias
-      const sentimentScore = await analyzeSentiment(assetNews);
+      const sentimentScore = await analyzeSentiment(assetNews.map(news => news.title + '. ' + news.content).join(' '));
       
       // Gerar sinal baseado no sentimento
       if (Math.abs(sentimentScore) >= 0.5) {
         const signal: TradingSignal = {
-          id: `news-${symbol}-${Date.now()}`,
           symbol,
           type: SignalType.NEWS,
           signal: sentimentScore > 0 ? 'BUY' : 'SELL',
@@ -380,12 +375,12 @@ async function generateNewsSignals(marketData: MarketData, marketNews: MarketNew
           timeframe: '1d',
           expiry: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString(),
           risk_reward: '2.0',
-          status: 'active',
-          metadata: {
-            sentiment_score: sentimentScore,
-            news_count: assetNews.length
-          }
+          status: 'active'
         };
+        
+        // Adicionando informação de contagem de notícias como metadado separado
+        // em vez de incluir no objeto TradingSignal
+        console.log(`Sinal gerado com base em ${assetNews.length} notícias para ${symbol}`);
         
         signals.push(signal);
       }
@@ -430,7 +425,6 @@ async function generateFundamentalSignals(marketData: MarketData): Promise<Tradi
     if (lastVolume > avgVolume * 2) {
       // Volume muito acima da média pode indicar movimento significativo
       signals.push({
-        id: `fund-${symbol}-${Date.now()}`,
         symbol,
         type: SignalType.FUNDAMENTAL,
         signal: closes[closes.length - 1] > closes[closes.length - 2] ? 'BUY' : 'SELL',
@@ -457,7 +451,6 @@ async function generateFundamentalSignals(marketData: MarketData): Promise<Tradi
     const normalVolatility = 0.02; // 2% é considerado normal para cripto
     if (volatility > normalVolatility * 2) {
       signals.push({
-        id: `fund-vol-${symbol}-${Date.now()}`,
         symbol,
         type: SignalType.FUNDAMENTAL,
         signal: 'SELL', // Alta volatilidade geralmente sugere cautela
@@ -525,7 +518,12 @@ export async function replaceCompletedSignal(completedSignal: TradingSignal): Pr
         
       case SignalType.NEWS:
         const marketNews = await fetchAllMarketNews();
-        const newsSignals = await generateNewsSignals(marketData, marketNews);
+        // Convertendo o tipo de MarketNews para o formato esperado
+        const compatibleMarketNews = marketNews.map(news => ({
+          ...news,
+          published_at: news.publishedAt || new Date().toISOString()
+        }));
+        const newsSignals = await generateNewsSignals(marketData, compatibleMarketNews);
         newSignal = newsSignals[0] || null;
         break;
         
@@ -619,11 +617,15 @@ export async function comprehensiveAnalyzeAsset(symbol: string): Promise<any> {
     
     // Buscar e analisar notícias
     const marketNews = await fetchAllMarketNews();
-    const newsSignals = await generateNewsSignals(marketData, marketNews);
+    // Converter o tipo de MarketNews para o tipo esperado pela função generateNewsSignals
+    const compatibleMarketNews = marketNews.map(news => ({
+      ...news,
+      published_at: new Date().toISOString() // Adicionando a propriedade published_at que está faltando
+    }));
+    const newsSignals = await generateNewsSignals(marketData, compatibleMarketNews);
     
     // Análise fundamental para criptomoedas
     const fundamentalSignals = await generateFundamentalSignals(marketData);
-    
     // Calcular tendência para day trade
     const trendAnalysis = determineDayTradeTrend(symbol, currentPrice);
     

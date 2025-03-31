@@ -1,38 +1,77 @@
 import { useNotifications } from "@/contexts/NotificationContext";
-import { Bell, Check } from "lucide-react";
+import { Bell } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { LanguageSelector } from "@/components/ui/language-selector";
+import { useLanguage } from "@/contexts/LanguageContext";
+import { Link } from "@/components/ui/link";
+import { cn } from "@/lib/utils";
 
 const Navbar = () => {
-  const { notifications, unreadCount } = useNotifications();
-  const readCount = notifications.filter(n => n.read).length;
+  const { notifications, unreadCount, toggleNotifications } = useNotifications();
+  const { t } = useLanguage();
   
+  // Obter o pathname atual
+  const pathname = window.location.pathname;
+
   return (
-    <div className="flex items-center gap-2">
-      <Link 
-        to="/notifications" 
-        className="relative p-2 rounded-full hover:bg-white/10 transition-colors"
-        title="Ver todas as notificações"
-      >
-        <Bell className="h-5 w-5 text-white/80" />
-        {unreadCount > 0 && (
-          <span className="absolute top-0 right-0 bg-blue-500 text-white text-[10px] font-medium rounded-full min-w-[16px] h-4 flex items-center justify-center">
-            {unreadCount}
-          </span>
-        )}
-      </Link>
-      
-      {readCount > 0 && (
-        <Link 
-          to="/notifications?filter=read" 
-          className="relative p-2 rounded-full hover:bg-white/10 transition-colors"
-          title="Ver notificações lidas"
-        >
-          <Check className="h-5 w-5 text-white/80" />
-          <span className="absolute top-0 right-0 bg-green-500/80 text-white text-[10px] font-medium rounded-full min-w-[16px] h-4 flex items-center justify-center">
-            {readCount}
-          </span>
-        </Link>
-      )}
-    </div>
+    <header className="sticky top-0 z-40 border-b border-white/[0.08] bg-black/60 backdrop-blur-sm">
+      <div className="container flex h-16 items-center justify-between">
+        <div className="flex gap-6 md:gap-10">
+          <Link href="/" className="flex items-center space-x-2">
+            <img src="/profeyes-shapes-logo.png" width={24} height={24} alt="ProfEyes Logo" />
+            <span className="font-bold sm:inline-block text-white/90">
+              ProfEyes Trading Assistant
+            </span>
+          </Link>
+          <nav className="hidden md:flex gap-6">
+            <Link
+              href="/"
+              className={cn(
+                "flex items-center text-sm font-medium",
+                pathname === "/" ? "text-white/90" : "text-white/60 hover:text-white/90"
+              )}
+            >
+              {t('nav.home')}
+            </Link>
+            <Link
+              href="/dashboard"
+              className={cn(
+                "flex items-center text-sm font-medium",
+                pathname === "/dashboard" ? "text-white/90" : "text-white/60 hover:text-white/90"
+              )}
+            >
+              {t('nav.dashboard')}
+            </Link>
+            <Link
+              href="/instructions"
+              className={cn(
+                "flex items-center text-sm font-medium",
+                pathname === "/instructions" ? "text-white/90" : "text-white/60 hover:text-white/90"
+              )}
+            >
+              {t('nav.instructions')}
+            </Link>
+          </nav>
+        </div>
+        <div className="flex items-center gap-4">
+          <LanguageSelector variant="minimal" />
+          <Button variant="ghost" size="icon" onClick={toggleNotifications}>
+            {unreadCount > 0 && (
+              <Badge variant="destructive" className="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center p-0 text-xs">
+                {unreadCount}
+              </Badge>
+            )}
+            <Bell className="h-5 w-5 text-white/80" />
+          </Button>
+          <Link href="/settings">
+            <Button variant="default" size="sm" className="ml-4">
+              {t('nav.settings')}
+            </Button>
+          </Link>
+        </div>
+      </div>
+    </header>
   );
 };
 

@@ -60,7 +60,7 @@ export async function fetchHistoricalData(
     const function_name = interval === 'daily' ? 'TIME_SERIES_DAILY' : 'TIME_SERIES_INTRADAY';
     
     const response = await fetch(
-      `https://www.alphavantage.co/query?function=${function_name}&symbol=${symbol}&interval=${interval}&apikey=${apiKey}`
+      `https://www.alphavantage.co/query?function=${function_name}&symbol=${symbol}&interval=${interval}&outputsize=compact&apikey=${apiKey}`
     );
     
     if (!response.ok) {
@@ -121,6 +121,31 @@ export async function fetchTechnicalIndicator(
     }));
   } catch (error) {
     console.error('Erro ao buscar indicador técnico:', error);
+    throw error;
+  }
+}
+
+export async function fetchCompanyOverview(symbol: string): Promise<any> {
+  try {
+    const apiKey = await getAlphaVantageApiKey();
+    
+    const response = await fetch(
+      `https://www.alphavantage.co/query?function=OVERVIEW&symbol=${symbol}&apikey=${apiKey}`
+    );
+    
+    if (!response.ok) {
+      throw new Error('Falha ao buscar dados da empresa');
+    }
+    
+    const data = await response.json();
+    
+    if (data['Error Message']) {
+      throw new Error(data['Error Message']);
+    }
+    
+    return data;
+  } catch (error) {
+    console.error('Erro ao buscar dados da empresa:', error);
     throw error;
   }
 } 

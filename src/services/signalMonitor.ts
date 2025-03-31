@@ -84,7 +84,9 @@ export class SignalMonitor {
 
       // Notificar sobre sinais atualizados
       if (this.callbacks.onSignalUpdate && result.updated.length > 0) {
-        this.callbacks.onSignalUpdate(result.updated);
+        // Converter o tipo para corresponder ao esperado pelo callback
+        const updatedSignals = result.updated as unknown as import("../services/types").TradingSignal[];
+        this.callbacks.onSignalUpdate(updatedSignals);
       }
 
       // Notificar sobre sinais que atingiram alvo ou stop
@@ -95,7 +97,9 @@ export class SignalMonitor {
 
         completedSignals.forEach(signal => {
           if (this.callbacks.onSignalComplete) {
-            this.callbacks.onSignalComplete(signal);
+            // Converter o tipo para corresponder ao esperado pelo callback
+            const convertedSignal = signal as unknown as import("../services/types").TradingSignal;
+            this.callbacks.onSignalComplete(convertedSignal);
           }
         });
       }
@@ -104,7 +108,9 @@ export class SignalMonitor {
       if (this.callbacks.onSignalReplaced && result.replaced.length > 0) {
         result.replaced.forEach(signal => {
           if (this.callbacks.onSignalReplaced) {
-            this.callbacks.onSignalReplaced(signal);
+            // Converter o tipo para corresponder ao esperado pelo callback
+            const convertedSignal = signal as unknown as import("../services/types").TradingSignal;
+            this.callbacks.onSignalReplaced(convertedSignal);
           }
         });
       }

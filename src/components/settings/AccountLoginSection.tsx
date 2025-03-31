@@ -155,7 +155,7 @@ export function AccountLoginSection({
           </div>
           
           <Badge 
-            variant={user ? "success" : "destructive"} 
+            variant={user ? "secondary" : "destructive"} 
             className={cn(
               "rounded-full text-[10px] uppercase tracking-wider py-0 px-2 font-light",
               user ? "bg-emerald-500/10 text-emerald-300/70" : "bg-red-500/10 text-red-300/70"

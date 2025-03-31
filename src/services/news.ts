@@ -1,3 +1,5 @@
+import { api } from "@/lib/axios";
+
 export const fetchMarketNews = async () => {
   try {
     const response = await api.get('/news');

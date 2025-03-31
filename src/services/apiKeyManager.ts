@@ -147,7 +147,7 @@ class ApiKeyManager {
       toast({
         title: "Aviso de Limite de API",
         description: message,
-        variant: "warning"
+        variant: "default"
       });
     }
 
@@ -172,7 +172,7 @@ class ApiKeyManager {
 
 export const apiKeyManager = ApiKeyManager.getInstance();
 
-// Função específica para obter a chave da Alpha Vantage
-export async function getAlphaVantageApiKey(): Promise<string> {
-  return apiKeyManager.getApiKey('alphavantage');
-} 
+// Comentar a função que não será mais usada
+// export async function getAlphaVantageApiKey(): Promise<string> {
+//   return apiKeyManager.getApiKey('alphavantage');
+// } 

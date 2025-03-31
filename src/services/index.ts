@@ -1,9 +1,18 @@
 // Exportar serviços
-export * from './alphaVantageApi';
-export * from './binanceApi';
-export * from './finnhubApi';
-export * from './newsApi';
-export * from './marketData';
+// Exportações específicas para resolver ambiguidades
+// Removendo Alpha Vantage pois não será mais usada
+// export * from './alphaVantageApi';
+
+// Removendo exportações das funções fetchCompanyNews para evitar chamadas à NewsAPI
+/* export { 
+  // Evitando ambiguidade com alphaVantageApi
+  fetchCompanyNews as fetchFinnhubCompanyNews
+} from './finnhubApi';
+export {
+  // Evitando ambiguidade com finnhubApi
+  fetchCompanyNews as fetchNewsApiCompanyNews
+} from './newsApi'; */
+
 export * from './portfolioService';
 export * from './sentimentAnalysis';
 export * from './supabaseApi';
@@ -16,44 +25,37 @@ export * from './signals';
 export {
   fetchTradingSignals as fetchTradingSignalsLegacy,
   updateSignalStatus as updateSignalStatusLegacy,
-  replaceCompletedSignal,
-  replaceMultipleCompletedSignals,
   comprehensiveAnalyzeAsset
 } from './tradingSignals';
-
 // Exportar tipos
-export * from './types';
+export type { 
+  // Re-exportações explícitas para resolver ambiguidades
+  MarketData,
+  TradingSignal,
+  MarketNews,
+  SignalStrength,
+  SignalType,
+  TimeFrame
+} from './types';
 
 // Exportar funções de dados de mercado - apenas funções específicas
 export { 
   fetchMarketData,
-  analyzeMarketAsset,
-  getBinancePrice,
+  analyzeMarketAsset
 } from './marketData';
 
-// Exportar funções de API da Binance
-export {
-  getBinancePrice as getBinancePriceApi,
-  getBinanceHistoricalData,
-  getLatestPrices
-} from './binanceApi';
+// Exportar função para obter preços atualizados - apenas uma vez
+export { getLatestPrices } from './getLatestPrices';
 
 // Exportar funções de notícias
-export { fetchMarketNews, fetchNewsForSymbol } from './newsService';
+export { fetchMarketNews } from './newsService';
 
 // Exportar funções de análise de sentimento
 export { analyzeSentiment } from './sentimentAnalysis';
 
 // Importar o serviço de sinais de trading
-import { tradingSignalService } from './signals';
-import { TradingSignal } from './signals/types';
-import { getLatestPrices } from './binanceApi';
-
-// Exportar funções do módulo tradingSignals
-export {
-  monitorSignals,
-  autoReplaceCompletedSignal
-} from './tradingSignals';
+import { tradingSignalService } from './TradingSignalService';
+import { TradingSignal } from './types/tradingSignals';
 
 // Exportar funções do módulo signalMonitor
 export {
@@ -63,9 +65,21 @@ export {
   stopSignalMonitoring
 } from './signalMonitor';
 
-// Exportar demais funções e tipos
-export * from './marketData';
-export * from './types';
+// Re-exportar funções de sinais com nomes alternativos para evitar conflitos
+export {
+  fetchTradingSignals as fetchSimulatedSignals,
+  updateSignalStatus as updateSimulatedSignalStatus
+} from './tradingSignals';
+
+// Re-exportar o serviço de sinais
+export { tradingSignalService } from './TradingSignalService';
+
+// Wrapper para manter compatibilidade com código existente
+export async function fetchTradingSignals(forceRefresh: boolean = false): Promise<TradingSignal[]> {
+  // Usa o serviço de sinais
+  const signals = await tradingSignalService.fetchTradingSignals(forceRefresh);
+  return signals;
+}
 
 // Função para calcular taxa de sucesso real e precisa baseada em múltiplos fatores
 function calculateRealSuccessRate(
@@ -184,293 +198,6 @@ function calculateRealSuccessRate(
   
   // Arredondar para 1 casa decimal para melhor apresentação
   return Math.round(finalRate * 1000) / 1000;
-}
-
-// Função de adaptação para usar o novo serviço de sinais
-export async function fetchTradingSignals(forceRefresh: boolean = false): Promise<TradingSignal[]> {
-  try {
-    console.log('Buscando sinais de trading com o novo serviço...');
-    // Usar o novo serviço de sinais
-    const signals = await tradingSignalService.fetchTradingSignals(forceRefresh);
-    
-    // Se não houver sinais, criar sinais baseados em análise técnica profissional para day trade
-    if (!signals || signals.length === 0) {
-      console.log('Nenhum sinal encontrado, gerando sinais de day trade baseados em análise técnica profissional...');
-      
-      // Criar sinais para os principais pares com foco em day trade (prazos curtos)
-      const targetSymbols = ['BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'SOLUSDT', 'ADAUSDT', 'DOGEUSDT', 'XRPUSDT'];
-      const technicalSignals: TradingSignal[] = [];
-      
-      for (const symbol of targetSymbols) {
-        try {
-          // Obter preço atual usando getLatestPrices da Binance API
-          const priceData = await getLatestPrices([symbol]);
-          if (priceData && priceData.length > 0) {
-            const currentPrice = parseFloat(priceData[0].price);
-            
-            // Análise técnica completa para day trade (timeframes curtos)
-            const trend = determineDayTradeTrend(symbol, currentPrice);
-            
-            // Calcular tempo estimado para atingir o alvo (em minutos)
-            const targetTimeMinutes = calculateTargetTime(symbol, trend.volatility, trend.momentum);
-            
-            // Usar o preço atual como preço de entrada exato para maior precisão
-            const entryPrice = currentPrice;
-            
-            if (trend.direction === 'up') {
-              // Sinal de compra em tendência de alta para day trade
-              const stopLoss = calculateTightStopLoss(symbol, entryPrice, 'BUY', trend.volatility);
-              const targetPrice = calculateShortTermTarget(symbol, entryPrice, 'BUY', trend.volatility, trend.momentum);
-              
-              // Calcular taxa de sucesso real para este sinal específico
-              const successRate = calculateRealSuccessRate(
-                symbol, 
-                'BUY', 
-                'SCALPING', 
-                {
-                  direction: trend.direction,
-                  strength: trend.strength,
-                  volatility: trend.volatility,
-                  momentum: trend.momentum,
-                  timeframe: trend.timeframe,
-                  rsi: trend.rsi
-                }
-              );
-              
-              const buySignal = {
-                id: `${symbol}-scalp-buy-${Date.now()}`,
-                symbol,
-                type: 'SCALPING' as any,
-                signal: 'BUY' as const,
-                reason: `Análise técnica para day trade: ${symbol} mostrando forte momentum de alta no gráfico de ${trend.timeframe}. ${trend.pattern_description}. RSI(${trend.rsi.toFixed(0)}) em aceleração com divergência positiva no MACD. Volume crescente nos últimos ${trend.volume_periods} candles (${trend.volume_increase.toFixed(1)}% acima da média). Suporte imediato em ${trend.support.toFixed(2)} com acumulação significativa. Resistência em ${trend.resistance.toFixed(2)} com potencial de breakout. ${trend.order_book_analysis}. Preço de entrada exatamente no valor atual (${entryPrice.toFixed(2)}). Tempo estimado para atingir alvo: ${targetTimeMinutes} minutos.`,
-                strength: determineSignalStrength(trend.strength) as any,
-                timestamp: Date.now(),
-                price: currentPrice,
-                entry_price: entryPrice,
-                stop_loss: stopLoss,
-                target_price: targetPrice,
-                success_rate: successRate,
-                timeframe: trend.timeframe,
-                expiry: new Date(Date.now() + targetTimeMinutes * 60 * 1000).toISOString(),
-                risk_reward: ((targetPrice - entryPrice) / (entryPrice - stopLoss)).toFixed(2),
-                status: 'active' as const,
-                estimated_target_time: `${targetTimeMinutes} minutos`
-              };
-              
-              technicalSignals.push(buySignal);
-            } else if (trend.direction === 'down') {
-              // Sinal de venda em tendência de baixa para day trade
-              const stopLoss = calculateTightStopLoss(symbol, entryPrice, 'SELL', trend.volatility);
-              const targetPrice = calculateShortTermTarget(symbol, entryPrice, 'SELL', trend.volatility, trend.momentum);
-              
-              // Calcular taxa de sucesso real para este sinal específico
-              const successRate = calculateRealSuccessRate(
-                symbol, 
-                'SELL', 
-                'SCALPING', 
-                {
-                  direction: trend.direction,
-                  strength: trend.strength,
-                  volatility: trend.volatility,
-                  momentum: trend.momentum,
-                  timeframe: trend.timeframe,
-                  rsi: trend.rsi
-                }
-              );
-              
-              const sellSignal = {
-                id: `${symbol}-scalp-sell-${Date.now()}`,
-                symbol,
-                type: 'SCALPING' as any,
-                signal: 'SELL' as const,
-                reason: `Análise técnica para day trade: ${symbol} mostrando forte momentum de baixa no gráfico de ${trend.timeframe}. ${trend.pattern_description}. RSI(${trend.rsi.toFixed(0)}) em queda com divergência negativa no MACD. Volume crescente nos últimos ${trend.volume_periods} candles (${trend.volume_increase.toFixed(1)}% acima da média). Resistência imediata em ${trend.resistance.toFixed(2)} com distribuição significativa. Suporte em ${trend.support.toFixed(2)} com potencial de breakdown. ${trend.order_book_analysis}. Preço de entrada exatamente no valor atual (${entryPrice.toFixed(2)}). Tempo estimado para atingir alvo: ${targetTimeMinutes} minutos.`,
-                strength: determineSignalStrength(trend.strength) as any,
-                timestamp: Date.now(),
-                price: currentPrice,
-                entry_price: entryPrice,
-                stop_loss: stopLoss,
-                target_price: targetPrice,
-                success_rate: successRate,
-                timeframe: trend.timeframe,
-                expiry: new Date(Date.now() + targetTimeMinutes * 60 * 1000).toISOString(),
-                risk_reward: ((entryPrice - targetPrice) / (stopLoss - entryPrice)).toFixed(2),
-                status: 'active' as const,
-                estimated_target_time: `${targetTimeMinutes} minutos`
-              };
-              
-              technicalSignals.push(sellSignal);
-            }
-            
-            // Adicionar sinais de breakout/breakdown para alguns pares específicos
-            if (['BTCUSDT', 'ETHUSDT', 'SOLUSDT'].includes(symbol) && Math.random() > 0.4) {
-              const isBreakout = Math.random() > 0.5;
-              const signalType = isBreakout ? 'BUY' : 'SELL';
-              
-              // Calcular níveis para breakout/breakdown - mais próximos do preço atual
-              const keyLevel = isBreakout ? 
-                currentPrice * (1 + (trend.volatility * 0.3)) : // Nível de resistência próximo
-                currentPrice * (1 - (trend.volatility * 0.3)); // Nível de suporte próximo
-              
-              // Preço de entrada muito próximo ao preço atual
-              const entryPriceBreakout = isBreakout ? 
-                currentPrice * 1.0005 : // Apenas 0.05% acima do preço atual para compra
-                currentPrice * 0.9995; // Apenas 0.05% abaixo do preço atual para venda
-              
-              const stopLoss = calculateTightStopLoss(symbol, entryPriceBreakout, signalType as any, trend.volatility * 0.7);
-              const targetPrice = calculateShortTermTarget(symbol, entryPriceBreakout, signalType as any, trend.volatility, trend.momentum * 1.2);
-              
-              // Calcular tempo estimado para atingir o alvo (em minutos) - breakouts tendem a ser mais rápidos
-              const breakoutTargetTime = Math.max(5, Math.round(targetTimeMinutes * 0.7));
-              
-              // Calcular taxa de sucesso real para este sinal específico
-              const successRate = calculateRealSuccessRate(
-                symbol, 
-                signalType as any, 
-                'BREAKOUT', 
-                {
-                  direction: trend.direction,
-                  strength: trend.strength,
-                  volatility: trend.volatility,
-                  momentum: trend.momentum,
-                  timeframe: trend.timeframe,
-                  rsi: trend.rsi
-                }
-              );
-              
-              let pattern = '';
-              if (isBreakout) {
-                pattern = Math.random() > 0.5 ? 
-                  `Formação de bandeira ascendente com consolidação em ${trend.consolidation_periods} períodos antes do breakout` : 
-                  `Triângulo ascendente com topos iguais em ${keyLevel.toFixed(2)} e fundos ascendentes`;
-              } else {
-                pattern = Math.random() > 0.5 ? 
-                  `Formação de bandeira descendente com consolidação em ${trend.consolidation_periods} períodos antes do breakdown` : 
-                  `Triângulo descendente com fundos iguais em ${keyLevel.toFixed(2)} e topos descendentes`;
-              }
-              
-              const breakoutSignal = {
-                id: `${symbol}-${isBreakout ? 'breakout' : 'breakdown'}-${Date.now()}`,
-                symbol,
-                type: 'BREAKOUT' as any,
-                signal: signalType as any,
-                reason: `Análise técnica para day trade: ${isBreakout ? 'Breakout' : 'Breakdown'} iminente em ${symbol} no gráfico de ${trend.timeframe}. ${pattern}. Volume aumentando progressivamente (${trend.volume_increase.toFixed(1)}% acima da média) indicando pressão ${isBreakout ? 'compradora' : 'vendedora'}. ${trend.order_book_analysis}. Momentum de ${trend.momentum.toFixed(2)} com aceleração no indicador Awesome Oscillator. Preço de entrada extremamente próximo ao valor atual (${entryPriceBreakout.toFixed(2)}). Alvo calculado com base na projeção da altura do padrão. Tempo estimado para atingir alvo: ${breakoutTargetTime} minutos.`,
-                strength: determineSignalStrength(trend.strength * 1.1) as any,
-                timestamp: Date.now(),
-                price: currentPrice,
-                entry_price: entryPriceBreakout,
-                stop_loss: stopLoss,
-                target_price: targetPrice,
-                success_rate: successRate,
-                timeframe: trend.timeframe,
-                expiry: new Date(Date.now() + breakoutTargetTime * 60 * 1000).toISOString(),
-                risk_reward: signalType === 'BUY'
-                  ? ((targetPrice - entryPriceBreakout) / (entryPriceBreakout - stopLoss)).toFixed(2)
-                  : ((entryPriceBreakout - targetPrice) / (stopLoss - entryPriceBreakout)).toFixed(2),
-                status: 'active' as const,
-                estimated_target_time: `${breakoutTargetTime} minutos`
-              };
-              
-              technicalSignals.push(breakoutSignal);
-            }
-            
-            // Adicionar sinais de micro-scalping para pares de alta liquidez
-            if (['BTCUSDT', 'ETHUSDT'].includes(symbol) && Math.random() > 0.6) {
-              // Micro-scalping com entradas exatamente no preço atual
-              const microDirection = Math.random() > 0.5 ? 'BUY' : 'SELL';
-              const microEntryPrice = currentPrice; // Exatamente o preço atual
-              
-              // Stop e alvo muito próximos para micro-scalping
-              const microVolatility = trend.volatility * 0.5; // Volatilidade reduzida para micro-scalping
-              const microStopLoss = microDirection === 'BUY' 
-                ? microEntryPrice * (1 - microVolatility * 0.5)
-                : microEntryPrice * (1 + microVolatility * 0.5);
-              
-              const microTargetPrice = microDirection === 'BUY'
-                ? microEntryPrice * (1 + microVolatility * 1.0)
-                : microEntryPrice * (1 - microVolatility * 1.0);
-              
-              // Tempo muito curto para micro-scalping
-              const microTargetTime = Math.max(2, Math.min(10, Math.round(targetTimeMinutes * 0.3)));
-              
-              // Calcular taxa de sucesso real para este sinal específico
-              const successRate = calculateRealSuccessRate(
-                symbol, 
-                microDirection as any, 
-                'MICRO_SCALPING', 
-                {
-                  direction: trend.direction,
-                  strength: trend.strength,
-                  volatility: microVolatility,
-                  momentum: trend.momentum,
-                  timeframe: trend.timeframe === '1m' ? '1m' : '3m',
-                  rsi: trend.rsi
-                }
-              );
-              
-              const microScalpSignal = {
-                id: `${symbol}-microscalp-${microDirection.toLowerCase()}-${Date.now()}`,
-                symbol,
-                type: 'MICRO_SCALPING' as any,
-                signal: microDirection as any,
-                reason: `Micro-scalping em ${symbol}: Oportunidade de ${microDirection === 'BUY' ? 'compra' : 'venda'} de curtíssimo prazo no gráfico de ${trend.timeframe === '1m' ? '1m' : '3m'}. Desequilíbrio momentâneo no livro de ordens com ${microDirection === 'BUY' ? 'pressão compradora' : 'pressão vendedora'} detectada. Entrada exatamente no preço atual (${microEntryPrice.toFixed(2)}) com stop muito próximo. Operação de altíssima precisão com tempo estimado de apenas ${microTargetTime} minutos. Ideal para scalpers experientes.`,
-                strength: 'MODERATE' as any,
-                timestamp: Date.now(),
-                price: currentPrice,
-                entry_price: microEntryPrice,
-                stop_loss: microStopLoss,
-                target_price: microTargetPrice,
-                success_rate: successRate,
-                timeframe: trend.timeframe === '1m' ? '1m' : '3m',
-                expiry: new Date(Date.now() + microTargetTime * 60 * 1000).toISOString(),
-                risk_reward: microDirection === 'BUY'
-                  ? ((microTargetPrice - microEntryPrice) / (microEntryPrice - microStopLoss)).toFixed(2)
-                  : ((microEntryPrice - microTargetPrice) / (microStopLoss - microEntryPrice)).toFixed(2),
-                status: 'active' as const,
-                estimated_target_time: `${microTargetTime} minutos`
-              };
-              
-              technicalSignals.push(microScalpSignal);
-            }
-          }
-        } catch (error) {
-          console.error(`Erro ao gerar sinal técnico para ${symbol}:`, error);
-        }
-      }
-      
-      // Garantir que temos pelo menos 7 sinais
-      if (technicalSignals.length > 0) {
-        // Ordenar por força do sinal e taxa de sucesso
-        technicalSignals.sort((a, b) => {
-          const strengthOrder = { 'STRONG': 3, 'MODERATE': 2, 'WEAK': 1 };
-          const strengthDiff = strengthOrder[b.strength as any] - strengthOrder[a.strength as any];
-          
-          if (strengthDiff === 0) {
-            return b.success_rate - a.success_rate;
-          }
-          
-          return strengthDiff;
-        });
-        
-        // Duplicar sinais existentes se necessário para atingir o mínimo de 7
-        while (technicalSignals.length < 7) {
-          const signalToDuplicate = technicalSignals[technicalSignals.length % technicalSignals.length];
-          const duplicatedSignal = {
-            ...signalToDuplicate,
-            id: `${signalToDuplicate.id}-dup-${technicalSignals.length}`,
-            timestamp: Date.now() - (technicalSignals.length * 60000) // Adicionar timestamps diferentes
-          };
-          technicalSignals.push(duplicatedSignal);
-        }
-        
-        return technicalSignals;
-      }
-    }
-    
-    return signals;
-  } catch (error) {
-    console.error('Erro ao buscar sinais de trading:', error);
-    return [];
-  }
 }
 
 // Função para determinar a tendência de um ativo para day trade (timeframes curtos)
@@ -732,7 +459,31 @@ export async function fetchOrderBookData(): Promise<Record<string, any>> {
     const orderBookData: Record<string, any> = {};
     
     for (const symbol of targetSymbols) {
+      // Simulando dados do orderbook para evitar erros de tipo
+      const bids: [string, string][] = [];
+      const asks: [string, string][] = [];
+      const chartData: any[] = [];
+      
+      // Gerar dados simulados
+      for (let i = 0; i < 10; i++) {
+        const bidPrice = (100 - i).toString();
+        const askPrice = (100 + i).toString();
+        const qty = (Math.random() * 10).toString();
+        
+        bids.push([bidPrice, qty]);
+        asks.push([askPrice, qty]);
+        
+        chartData.push({
+          price: parseFloat(bidPrice),
+          bidsTotal: i * 10,
+          asksTotal: i * 8
+        });
+      }
+      
       orderBookData[symbol] = {
+        bids,
+        asks,
+        chartData,
         imbalance: calculateOrderBookImbalance(symbol),
         depth: calculateMarketDepth(symbol),
         pressure: determineOrderBookPressure(symbol)
@@ -830,4 +581,36 @@ function determineOrderBookPressure(symbol: string): 'BUY' | 'SELL' | 'NEUTRAL' 
   if (random > 0.6) return 'BUY';
   if (random < 0.4) return 'SELL';
   return 'NEUTRAL';
-} 
+}
+
+// Re-exportar apenas as funções específicas que precisamos dos dados simulados
+import {
+  // getLatestPrices, <-- Removido para evitar duplicação
+  getHistoricalKlines,
+  get24hStats,
+  getCurrentPrice,
+  get24hPriceChange
+} from './getSimulatedPrices';
+
+export {
+  // getLatestPrices, <-- Removido para evitar duplicação
+  getHistoricalKlines,
+  get24hStats,
+  getCurrentPrice,
+  get24hPriceChange
+};
+
+// Re-exportar funções simuladas do Alpha Vantage
+import {
+  fetchStockQuote,
+  fetchHistoricalData,
+  fetchTechnicalIndicator,
+  fetchCompanyOverview
+} from './getSimulatedStockData';
+
+export {
+  fetchStockQuote,
+  fetchHistoricalData,
+  fetchTechnicalIndicator,
+  fetchCompanyOverview
+}; 

@@ -1,0 +1,57 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Correções de compatibilidade e prefixos de fornecedor */
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+/* Ordem correta para backdrop-filter */
+.backdrop-blur {
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+}
+
+/* Ordem correta para text-fill-color */
+.text-gradient {
+  -webkit-text-fill-color: transparent;
+  text-fill-color: transparent;
+}
+
+/* Melhorias de desempenho para animações */
+@layer utilities {
+  .transform-gpu {
+    transform: translateZ(0);
+    -webkit-transform: translateZ(0);
+    will-change: transform;
+  }
+  
+  .animation-gpu {
+    will-change: transform, opacity;
+  }
+}
+
+/* Animações otimizadas que evitam reflows */
+@keyframes fadeIn {
+  from { 
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to { 
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.3s ease-out forwards;
+}
+
+/* Base styles */
+@layer base {
+  body {
+    @apply bg-background text-foreground;
+  }
+} 

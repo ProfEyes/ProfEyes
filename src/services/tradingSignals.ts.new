@@ -1,7 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import { TradingSignal, MarketData, SignalType, SignalStrength, MarketNews } from './types';
 import { getBinancePrice, getBinanceHistoricalData } from "./binanceApi";
-import { fetchStockQuote, fetchHistoricalData, fetchTechnicalIndicator, fetchCompanyOverview } from "./alphaVantageApi";
+import { fetchStockQuote, fetchHistoricalData, fetchTechnicalIndicator, fetchCompanyOverview } from "./getSimulatedStockData";
 import { fetchPriceTarget, fetchAnalystRecommendations } from "./finnhubApi";
 import { 
   fetchAllMarketNews, 

@@ -415,61 +415,82 @@ export default function Auth() {
     }
   };
 
-  // Função para lidar com o login
+  // Função de login
   const handleLogin = async () => {
-    // Limpar qualquer erro anterior
+    // Limpar erros anteriores
     clearError();
     
-    // Validar campos
-    if (!validateFields(true)) {
-      // Mostrar animação de erro
-      animateErrorField();
+    // Validar campos antes de prosseguir
+    if (!email) {
+      setError({ field: 'email', message: 'Por favor, informe seu email.' });
+      emailRef.current?.focus();
+      return;
+    }
+    
+    if (!password) {
+      setError({ field: 'password', message: 'Por favor, informe sua senha.' });
+      passwordRef.current?.focus();
       return;
     }
     
     try {
+      // Definir estado de carregamento imediatamente para feedback visual
       setLoadingAction('login');
-      const { error: authError } = await signInWithEmail(email, password, rememberMe);
       
-      if (authError) {
-        // Definir o campo de erro
-        if (authError.message.includes('Senha incorreta')) {
-          setError({ field: 'password', message: authError.message });
-          passwordRef.current?.focus();
-        } else if (authError.message.includes('Email não encontrado')) {
-          setError({ field: 'email', message: authError.message });
-          emailRef.current?.focus();
-        } else if (authError.message.includes('Email não verificado')) {
-          setError({ field: 'email', message: authError.message });
-          // Mostrar opção de verificar email
+      // Mostrar indicação de progresso
+      const loginToast = toast.loading('Verificando credenciais...');
+      
+      // Simular progresso de verificação local para melhorar experiência
+      setTimeout(() => {
+        if (loadingAction === 'login') {
+          toast.loading('Autenticando...', { id: loginToast });
+        }
+      }, 300);
+      
+      // Realizar login com cache de sessão para acesso rápido
+      const { error } = await signInWithEmail(email, password, rememberMe);
+      
+      if (error) {
+        // Se houver erro, mostrar mensagem apropriada
+        const errorMsg = error.message || 'Erro ao fazer login. Por favor, tente novamente.';
+        
+        if (error.message.includes('Email not confirmed') || error.name === 'EmailNotVerified') {
           setVerifyEmailState(true);
           setVerifyEmailAddress(email);
-        } else {
-          setError({ field: 'email', message: authError.message });
-          emailRef.current?.focus();
+          toast.error('Email não verificado', { 
+            id: loginToast,
+            description: 'Por favor, verifique seu email antes de fazer login.' 
+          });
+          return;
         }
         
-        throw authError;
+        // Determinar qual campo tem erro
+        let fieldWithError = 'email';
+        if (error.message.includes('password') || error.message.includes('senha') || 
+            error.message.includes('credentials') || error.message.includes('credenciais')) {
+          fieldWithError = 'password';
+        }
+        
+        setError({ field: fieldWithError, message: errorMsg });
+        toast.error('Erro de login', { id: loginToast, description: errorMsg });
+        return;
       }
       
-      // Armazena o email do usuário para exibir na animação
+      // Login bem-sucedido
+      toast.success('Login bem-sucedido!', { id: loginToast });
       setLoggedInEmail(email);
-      
-      // Ativa a animação de sucesso
       setLoginSuccess(true);
       
-      // Redireciona para a página inicial após a animação (3 segundos)
+      // Redirecionar para a página inicial após curto delay
       setTimeout(() => {
-        navigate("/");
-      }, 3000);
+        navigate('/');
+      }, 1200); // Delay reduzido para melhorar tempo de resposta
       
-    } catch (error: any) {
+    } catch (error) {
+      toast.error('Erro ao fazer login. Por favor, tente novamente.');
       console.error('Erro ao fazer login:', error);
-      if (!error.message.includes('Email não verificado')) {
-        animateErrorField();
-      }
+    } finally {
       setLoadingAction(null);
-      setPassword("");
     }
   };
   
@@ -488,6 +509,9 @@ export default function Auth() {
     try {
       setLoadingAction('signup');
       
+      // Mostrar indicação de progresso
+      const signupToast = toast.loading('Processando cadastro...');
+      
       // Extrair a data de nascimento do formato DD/MM/YYYY para o formato ISO (YYYY-MM-DD)
       const rawBirthdate = birthdate.replace(/\D/g, '');
       const day = rawBirthdate.substring(0, 2);
@@ -498,20 +522,54 @@ export default function Auth() {
       const { error: authError } = await signUp(email, password, formattedBirthdate);
       
       if (authError) {
-        // Definir o campo de erro
-        if (authError.message.includes('já está cadastrado')) {
-          setError({ field: 'email', message: authError.message });
+        // Verificar especificamente se o erro é de email já cadastrado
+        if (authError.message.includes('já está cadastrado') || 
+            authError.name === 'UserExists' || 
+            authError.message.includes('already registered')) {
+          setError({ 
+            field: 'email', 
+            message: 'Este email já está cadastrado. Por favor, utilize outro email ou faça login.' 
+          });
           emailRef.current?.focus();
-        } else if (authError.message.includes('A senha deve')) {
+          
+          toast.error('Email já cadastrado', { 
+            id: signupToast,
+            description: 'Este email já possui uma conta. Tente fazer login.'
+          });
+          
+          animateErrorField();
+          return;
+        } 
+        // Erro relacionado a senha
+        else if (authError.message.includes('A senha deve') || 
+                authError.name === 'WeakPassword') {
           setError({ field: 'password', message: authError.message });
           passwordRef.current?.focus();
-        } else {
+          
+          toast.error('Senha inválida', {
+            id: signupToast,
+            description: authError.message
+          });
+        } 
+        // Outros erros
+        else {
           setError({ field: 'email', message: authError.message });
           emailRef.current?.focus();
+          
+          toast.error('Erro no cadastro', {
+            id: signupToast,
+            description: authError.message
+          });
         }
         
         throw authError;
       }
+      
+      // Cadastro bem-sucedido
+      toast.success('Cadastro realizado!', {
+        id: signupToast,
+        description: 'Verifique seu email para ativar sua conta.'
+      });
       
       // Armazena o email registrado para exibir na mensagem de sucesso
       setRegisteredEmail(email);
@@ -533,10 +591,6 @@ export default function Auth() {
     } catch (error: any) {
       console.error('Erro ao criar conta:', error);
       animateErrorField();
-      setLoadingAction(null);
-      setPassword("");
-      setConfirmPassword("");
-      setPasswordStrength(null);
     } finally {
       setLoadingAction(null);
     }
@@ -605,7 +659,7 @@ export default function Auth() {
         setShowTerms(open);
       }}
       // Adicionando classe personalizada para o overlay do Dialog
-      className="terms-dialog"
+      // Removendo a propriedade className que não é suportada pelo Dialog
     >
       <style dangerouslySetInnerHTML={{
         __html: `
@@ -961,60 +1015,59 @@ export default function Auth() {
       initial={{ opacity: 0, scale: 0.95 }}
       animate={{ opacity: 1, scale: 1 }}
       exit={{ opacity: 0, scale: 0.95 }}
-      transition={{ duration: 0.5 }}
-      className="flex flex-col items-center justify-center py-8 text-center"
+      transition={{ duration: 0.3 }}
+      className="flex flex-col items-center justify-center py-6 text-center"
     >
       <motion.div
         initial={{ scale: 0 }}
         animate={{ scale: 1 }}
         transition={{ 
           type: "spring", 
-          stiffness: 260, 
-          damping: 20,
-          delay: 0.2 
+          stiffness: 300, 
+          damping: 25,
+          delay: 0.1 
         }}
-        className="mb-6 relative"
+        className="mb-4 relative"
       >
         <div className="absolute inset-0 rounded-full bg-emerald-500/10 blur-md"></div>
         <div className="relative">
-          <CheckCircle2 className="h-20 w-20 text-emerald-400/80" strokeWidth={1.5} />
+          <CheckCircle2 className="h-16 w-16 text-emerald-400/80" strokeWidth={1.5} />
         </div>
       </motion.div>
       
       <motion.h2 
-        className="text-xl font-light text-white/90 mb-3"
-        initial={{ y: 20, opacity: 0 }}
+        className="text-xl font-light text-white/90 mb-2"
+        initial={{ y: 10, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
-        transition={{ delay: 0.4 }}
+        transition={{ delay: 0.2 }}
       >
         Login Bem-sucedido!
       </motion.h2>
       
       <motion.p 
-        className="text-white/50 text-sm mb-6"
-        initial={{ y: 20, opacity: 0 }}
+        className="text-white/50 text-sm mb-3"
+        initial={{ y: 10, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
-        transition={{ delay: 0.5 }}
+        transition={{ delay: 0.3 }}
       >
-        Bem-vindo de volta, <span className="text-white/80 font-medium">{loggedInEmail}</span>. Você será redirecionado em instantes...
+        Redirecionando para o dashboard...
       </motion.p>
       
-      <motion.div
+      <motion.div 
+        className="w-full bg-gray-800/30 h-1.5 rounded-full mt-1 overflow-hidden"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
-        transition={{ delay: 0.7 }}
-        className="w-full"
+        transition={{ delay: 0.3 }}
       >
-        <div className="relative h-1 w-full bg-black/30 rounded-full overflow-hidden">
-          <motion.div 
-            className="absolute inset-0 bg-emerald-400/50"
-            initial={{ width: 0 }}
-            animate={{ 
-              width: `${(passwordsMatch?.isMatch ? 100 : 0)}%` 
-            }}
-            transition={{ duration: 2 }}
-          />
-        </div>
+        <motion.div 
+          className="h-full bg-gradient-to-r from-emerald-500/40 to-emerald-500/80 rounded-full"
+          initial={{ width: "0%" }}
+          animate={{ width: "100%" }}
+          transition={{ 
+            duration: 1, 
+            ease: "easeInOut" 
+          }}
+        />
       </motion.div>
     </motion.div>
   );
@@ -1308,15 +1361,21 @@ export default function Auth() {
             className="text-center mb-8"
           >
             <motion.h1 
-              className="text-3xl font-light tracking-wide text-white/90 mb-2"
+              className="text-2xl bg-gradient-to-r from-white to-white/80 bg-clip-text text-transparent mb-2"
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.3, duration: 0.5 }}
+              style={{
+                fontFamily: 'Mollen, sans-serif',
+                fontWeight: 600,
+                letterSpacing: '-0.02em',
+                textShadow: '0 0 15px rgba(255, 255, 255, 0.2)'
+              }}
             >
-              ProfEyes
+              NP Exclusive Signals
             </motion.h1>
             <motion.p 
-              className="text-white/40 text-sm tracking-wide"
+              className="text-white/40 text-xs tracking-wide"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ delay: 0.4, duration: 0.5 }}

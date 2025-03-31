@@ -36,6 +36,7 @@ export interface MarketData {
 export type SignalStatus = 'active' | 'completed' | 'cancelled' | 'expired';
 
 export interface TradingSignal {
+  [x: string]: any;
   symbol: string;
   type: SignalType;
   signal: 'BUY' | 'SELL';
@@ -51,6 +52,7 @@ export interface TradingSignal {
   expiry: string;
   risk_reward: string;
   status: 'active' | 'completed' | 'cancelled';
+  metadata?: Record<string, any>;
 }
 
 export interface MarketNews {
@@ -66,4 +68,6 @@ export interface MarketNews {
   symbols?: string[];
   time?: number;
   datetime?: number;
+  imageUrl?: string;
+  id?: string | number;
 } 

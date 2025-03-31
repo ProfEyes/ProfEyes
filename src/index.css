@@ -4,26 +4,31 @@
  
 @layer base {
   :root {
-    --background: 240 10% 3.9%;
-    --foreground: 0 0% 98%;
-    --card: 240 10% 3.9%;
-    --card-foreground: 0 0% 98%;
-    --popover: 240 10% 3.9%;
-    --popover-foreground: 0 0% 98%;
-    --primary: 0 0% 98%;
-    --primary-foreground: 240 5.9% 10%;
-    --secondary: 240 3.7% 15.9%;
-    --secondary-foreground: 0 0% 98%;
-    --muted: 240 3.7% 15.9%;
-    --muted-foreground: 240 5% 64.9%;
-    --accent: 240 3.7% 15.9%;
-    --accent-foreground: 0 0% 98%;
+    --background: 0 0% 0%;
+    --foreground: 0 0% 100%;
+    --card: 0 0% 0%;
+    --card-foreground: 0 0% 100%;
+    --popover: 0 0% 0%;
+    --popover-foreground: 0 0% 100%;
+    --primary: 0 0% 100%;
+    --primary-foreground: 0 0% 0%;
+    --secondary: 0 0% 96.1%;
+    --secondary-foreground: 222.2 47.4% 11.2%;
+    --muted: 0 0% 13%;
+    --muted-foreground: 0 0% 65%;
+    --accent: 0 0% 15%;
+    --accent-foreground: 0 0% 100%;
     --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 240 3.7% 15.9%;
-    --input: 240 3.7% 15.9%;
-    --ring: 240 4.9% 83.9%;
-    --radius: 0.75rem;
+    --destructive-foreground: 0 0% 100%;
+    --border: 0 0% 20%;
+    --input: 0 0% 20%;
+    --ring: 0 0% 100%;
+    --radius: 0.5rem;
+    
+    /* Variáveis de animação */
+    --fade-time: 1800ms;
+    --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+    --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
   }
 
   * {
@@ -31,12 +36,41 @@
   }
   
   body {
-    @apply bg-background text-foreground antialiased;
+    @apply bg-black text-foreground antialiased;
     font-feature-settings: "ss01", "ss02", "cv01", "cv02", "cv03";
   }
 
+  html {
+    @apply bg-black;
+  }
+
+  #root {
+    @apply bg-black min-h-screen;
+  }
+
+  /* Estilos para fade-in lento */
+  .app-fade-in {
+    opacity: 0;
+    animation: appFadeIn var(--fade-time) var(--ease-out-expo) forwards;
+  }
+
+  @keyframes appFadeIn {
+    0% {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    100% {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
   .glass {
-    @apply bg-white/5 backdrop-blur-lg border border-white/10;
+    background: rgba(0, 0, 0, 0.3);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-radius: var(--radius);
+    border: 1px solid rgba(255, 255, 255, 0.05);
   }
 
   .card-gradient {
@@ -76,4 +110,420 @@
 
 .animate-pulse-ring {
   animation: pulse-ring 1.5s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+}
+
+/* Animação de fade-in mais demorada para o app */
+@keyframes longFadeIn {
+  0% { 
+    opacity: 0;
+    transform: translateY(10px) scale(0.98);
+  }
+  50% {
+    opacity: 0.5;
+    transform: translateY(5px) scale(0.99);
+  }
+  100% { 
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideInTop {
+  from { transform: translateY(-20px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+@keyframes pulse {
+  0% { opacity: 0.4; }
+  50% { opacity: 0.7; }
+  100% { opacity: 0.4; }
+}
+
+/* Customize scrollbar */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 4px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 10px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+/* Animações para os elementos da aplicação */
+.animate-fade {
+  animation: fadeIn 0.5s ease-out forwards;
+}
+
+.animate-slide-top {
+  animation: slideInTop 0.5s ease-out forwards;
+}
+
+/* Loading animation for signals */
+.simple-loader {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem 0;
+}
+
+.loading-text-container {
+  height: 10px;
+  width: 100px;
+  margin-bottom: 15px;
+  overflow: hidden;
+  position: relative;
+}
+
+.loading-text {
+  height: 100%;
+  width: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
+  animation: pulse 1.5s infinite;
+  border-radius: 4px;
+}
+
+.bars-container {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  height: 30px;
+  gap: 3px;
+}
+
+.bar {
+  width: 3px;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 1px;
+  animation: wave 1s ease-in-out infinite;
+}
+
+.bar:nth-child(1) {
+  height: 15px;
+  animation-delay: 0s;
+}
+
+.bar:nth-child(2) {
+  height: 20px;
+  animation-delay: 0.1s;
+}
+
+.bar:nth-child(3) {
+  height: 25px;
+  animation-delay: 0.2s;
+}
+
+.bar:nth-child(4) {
+  height: 20px;
+  animation-delay: 0.3s;
+}
+
+.bar:nth-child(5) {
+  height: 15px;
+  animation-delay: 0.4s;
+}
+
+@keyframes wave {
+  0% { transform: scaleY(1); background: rgba(255, 255, 255, 0.15); }
+  50% { transform: scaleY(1.5); background: rgba(255, 255, 255, 0.35); }
+  100% { transform: scaleY(1); background: rgba(255, 255, 255, 0.15); }
+}
+
+/* Animações personalizadas para atualização */
+@keyframes pulse-glow {
+  0% {
+    box-shadow: 0 0 10px rgba(255, 255, 255, 0.1);
+  }
+  50% {
+    box-shadow: 0 0 20px rgba(255, 255, 255, 0.2);
+  }
+  100% {
+    box-shadow: 0 0 10px rgba(255, 255, 255, 0.1);
+  }
+}
+
+@keyframes refresh-ripple {
+  0% {
+    box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.15);
+    transform: scale(1);
+  }
+  70% {
+    box-shadow: 0 0 0 20px rgba(255, 255, 255, 0);
+    transform: scale(1.05);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(255, 255, 255, 0);
+    transform: scale(1);
+  }
+}
+
+@keyframes subtle-bounce {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-5px);
+  }
+}
+
+@keyframes smooth-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.refresh-animation {
+  animation: refresh-ripple 1.5s ease-out;
+}
+
+.pulse-glow {
+  animation: pulse-glow 2s infinite;
+}
+
+.subtle-bounce {
+  animation: subtle-bounce 1s ease-in-out;
+}
+
+.smooth-fade-in {
+  animation: smooth-fade-in 0.5s ease-out forwards;
+}
+
+/* Classe para estabilizar a altura de elementos durante a transição */
+.stable-height {
+  height: var(--stable-height);
+  min-height: var(--stable-height);
+  transition: all 0.3s ease-in-out;
+}
+
+/* Classe para o container dos sinais, para evitar deslocamentos durante a transição */
+.signals-container {
+  will-change: opacity;
+  backface-visibility: hidden;
+  transform: translateZ(0);
+  position: relative;
+}
+
+/* Classe para estabilizar os itens de sinal durante a atualização */
+.stable-signal-item {
+  transform: translateZ(0);
+  backface-visibility: hidden;
+  will-change: opacity;
+  position: relative;
+  z-index: 1;
+  transition-property: opacity;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  contain: layout;
+}
+
+/* Classes para estabilizar o cabeçalho de cards */
+.card-header-stable {
+  position: relative;
+  contain: layout;
+  height: 2.25rem; /* 36px - altura consistente */
+  min-height: 2.25rem;
+  max-height: 2.25rem;
+}
+
+.card-title-fixed {
+  position: absolute !important;
+  left: 0.75rem;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 10;
+  width: max-content;
+  transition: none !important;
+  pointer-events: none;
+}
+
+.card-action-fixed {
+  position: absolute !important;
+  right: 0.75rem;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 10;
+  width: max-content;
+  transition: none !important;
+}
+
+/* Animações para o botão de atualização de notícias */
+@keyframes success-glow {
+  0% {
+    box-shadow: 0 0 0 0 rgba(74, 222, 128, 0.1);
+  }
+  70% {
+    box-shadow: 0 0 0 6px rgba(74, 222, 128, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(74, 222, 128, 0);
+  }
+}
+
+@keyframes success-appear {
+  0% {
+    opacity: 0;
+    transform: translateY(4px) scale(0.95);
+  }
+  20% {
+    opacity: 1;
+    transform: translateY(0) scale(1.02);
+  }
+  40% {
+    transform: translateY(0) scale(0.98);
+  }
+  60% {
+    transform: translateY(0) scale(1);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.news-refresh-success {
+  animation: success-glow 1.5s ease-out infinite, success-appear 0.4s ease-out;
+}
+
+/* Estilos complementares para o novo design da aba de sinais */
+@keyframes subtle-pulse {
+  0% { opacity: 0.7; }
+  50% { opacity: 1; }
+  100% { opacity: 0.7; }
+}
+
+@keyframes gentle-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-3px); }
+}
+
+@keyframes soft-glow {
+  0%, 100% { filter: brightness(1); }
+  50% { filter: brightness(1.2); }
+}
+
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Estilos para o card de sinais refinado */
+.signals-card-container {
+  position: relative;
+  overflow: hidden;
+}
+
+.signals-card-container::before {
+  content: "";
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: radial-gradient(circle, rgba(99, 102, 241, 0.05) 0%, rgba(99, 102, 241, 0) 70%);
+  z-index: 0;
+  opacity: 0.3;
+  pointer-events: none;
+  animation: subtle-pulse 8s infinite ease-in-out;
+}
+
+.signal-item-hover {
+  transition: all 0.3s ease-out;
+}
+
+.signal-item-hover:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+}
+
+.signal-accent-line {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  transition: height 0.3s ease-in-out;
+}
+
+.signal-accent-glow {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  filter: blur(8px);
+  opacity: 0.7;
+  transition: all 0.3s ease-in-out;
+}
+
+.compra-accent {
+  background: linear-gradient(to bottom, #10b981, #059669);
+  box-shadow: 0 0 10px rgba(16, 185, 129, 0.5);
+}
+
+.venda-accent {
+  background: linear-gradient(to bottom, #f43f5e, #e11d48);
+  box-shadow: 0 0 10px rgba(244, 63, 94, 0.5);
+}
+
+.signal-card-glassy {
+  background: rgba(15, 23, 42, 0.4);
+  backdrop-filter: blur(10px);
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  transition: all 0.3s ease-out;
+}
+
+.signal-card-glassy:hover {
+  border-color: rgba(255, 255, 255, 0.12);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+}
+
+.signal-time-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 500;
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.8);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.1);
+}
+
+.signal-header-gradient {
+  background: linear-gradient(to right, rgba(15, 23, 42, 0.9), rgba(15, 23, 42, 0.7));
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.subtle-pattern-bg {
+  background-image: url('/subtle-pattern.png');
+  background-repeat: repeat;
+  background-size: 100px;
+  background-blend-mode: overlay;
+  background-opacity: 0.03;
 }

@@ -1,8 +1,8 @@
-import { useQuery } from 'react-query';
-import { format } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
-import { Newspaper } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
+import { useQuery } from 'react-query'; // Importando o hook useQuery da biblioteca react-query
+import { format } from 'date-fns'; // Importando a função format da biblioteca date-fns
+import { ptBR } from 'date-fns/locale'; // Importando a localidade ptBR da biblioteca date-fns
+import { Newspaper } from 'lucide-react'; // Importando o ícone Newspaper da biblioteca lucide-react
+import { Badge } from '@/components/ui/badge'; // Importando o componente Badge do diretório de componentes
 import { fetchMarketNews } from '@/services/news';
 
 const NewsPage = () => {

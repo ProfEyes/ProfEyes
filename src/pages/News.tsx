@@ -59,16 +59,16 @@ const getRandomFallbackImage = (newsId: string) => {
 const newsLoadingStyles = `
   @keyframes newsLoadingPulse {
     0% {
-      opacity: 0.6;
-      transform: scale(0.98);
+      opacity: 0.7;
+      transform: scale(0.99);
     }
     50% {
       opacity: 0.9;
       transform: scale(1);
     }
     100% {
-      opacity: 0.6;
-      transform: scale(0.98);
+      opacity: 0.7;
+      transform: scale(0.99);
     }
   }
   
@@ -86,17 +86,17 @@ const newsLoadingStyles = `
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    padding: 2rem;
-    animation: newsLoadingPulse 2s infinite ease-in-out;
+    padding: 1.5rem;
+    animation: newsLoadingPulse 1.5s infinite ease-in-out;
   }
   
   .news-loading-icon {
-    margin-bottom: 1rem;
-    animation: newsIconSpin 3s infinite linear;
+    margin-bottom: 0.75rem;
+    animation: newsIconSpin 2s infinite linear;
   }
   
   .news-loading-text {
-    font-size: 1rem;
+    font-size: 0.95rem;
     font-weight: 500;
     text-align: center;
   }
@@ -105,6 +105,18 @@ const newsLoadingStyles = `
 const News = () => {
   const [newsWithImages, setNewsWithImages] = useState<any[]>([]);
   const [isLoadingImages, setIsLoadingImages] = useState(false);
+  
+  // Buscar notícias com React Query
+  const { data: news, isLoading, error, refetch } = useQuery({
+    queryKey: ['marketNews'],
+    queryFn: () => fetchMarketNews({ limit: 20 }), // Busca até 20 notícias para a página completa
+    refetchInterval: 1800000, // Atualiza a cada 30 minutos (1800000 ms)
+    staleTime: 1800000, // Considera os dados obsoletos após 30 minutos
+    // Usar cache já existente imediatamente
+    cacheTime: 1800000,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+  });
   
   // Adicionar o estilo de animação ao documento
   useEffect(() => {
@@ -116,13 +128,6 @@ const News = () => {
       document.head.removeChild(styleElement);
     };
   }, []);
-  
-  const { data: news, isLoading, error, refetch } = useQuery({
-    queryKey: ['marketNews'],
-    queryFn: () => fetchMarketNews({ limit: 20 }), // Busca até 20 notícias para a página completa
-    refetchInterval: 1800000, // Atualiza a cada 30 minutos (1800000 ms)
-    staleTime: 1800000, // Considera os dados obsoletos após 30 minutos
-  });
 
   // Efeito para processar as imagens das notícias com otimização
   useEffect(() => {
@@ -132,8 +137,8 @@ const News = () => {
         // Verificar se já temos uma imagem em cache para esta notícia
         const cachedImage = localStorage.getItem(`news_image_${item.id}`);
         
-        if (item.imageUrl) {
-          return item;
+        if (item.imageUrl || item.image) {
+          return { ...item, imageUrl: item.imageUrl || item.image };
         } else if (cachedImage) {
           return { ...item, imageUrl: cachedImage, isTemporaryImage: true };
         } else {
@@ -142,13 +147,12 @@ const News = () => {
           return { ...item, imageUrl: fallbackImage, isTemporaryImage: true };
         }
       });
-      
       setNewsWithImages(initialNewsWithImages);
       
       // Iniciar o processo de extração de imagens reais
       setIsLoadingImages(true);
       
-      // Extrair imagens reais das URLs das notícias com timeout para não bloquear a interface
+      // Extrair imagens reais das URLs das notícias com timeout mais curto para carregamento mais rápido
       setTimeout(() => {
         updateNewsImages(news)
           .then(updatedNews => {
@@ -166,7 +170,7 @@ const News = () => {
             console.error("Erro ao atualizar imagens das notícias:", error);
             setIsLoadingImages(false);
           });
-      }, 100);
+      }, 50); // Reduzido de 100ms para 50ms para carregamento mais rápido
     }
   }, [news]);
 
@@ -283,7 +287,7 @@ const News = () => {
                     <div className="h-48 overflow-hidden rounded-lg relative">
                       <img 
                         src={item.imageUrl || getRandomFallbackImage(item.id)} 
-                        alt={item.title}
+                        alt={item.headline || item.title || "Notícia"}
                         className={`w-full h-full object-cover ${item.isTemporaryImage ? 'opacity-80' : ''}`}
                         onError={(e) => {
                           const target = e.target as HTMLImageElement;
@@ -298,14 +302,14 @@ const News = () => {
                       )}
                     </div>
                     <div className="space-y-4">
-                      <h2 className="text-2xl font-semibold">{item.title}</h2>
+                      <h2 className="text-2xl font-semibold">{item.headline || item.title || "Notícia sem título"}</h2>
                       <p className="text-muted-foreground line-clamp-3">{item.summary || item.content}</p>
                       <div className="flex items-center justify-between">
                         <p className="text-sm text-muted-foreground">
                           {item.source}
                         </p>
                         <p className="text-sm text-muted-foreground">
-                          {format(new Date(item.publishedAt), "dd/MM/yyyy HH:mm", { locale: ptBR })}
+                          {format(new Date(item.publishedAt || item.datetime), "dd/MM/yyyy HH:mm", { locale: ptBR })}
                         </p>
                       </div>
                       {item.relatedSymbols && item.relatedSymbols.length > 0 && (
