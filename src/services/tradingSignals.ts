@@ -26,7 +26,7 @@ let errorCount = 0;
 const MAX_CONSECUTIVE_ERRORS = 5;
 
 // Lista de ativos disponíveis com suas categorias
-const ATIVOS_CATEGORIAS = {
+export const ATIVOS_CATEGORIAS = {
   "USD/BRL (OTC)": "Blitz",
   "USOUSD (OTC)": "Blitz",
   "BTC/USD (OTC)": "Blitz",

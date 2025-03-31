@@ -10,6 +10,89 @@ import { toast } from "sonner";
 import { fetchTradingSignals, replaceCompletedSignal, updateSignalStatus, replaceMultipleCompletedSignals } from './tradingSignals';
 import { generateRandomId } from '@/lib/utils';
 
+// Lista de ativos disponíveis com suas categorias
+const ATIVOS_CATEGORIAS = {
+  "USD/BRL (OTC)": "Blitz",
+  "USOUSD (OTC)": "Blitz",
+  "BTC/USD (OTC)": "Blitz",
+  "Google (OTC)": "Blitz",
+  "EUR/JPY (OTC)": "Blitz",
+  "ETH/USD (OTC)": "Blitz",
+  "MELANIA Coin (OTC)": "Binary",
+  "EUR/GBP (OTC)": "Blitz",
+  "Apple (OTC)": "Blitz",
+  "Amazon (OTC)": "Blitz",
+  "TRUMP Coin (OTC)": "Binary",
+  "Nike, Inc. (OTC)": "Blitz",
+  "DOGECOIN (OTC)": "Blitz",
+  "Tesla (OTC)": "Blitz",
+  "SOL/USD (OTC)": "Blitz",
+  "1000Sats (OTC)": "Binary",
+  "XAUUSD (OTC)": "Digital",
+  "McDonald´s Corporation (OTC)": "Blitz",
+  "Meta (OTC)": "Blitz",
+  "Coca-Cola Company (OTC)": "Blitz",
+  "CARDANO (OTC)": "Blitz",
+  "EUR/USD (OTC)": "Blitz",
+  "PEN/USD (OTC)": "Blitz",
+  "Bitcoin Cash (OTC)": "Binary",
+  "AUD/CAD (OTC)": "Blitz",
+  "Tesla/Ford (OTC)": "Blitz",
+  "US 100 (OTC)": "Binary",
+  "TRON/USD (OTC)": "Blitz",
+  "USD/CAD (OTC)": "Blitz",
+  "AUD/USD (OTC)": "Blitz",
+  "AIG (OTC)": "Binary",
+  "Alibaba Group Holding (OTC)": "Blitz",
+  "Snap Inc. (OTC)": "Blitz",
+  "US 500 (OTC)": "Digital",
+  "AUD/CHF (OTC)": "Blitz",
+  "Amazon/Alibaba (OTC)": "Blitz",
+  "Pepe (OTC)": "Binary",
+  "Chainlink (OTC)": "Binary",
+  "USD/ZAR (OTC)": "Blitz",
+  "Worldcoin (OTC)": "Binary",
+  "Litecoin (OTC)": "Binary",
+  "Injective (OTC)": "Binary",
+  "ORDI (OTC)": "Binary",
+  "ICP (OTC)": "Binary",
+  "Cosmos (OTC)": "Binary",
+  "Polkadot (OTC)": "Binary",
+  "TON (OTC)": "Binary",
+  "Celestia (OTC)": "Binary",
+  "NEAR (OTC)": "Binary",
+  "Ripple (OTC)": "Binary",
+  "Ronin (OTC)": "Binary",
+  "Stacks (OTC)": "Binary",
+  "Immutable (OTC)": "Binary",
+  "EOS (OTC)": "Binary",
+  "Jupiter (OTC)": "Binary",
+  "Polygon (OTC)": "Binary",
+  "Arbitrum (OTC)": "Binary",
+  "Sandbox (OTC)": "Binary",
+  "Decentraland (OTC)": "Binary",
+  "Sei (OTC)": "Binary",
+  "IOTA (OTC)": "Binary",
+  "Pyth (OTC)": "Binary",
+  "Graph (OTC)": "Binary",
+  "Floki (OTC)": "Binary",
+  "Gala (OTC)": "Binary",
+  "Bonk (OTC)": "Binary",
+  "Beam (OTC)": "Binary",
+  "Hamster Kombat (OTC)": "Binary",
+  "NOT (OTC)": "Binary",
+  "US 30 (OTC)": "Binary",
+  "JP 225 (OTC)": "Binary",
+  "HK 33 (OTC)": "Binary",
+  "GER 30 (OTC)": "Binary",
+  "SP 35 (OTC)": "Binary",
+  "UK 100 (OTC)": "Binary",
+  "EUR/THB (OTC)": "Digital",
+  "JPY Currency Index": "Digital",
+  "USD Currency Index": "Digital",
+  "AUS 200 (OTC)": "Digital"
+};
+
 // Interfaces para uso interno na classe
 interface MarketNews {
   title: string;
@@ -69,9 +152,12 @@ export class TradingSignalService {
       const extendedSignals: ExtendedTradingSignal[] = signals.map(signal => {
         const created = new Date(signal.timestamp);
         
+        // Obter categoria do ativo do ATIVOS_CATEGORIAS ou usar 'Blitz' como padrão
+        const categoria = ATIVOS_CATEGORIAS[signal.symbol] || "Blitz";
+        
         return {
           ...signal,
-          exchange: 'Simulado',
+          exchange: categoria, // Usar categoria como exchange (Blitz, Binary ou Digital)
           elapsed_time: formatDistance(created, new Date(), { locale: ptBR, addSuffix: true }),
           created_at: signal.timestamp,
           updated_at: signal.timestamp
