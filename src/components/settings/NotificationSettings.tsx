@@ -47,6 +47,19 @@ interface NotificationSettingsProps {
   onPermissionChange?: (granted: boolean) => void;
 }
 
+// Estilo modificado para o cabeçalho de seção  
+const SectionHeader = ({ icon, title, description }: { icon: React.ReactNode, title: string, description: string }) => (
+  <div className="flex items-center gap-3 mb-5">
+    <div className="p-2.5 rounded-lg bg-white/5 border border-white/10 text-white/70">
+      {icon}
+    </div>
+    <div>
+      <h3 className="text-base font-medium text-white/80">{title}</h3>
+      <p className="text-xs text-white/40">{description}</p>
+    </div>
+  </div>
+);
+
 export function NotificationSettings({
   onSettingsChange,
   onNotificationTestSent,
@@ -348,29 +361,57 @@ export function NotificationSettings({
     );
   };
   
-  // Renderização do badge de status do canal de browser
-  const renderBrowserStatus = () => {
-    switch (browserPermission) {
-      case "granted":
-        return <Badge className="bg-emerald-500/80">Permitido</Badge>;
-      case "denied":
-        return <Badge className="bg-rose-500/80">Negado</Badge>;
-      case "default":
-        return <Badge className="bg-amber-500/80">Pendente</Badge>;
-      case "unsupported":
-        return <Badge className="bg-gray-500/80">Não suportado</Badge>;
-    }
-  };
-  
-  // Badge de prioridade
+  // Função para renderizar prioridade com cores atualizadas
   const renderPriorityBadge = (priority: "high" | "medium" | "low") => {
     switch (priority) {
       case "high":
-        return <Badge className="bg-rose-500/80">Alta</Badge>;
+        return <Badge className="bg-rose-500/20 text-rose-200 border-rose-500/30 hover:bg-rose-500/30">Alta</Badge>;
       case "medium":
-        return <Badge className="bg-amber-500/80">Média</Badge>;
+        return <Badge className="bg-amber-500/20 text-amber-200 border-amber-500/30 hover:bg-amber-500/30">Média</Badge>;
       case "low":
-        return <Badge className="bg-blue-500/80">Baixa</Badge>;
+        return <Badge className="bg-slate-500/20 text-slate-200 border-slate-500/30 hover:bg-slate-500/30">Baixa</Badge>;
+    }
+  };
+  
+  // Modificação para o render do status de permissão
+  const renderBrowserStatus = () => {
+    switch (browserPermission) {
+      case "granted":
+        return (
+          <Badge className="bg-green-500/20 text-green-200 border-green-500/30">
+            <span className="flex items-center gap-1">
+              <span className="h-1.5 w-1.5 rounded-full bg-green-400"></span>
+              Autorizado
+            </span>
+          </Badge>
+        );
+      case "denied":
+        return (
+          <Badge className="bg-rose-500/20 text-rose-200 border-rose-500/30">
+            <span className="flex items-center gap-1">
+              <span className="h-1.5 w-1.5 rounded-full bg-rose-400"></span>
+              Bloqueado
+            </span>
+          </Badge>
+        );
+      case "default":
+        return (
+          <Badge className="bg-amber-500/20 text-amber-200 border-amber-500/30">
+            <span className="flex items-center gap-1">
+              <span className="h-1.5 w-1.5 rounded-full bg-amber-400"></span>
+              Não configurado
+            </span>
+          </Badge>
+        );
+      case "unsupported":
+        return (
+          <Badge className="bg-slate-500/20 text-slate-200 border-slate-500/30">
+            <span className="flex items-center gap-1">
+              <span className="h-1.5 w-1.5 rounded-full bg-slate-400"></span>
+              Não suportado
+            </span>
+          </Badge>
+        );
     }
   };
   

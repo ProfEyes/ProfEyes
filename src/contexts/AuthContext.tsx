@@ -1,616 +1,390 @@
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { Session, User, AuthError } from '@supabase/supabase-js';
-import { toast } from 'sonner';
-import { Database } from '@/types/supabase';
+import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import { userService } from '@/services/userService';
 import { supabase } from '@/lib/supabase';
+import { AuthContextType, AuthState, Provider, Session, User, UserProfile } from '@/types/auth';
+import { toast } from 'sonner';
 
-// Tipo para o perfil do usuário
-type UserProfile = Database['public']['Tables']['user_profiles']['Row'];
-
-// Tipo simplificado para usuário simulado
-type MockedUser = {
-  id: string;
-  email: string;
-  password: string;
-  verified: boolean;
-  created_at: string;
-};
-
-// Define o tipo de contexto para autenticação
-type AuthContextType = {
-  session: Session | null;
-  user: User | null;
-  profile: UserProfile | null;
-  loading: boolean;
-  signInWithEmail: (email: string, password: string, rememberMe?: boolean) => Promise<{ error: AuthError | null }>;
-  signUp: (email: string, password: string, birthdate?: string) => Promise<{ error: AuthError | null }>;
-  signOut: () => Promise<void>;
-  resetPassword: (email: string) => Promise<{ error: AuthError | null }>;
-  updateProfile: (data: Partial<UserProfile>) => Promise<{ error: Error | null }>;
-  verifyEmail: (email: string) => Promise<{ error: AuthError | null }>;
-  isStrongPassword: (password: string) => { isStrong: boolean; message: string };
-};
-
-// Cria o contexto de autenticação
+// Contexto de autenticação
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Props para o provedor de autenticação
-type AuthProviderProps = {
-  children: ReactNode;
+// Estado inicial de autenticação
+const initialAuthState: AuthState = {
+  user: null,
+  session: null,
+  profile: null,
+  loading: true,
+  error: null,
+  isAdmin: false,
 };
 
-// Chave para armazenar usuários mockados no localStorage
-const LOCAL_STORAGE_USERS_KEY = 'mock_users';
-const LOCAL_STORAGE_CURRENT_USER_KEY = 'current_user';
+interface AuthProviderProps {
+  children: ReactNode;
+}
 
 // Componente provedor de autenticação 
 export function AuthProvider({ children }: AuthProviderProps) {
-  const [session, setSession] = useState<Session | null>(null);
-  const [user, setUser] = useState<User | null>(null);
-  const [profile, setProfile] = useState<UserProfile | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  // Funções auxiliares para gerenciar usuários mockados no localStorage
-  const getLocalUsers = (): MockedUser[] => {
-    const usersJSON = localStorage.getItem(LOCAL_STORAGE_USERS_KEY);
-    return usersJSON ? JSON.parse(usersJSON) : [];
-  };
+  const [state, setState] = useState<AuthState>(initialAuthState);
   
-  const saveLocalUsers = (users: MockedUser[]) => {
-    localStorage.setItem(LOCAL_STORAGE_USERS_KEY, JSON.stringify(users));
-  };
-  
-  const saveCurrentUser = (mockedUser: MockedUser) => {
-    // Não permite salvar usuário atual se o email não estiver verificado
-    if (!mockedUser.verified) {
-      return null;
-    }
-    
-    const mockSession = {
-      user: {
-        id: mockedUser.id,
-        email: mockedUser.email,
-        user_metadata: { 
-          email: mockedUser.email,
-          email_verified: mockedUser.verified
-        }
-      }
-    };
-    localStorage.setItem(LOCAL_STORAGE_CURRENT_USER_KEY, JSON.stringify(mockSession));
-    return mockSession;
-  };
-  
-  const loadCurrentUser = () => {
-    const userJSON = localStorage.getItem(LOCAL_STORAGE_CURRENT_USER_KEY);
-    return userJSON ? JSON.parse(userJSON) : null;
-  };
-  
-  // Função para validar senha forte
-  const isStrongPassword = (password: string) => {
-    const minLength = 6;
-    const hasUpperCase = /[A-Z]/.test(password);
-    const hasLowerCase = /[a-z]/.test(password);
-    const hasNumbers = /\d/.test(password);
-    const hasSpecialChar = /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password);
-    
-    if (password.length < minLength) {
-      return { 
-        isStrong: false, 
-        message: `A senha deve ter pelo menos ${minLength} caracteres` 
-      };
-    }
-    
-    const requirements = [];
-    if (!hasUpperCase) requirements.push("uma letra maiúscula");
-    if (!hasLowerCase) requirements.push("uma letra minúscula");
-    if (!hasNumbers) requirements.push("um número");
-    if (!hasSpecialChar) requirements.push("um caractere especial");
-    
-    if (requirements.length > 0) {
-      return {
-        isStrong: false,
-        message: `A senha deve conter pelo menos ${requirements.join(", ")}`
-      };
-    }
-    
-    return { isStrong: true, message: "Senha forte" };
-  };
-
+  // Efeito para carregar a sessão no carregamento inicial
   useEffect(() => {
-    // Sincronizar com o estado de autenticação do Supabase
-    const getCurrentUser = async () => {
+    const fetchSession = async () => {
       try {
-        // Já começamos com loading true
-        setLoading(true);
-        
-        // Verificar se existe uma sessão no localStorage antes de fazer a requisição
-        const localSession = localStorage.getItem('supabase.auth.token');
-        
-        // Se não houver sessão local, podemos retornar mais rapidamente
-        if (!localSession) {
-          setSession(null);
-          setUser(null);
-          setProfile(null);
-          setLoading(false);
-          return;
-        }
-        
-        // Verificar a sessão no Supabase
-        const { data, error } = await supabase.auth.getSession();
-        
-        if (error) {
-          console.error('Erro ao verificar autenticação:', error);
-          // Em caso de erro, consideramos que não há usuário autenticado
-          setSession(null);
-          setUser(null);
-          setProfile(null);
-          setLoading(false);
-          return;
-        }
-        
-        const session = data?.session;
+        // Obtém a sessão atual
+        const session = await userService.getCurrentSession();
         
         if (session) {
-          setSession(session);
-          setUser(session.user);
+          // Se houver sessão, obtém o usuário e o perfil
+          const user = session.user;
+          const { data: profile } = await userService.getUserProfile();
+          const isAdmin = await userService.isAdmin();
           
-          try {
-            // Carregar o perfil do usuário
-            const { data: profileData } = await supabase
-              .from('user_profiles')
-              .select('*')
-              .eq('user_id', session.user.id)
-              .single();
-              
-            if (profileData) {
-              setProfile(profileData);
-            }
-          } catch (profileError) {
-            console.error('Erro ao carregar perfil:', profileError);
-            // Continuar mesmo se houver erro ao carregar o perfil
-          }
+          setState({
+            ...initialAuthState,
+            user,
+            session,
+            profile,
+            isAdmin,
+            loading: false,
+          });
         } else {
-          // Sem sessão
-          setSession(null);
-          setUser(null);
-          setProfile(null);
+          // Se não houver sessão, restaura o estado inicial
+          setState({ ...initialAuthState, loading: false });
         }
       } catch (error) {
-        console.error('Erro ao verificar autenticação:', error);
-        // Em caso de erro, considerar que não há usuário autenticado
-        setSession(null);
-        setUser(null);
-        setProfile(null);
-      } finally {
-        // Garantir que o loading seja definido como false
-        setLoading(false);
+        console.error('Erro ao carregar sessão:', error);
+        setState({
+          ...initialAuthState,
+          error: error as Error,
+          loading: false,
+        });
       }
     };
-    
-    // Executar imediatamente
-    getCurrentUser();
-    
-    // Configurar o listener para mudanças na autenticação
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log('Auth state changed:', event);
-      
-      setSession(session);
-      setUser(session?.user ?? null);
-      
-      if (session?.user) {
-        // Carregar o perfil do usuário quando a sessão mudar
-        try {
-          const { data: profileData } = await supabase
-            .from('user_profiles')
-            .select('*')
-            .eq('user_id', session.user.id)
-            .single();
+
+    // Configurar listeners de mudanças de autenticação
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        console.log('Evento de autenticação:', event);
+        
+        if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+          // Se o usuário fizer login, atualiza o estado
+          if (session) {
+            const user = session.user;
+            const { data: profile } = await userService.getUserProfile();
+            const isAdmin = await userService.isAdmin();
             
-          setProfile(profileData || null);
-        } catch (error) {
-          console.error('Erro ao carregar perfil:', error);
-          setProfile(null);
+            setState({
+              ...state,
+              user,
+              session,
+              profile,
+              isAdmin,
+              loading: false,
+            });
+          }
+        } else if (event === 'SIGNED_OUT') {
+          // Se o usuário fizer logout, restaura o estado inicial
+          setState({ ...initialAuthState, loading: false });
         }
-      } else {
-        setProfile(null);
       }
-    });
-    
-    // Limpar o listener quando o componente for desmontado
+    );
+
+    // Carregar sessão inicial
+    fetchSession();
+
+    // Limpar subscription ao desmontar
     return () => {
       subscription.unsubscribe();
     };
   }, []);
 
-  // Função para login com email e senha via Supabase
-  const signInWithEmail = async (email: string, password: string, rememberMe: boolean = false) => {
-    try {
-      setLoading(true);
-      
-      // Verificar se existe uma sessão armazenada em cache para este usuário
-      const cachedSession = localStorage.getItem(`auth_cache_${email}`);
-      if (cachedSession) {
-        try {
-          const sessionData = JSON.parse(cachedSession);
-          // Verificar se o cache ainda é válido (menos de 12 horas)
-          const now = new Date().getTime();
-          if (sessionData.timestamp && (now - sessionData.timestamp < 12 * 60 * 60 * 1000)) {
-            // Usar os dados em cache para login mais rápido
-            console.log('Usando dados em cache para login mais rápido');
-            setSession(sessionData.session);
-            setUser(sessionData.user);
-            
-            // Fazer uma verificação da sessão em segundo plano para atualizar o cache
-            supabase.auth.getSession().then(({ data }) => {
-              if (data?.session) {
-                // Atualizar cache silenciosamente
-                localStorage.setItem(`auth_cache_${email}`, JSON.stringify({
-                  session: data.session,
-                  user: data.session.user,
-                  timestamp: new Date().getTime()
-                }));
-              }
-            });
-            
-            return { data: sessionData };
-          }
-        } catch (e) {
-          // Ignorar erros de parsing do cache
-          console.warn('Erro ao processar cache de autenticação:', e);
-        }
+  // Função para atualizar o perfil do usuário
+  const refreshUserProfile = async () => {
+    if (state.user) {
+      try {
+        setState({ ...state, loading: true });
+        const { data: profile } = await userService.getUserProfile();
+        const isAdmin = await userService.isAdmin();
+        setState({
+          ...state,
+          profile,
+          isAdmin,
+          loading: false,
+        });
+      } catch (error) {
+        console.error('Erro ao atualizar perfil:', error);
+        setState({
+          ...state,
+          error: error as Error,
+          loading: false,
+        });
       }
+    }
+  };
+
+  // Fazer login com email
+  const signInWithEmail = async (email: string, password: string, remember = false) => {
+    try {
+      setState({ ...state, loading: true });
       
-      // Fazer login utilizando o Supabase
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password
-      });
+      const { data, error } = await userService.signInWithEmail(email, password);
       
       if (error) {
-        console.error('Erro ao fazer login:', error);
-        
-        // Traduzir as mensagens de erro comuns do Supabase
-        if (error.message.includes('Invalid login credentials')) {
-          return { 
-            error: {
-              message: 'Email ou senha incorretos. Por favor, verifique suas credenciais.',
-              name: 'InvalidCredentials'
-            } as any 
-          };
-        }
-        
-        if (error.message.includes('Email not confirmed')) {
-          return {
-            error: {
-              message: 'Email não verificado. Por favor, verifique seu email antes de fazer login.',
-              name: 'EmailNotVerified'
-            } as any
-          };
-        }
-        
+        setState({
+          ...state,
+          error: error as Error,
+          loading: false,
+        });
         return { error };
       }
       
-      if (!data.session || !data.user) {
-        return { 
-          error: {
-            message: 'Erro ao fazer login. Por favor, tente novamente.',
-            name: 'LoginFailed'
-          } as any 
-        };
-      }
+      // Obter perfil do usuário
+      const { data: profile } = await userService.getUserProfile();
+      const isAdmin = await userService.isAdmin();
       
-      // Salvar dados em cache para login rápido futuro se 'rememberMe' estiver ativado
-      if (rememberMe) {
-        localStorage.setItem(`auth_cache_${email}`, JSON.stringify({
-          session: data.session,
-          user: data.user,
-          timestamp: new Date().getTime()
-        }));
-      }
+      setState({
+        ...state,
+        user: data?.user || null,
+        session: data,
+        profile,
+        isAdmin,
+        loading: false,
+        error: null,
+      });
       
-      // Atualizar o estado com os dados do usuário
-      setSession(data.session);
-      setUser(data.user);
-      
-      return { data };
+      return { error: null };
     } catch (error) {
       console.error('Erro ao fazer login:', error);
-      return {
-        error: {
-          message: 'Erro ao fazer login. Por favor, tente novamente.',
-          name: 'LoginFailed'
-        } as any
-      };
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Função para verificar email via Supabase (enviar email de verificação)
-  const verifyEmail = async (email: string) => {
-    try {
-      setLoading(true);
-      
-      // Enviar email de verificação para o usuário
-      const { error } = await supabase.auth.resend({
-        type: 'signup',
-        email: email,
-        options: {
-          emailRedirectTo: `${window.location.origin}/auth`,
-        }
+      setState({
+        ...state,
+        error: error as Error,
+        loading: false,
       });
-      
-      if (error) {
-        console.error('Erro ao enviar email de verificação:', error);
-        
-        if (error.message.includes('rate limit')) {
-          return { 
-            error: {
-              message: 'Muitas solicitações. Por favor, aguarde alguns minutos antes de tentar novamente.',
-              name: 'RateLimitExceeded'
-            } as any
-          };
-        }
-        
-        return { error };
-      }
-      
-      toast.success('Email de verificação enviado!', {
-        description: 'Por favor, verifique sua caixa de entrada e spam para confirmar sua conta.'
-      });
-      
-      return { error: null };
-    } catch (error: any) {
-      console.error('Erro ao enviar email de verificação:', error);
-      toast.error(`Erro ao enviar email de verificação: ${error.message}`);
-      return { error: error as any };
-    } finally {
-      setLoading(false);
+      return { error: error as Error };
     }
   };
 
-  // Função para logout via Supabase
-  const signOut = async () => {
-    try {
-      setLoading(true);
-      
-      // Fazer logout utilizando o Supabase
-      const { error } = await supabase.auth.signOut();
-      
-      if (error) {
-        console.error('Erro ao fazer logout:', error);
-        throw error;
-      }
-      
-      // Limpar o estado
-      setUser(null);
-      setSession(null);
-      setProfile(null);
-      
-      toast.success('Logout realizado com sucesso');
-    } catch (error: any) {
-      console.error('Erro ao fazer logout:', error);
-      toast.error(`Erro ao fazer logout: ${error.message}`);
-      throw error;
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Função para resetar a senha
-  const resetPassword = async (email: string) => {
-    try {
-      setLoading(true);
-      
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/auth/reset-password`
-      });
-      
-      if (error) {
-        console.error('Erro ao enviar email de recuperação:', error);
-        
-        // Traduzir as mensagens de erro comuns do Supabase
-        if (error.message.includes('User not found')) {
-          return { 
-            error: {
-              message: 'Email não encontrado. Por favor, verifique o email informado.',
-              name: 'UserNotFound'
-            } as any 
-          };
-        }
-        
-        return { error };
-      }
-      
-      return { data: true };
-    } catch (error) {
-      console.error('Erro ao enviar email de recuperação:', error);
-      return {
-        error: {
-          message: 'Erro ao enviar email de recuperação. Por favor, tente novamente.',
-          name: 'ResetFailed'
-        } as any
-      };
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Função para atualizar o perfil do usuário
-  const updateProfile = async (data: Partial<UserProfile>) => {
-    try {
-      if (!user) {
-        throw new Error('Usuário não autenticado');
-      }
-
-      // Atualiza o perfil local
-      setProfile(prev => prev ? { ...prev, ...data } : null);
-      
-      toast.success('Perfil atualizado com sucesso!');
-      return { error: null };
-    } catch (error: any) {
-      toast.error(`Erro ao atualizar perfil: ${error.message}`);
-      return { error };
-    }
-  };
-
-  // Função para cadastro via Supabase
+  // Fazer cadastro com email
   const signUp = async (email: string, password: string, birthdate?: string) => {
     try {
-      setLoading(true);
+      setState({ ...state, loading: true });
       
-      // Verificar se o email é válido
-      const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!emailPattern.test(email)) {
-        return { 
-          error: {
-            message: 'Por favor, forneça um email válido.',
-            name: 'InvalidEmail'
-          } as any
-        };
-      }
-      
-      // Verificar se a senha é forte o suficiente
-      const passwordCheck = isStrongPassword(password);
-      if (!passwordCheck.isStrong) {
-        return { 
-          error: {
-            message: passwordCheck.message,
-            name: 'WeakPassword'
-          } as any
-        };
-      }
-      
-      // Verificar se a data de nascimento foi fornecida
-      if (!birthdate) {
-        return {
-          error: {
-            message: 'A data de nascimento é obrigatória.',
-            name: 'MissingBirthdate'
-          } as any
-        };
-      }
-      
-      // Verificar se o email já existe usando o endpoint auth.signInWithOtp
-      // Esta é uma forma indireta de verificar se o email existe, sem realmente fazer login
-      const { error: existingUserError } = await supabase.auth.signInWithOtp({
-        email,
-        options: {
-          shouldCreateUser: false, // Não criar usuário se não existir
-        }
-      });
-      
-      // Se não retornar erro de "user not found", é porque o usuário já existe
-      // No Supabase, se tentarmos enviar OTP para um email inexistente, dará erro
-      if (!existingUserError || !existingUserError.message.includes('not found')) {
-        console.log('Email já existe:', email);
-        return { 
-          error: {
-            message: 'Este email já está cadastrado. Por favor, faça login com sua conta existente.',
-            name: 'UserExists'
-          } as any 
-        };
-      }
-      
-      // Realizar o cadastro utilizando o Supabase
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          // Configurar o redirecionamento para a página de confirmação - URL absoluta
-          emailRedirectTo: `${window.location.origin}/auth`,
-          data: {
-            display_name: email.split('@')[0],
-            birthdate: birthdate,
-          }
-        }
-      });
+      const { data, error } = await userService.signUp(email, password, birthdate);
       
       if (error) {
-        console.error('Erro ao criar conta:', error);
-        
-        // Traduzir as mensagens de erro comuns do Supabase
-        if (error.message.includes('already registered') || 
-            error.message.includes('User already registered') ||
-            error.message.includes('already exists') ||
-            error.message.includes('email taken')) {
-          return { 
-            error: {
-              message: 'Este email já está cadastrado. Por favor, faça login com sua conta existente.',
-              name: 'UserExists'
-            } as any 
-          };
-        }
-        
+        setState({
+          ...state,
+          error: error as Error,
+          loading: false,
+        });
         return { error };
       }
       
-      // Verificar se o email de confirmação foi enviado
-      if (data?.user && !data.user.email_confirmed_at) {
-        // Sempre enviar email de confirmação manualmente após o cadastro
-        // para garantir que chegue ao usuário
-        const { error: resendError } = await supabase.auth.resend({
-          type: 'signup',
-          email,
-          options: {
-            emailRedirectTo: `${window.location.origin}/auth`,
-          }
-        });
-        
-        if (resendError) {
-          console.warn('Erro ao reenviar email de confirmação:', resendError);
-        }
-      }
+      setState({
+        ...state,
+        loading: false,
+        error: null,
+      });
+      
+      toast.success(
+        'Cadastro realizado com sucesso! Verifique seu email para confirmar o cadastro.',
+        { duration: 5000 }
+      );
       
       return { error: null };
-    } catch (error: any) {
-      console.error('Erro ao criar conta:', error);
-      
-      // Verificar se é um erro de usuário já existente
-      if (error.message && (
-          error.message.includes('already registered') || 
-          error.message.includes('already exists') ||
-          error.message.includes('já existe') ||
-          error.message.includes('já cadastrado')
-        )) {
-        return { 
-          error: {
-            message: 'Este email já está cadastrado. Por favor, faça login com sua conta existente.',
-            name: 'UserExists'
-          } as any 
-        };
-      }
-      
-      return { error: error as any };
-    } finally {
-      setLoading(false);
+    } catch (error) {
+      console.error('Erro ao cadastrar:', error);
+      setState({
+        ...state,
+        error: error as Error,
+        loading: false,
+      });
+      return { error: error as Error };
     }
   };
 
-  // Valor do contexto a ser fornecido
-  const value = {
-    session,
-    user,
-    profile,
-    loading,
+  // Fazer login com provedor (Google, GitHub, etc.)
+  const signInWithProvider = async (provider: Provider) => {
+    try {
+      setState({ ...state, loading: true });
+      
+      const { data, error } = await userService.signInWithProvider(provider);
+      
+      if (error) {
+        setState({
+          ...state,
+          error: error as Error,
+          loading: false,
+        });
+        return { error };
+      }
+      
+      // Aqui não atualizamos o estado imediatamente pois o OAuth redireciona o usuário
+      // O estado será atualizado quando o usuário retornar pelo callback
+      
+      return { error: null };
+    } catch (error) {
+      console.error(`Erro ao fazer login com ${provider}:`, error);
+      setState({
+        ...state,
+        error: error as Error,
+        loading: false,
+      });
+      return { error: error as Error };
+    }
+  };
+
+  // Fazer logout
+  const signOut = async () => {
+    try {
+      setState({ ...state, loading: true });
+      
+      await userService.signOut();
+      
+      setState({
+        ...initialAuthState,
+        loading: false,
+      });
+    } catch (error) {
+      console.error('Erro ao fazer logout:', error);
+      setState({
+        ...state,
+        error: error as Error,
+        loading: false,
+      });
+    }
+  };
+
+  // Verificar email
+  const verifyEmail = async (email: string) => {
+    try {
+      setState({ ...state, loading: true });
+      
+      const { error } = await userService.verifyEmail(email);
+      
+      setState({
+        ...state,
+        loading: false,
+        error: error as Error,
+      });
+      
+      if (!error) {
+        toast.success(
+          'Email de verificação enviado com sucesso!',
+          { duration: 5000 }
+        );
+      }
+      
+      return { error };
+    } catch (error) {
+      console.error('Erro ao verificar email:', error);
+      setState({
+        ...state,
+        error: error as Error,
+        loading: false,
+      });
+      return { error: error as Error };
+    }
+  };
+
+  // Recuperação de senha
+  const resetPassword = async (email: string) => {
+    try {
+      setState({ ...state, loading: true });
+      
+      const { error } = await userService.resetPassword(email);
+      
+      setState({
+        ...state,
+        loading: false,
+        error: error as Error,
+      });
+      
+      if (!error) {
+        toast.success(
+          'Email de recuperação de senha enviado com sucesso!',
+          { duration: 5000 }
+        );
+      }
+      
+      return { error };
+    } catch (error) {
+      console.error('Erro ao resetar senha:', error);
+      setState({
+        ...state,
+        error: error as Error,
+        loading: false,
+      });
+      return { error: error as Error };
+    }
+  };
+
+  // Atualizar perfil
+  const updateProfile = async (profile: Partial<UserProfile>) => {
+    try {
+      setState({ ...state, loading: true });
+      
+      const { data, error } = await userService.updateUserProfile(profile);
+      
+      if (error) {
+        setState({
+          ...state,
+          error: error as Error,
+          loading: false,
+        });
+        return { error };
+      }
+      
+      setState({
+        ...state,
+        profile: data,
+        loading: false,
+        error: null,
+      });
+      
+      toast.success('Perfil atualizado com sucesso!');
+      
+      return { error: null };
+    } catch (error) {
+      console.error('Erro ao atualizar perfil:', error);
+      setState({
+        ...state,
+        error: error as Error,
+        loading: false,
+      });
+      return { error: error as Error };
+    }
+  };
+
+  // Verificar força da senha
+  const isStrongPassword = userService.isStrongPassword;
+
+  const contextValue: AuthContextType = {
+    ...state,
     signInWithEmail,
     signUp,
     signOut,
+    verifyEmail,
     resetPassword,
     updateProfile,
-    verifyEmail,
-    isStrongPassword
-  } as AuthContextType;
+    isStrongPassword,
+    refreshUserProfile,
+    signInWithProvider,
+  };
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  return (
+    <AuthContext.Provider value={contextValue}>
+      {children}
+    </AuthContext.Provider>
+  );
 }
 
 // Hook para usar o contexto de autenticação
-export function useAuth() {
+export const useAuth = () => {
   const context = useContext(AuthContext);
+  
   if (context === undefined) {
     throw new Error('useAuth deve ser usado dentro de um AuthProvider');
   }
+  
   return context;
-} 
+}; 

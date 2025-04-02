@@ -496,40 +496,69 @@ export default function Auth() {
   
   // Função para lidar com o cadastro
   const handleSignUp = async () => {
-    // Limpar qualquer erro anterior
-    clearError();
+    setError(null);
     
-    // Validar campos
-    if (!validateFields(false)) {
-      // Mostrar animação de erro
-      animateErrorField();
+    // Verificar se todos os campos necessários foram preenchidos
+    if (!email) {
+      setError({ field: 'email', message: 'Por favor, informe seu email' });
+      emailRef.current?.focus();
+      return;
+    }
+
+    if (!birthdate) {
+      setError({ field: 'birthdate', message: 'Por favor, informe sua data de nascimento' });
+      birthdateRef.current?.focus();
       return;
     }
     
+    if (!password) {
+      setError({ field: 'password', message: 'Por favor, informe sua senha' });
+      passwordRef.current?.focus();
+      return;
+    }
+    
+    if (password !== confirmPassword) {
+      setError({ field: 'confirmPassword', message: 'As senhas não coincidem' });
+      confirmPasswordRef.current?.focus();
+      return;
+    }
+    
+    if (!termsAccepted) {
+      setError({ field: 'terms', message: 'Você precisa aceitar os termos de uso' });
+      return;
+    }
+    
+    // Iniciar indicador de carregamento
+    setLoadingAction('signup');
+    
+    // Mostrar o toast de processamento
+    const signupToast = toast.loading('Processando cadastro...', {
+      description: 'Verificando disponibilidade do email'
+    });
+    
     try {
-      setLoadingAction('signup');
+      // Realizar o cadastro através do contexto de autenticação
+      console.log('Iniciando processo de cadastro para:', email);
       
-      // Mostrar indicação de progresso
-      const signupToast = toast.loading('Processando cadastro...');
-      
-      // Extrair a data de nascimento do formato DD/MM/YYYY para o formato ISO (YYYY-MM-DD)
-      const rawBirthdate = birthdate.replace(/\D/g, '');
-      const day = rawBirthdate.substring(0, 2);
-      const month = rawBirthdate.substring(2, 4);
-      const year = rawBirthdate.substring(4, 8);
-      const formattedBirthdate = `${year}-${month}-${day}`;
-      
-      const { error: authError } = await signUp(email, password, formattedBirthdate);
+      const { error: authError } = await signUp(email, password, birthdate);
       
       if (authError) {
-        // Verificar especificamente se o erro é de email já cadastrado
-        if (authError.message.includes('já está cadastrado') || 
-            authError.name === 'UserExists' || 
-            authError.message.includes('already registered')) {
-          setError({ 
-            field: 'email', 
-            message: 'Este email já está cadastrado. Por favor, utilize outro email ou faça login.' 
-          });
+        console.error('Erro retornado pelo signUp:', authError);
+        
+        // Atualizar o toast para indicar erro
+        toast.error('Falha no cadastro', {
+          id: signupToast,
+          description: authError.message
+        });
+        
+        // Se o erro for de email já cadastrado
+        if (authError.name === 'UserExists' || 
+            authError.message.includes('já está cadastrado') || 
+            authError.message.includes('already registered') ||
+            authError.message.includes('already exists')) {
+          
+          console.log('Email já cadastrado detectado na interface:', email);
+          setError({ field: 'email', message: authError.message });
           emailRef.current?.focus();
           
           toast.error('Email já cadastrado', { 
@@ -565,6 +594,8 @@ export default function Auth() {
         throw authError;
       }
       
+      console.log('Cadastro processado com sucesso');
+      
       // Cadastro bem-sucedido
       toast.success('Cadastro realizado!', {
         id: signupToast,
@@ -589,8 +620,24 @@ export default function Auth() {
       setTermsAccepted(false);
       
     } catch (error: any) {
-      console.error('Erro ao criar conta:', error);
-      animateErrorField();
+      console.error('Erro ao criar conta (try/catch):', error);
+      
+      // Evitar exibir múltiplos erros se for de email já cadastrado
+      if (!error.message?.includes('já está cadastrado') && 
+          error.name !== 'UserExists' &&
+          !error.message?.includes('already registered') &&
+          !error.message?.includes('already exists') &&
+          !error.message?.includes('email taken') &&
+          !error.message?.includes('duplicate key') &&
+          !error.message?.includes('unique constraint') &&
+          !error.message?.includes('uniqueness violation')) {
+        // Apenas exibir o toast genérico para erros diferentes do email já cadastrado
+        toast.error('Falha no cadastro', {
+          id: signupToast,
+          description: 'Ocorreu um erro durante o cadastro. Tente novamente.'
+        });
+        animateErrorField();
+      }
     } finally {
       setLoadingAction(null);
     }

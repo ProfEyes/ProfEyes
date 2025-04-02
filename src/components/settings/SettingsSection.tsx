@@ -15,37 +15,48 @@ interface SettingsSectionProps {
 export function SettingsSection({ title, description, icon, children, className }: SettingsSectionProps) {
   return (
     <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -10 }}
+      transition={{ duration: 0.4 }}
       whileHover={{ 
         scale: 1.01,
-        boxShadow: "0 8px 32px rgba(0, 0, 0, 0.1), 0 4px 10px rgba(31, 41, 55, 0.2)"
+        boxShadow: "0 8px 30px rgba(0, 0, 0, 0.07)"
       }}
-      transition={{ duration: 0.3 }}
       className={cn(
-        "rounded-xl overflow-hidden transition-all duration-300 group",
+        "rounded-xl overflow-hidden group",
         className
       )}
     >
-      <Card className="border border-white/10 bg-gradient-to-b from-white/[0.07] to-white/[0.03] backdrop-blur-lg shadow-xl h-full">
-        <div className="relative z-10">
-          <CardHeader className="pb-2">
+      <Card className="border border-white/5 bg-gradient-to-b from-white/[0.04] to-white/[0.01] backdrop-blur-2xl shadow-[0_0_25px_rgba(0,0,0,0.05)] h-full">
+        <div className="relative">
+          {/* Decorative gradient blur */}
+          <div className="absolute -top-10 -left-10 w-40 h-40 bg-rose-400/5 rounded-full blur-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-700"></div>
+          <div className="absolute -bottom-20 -right-10 w-60 h-60 bg-amber-400/5 rounded-full blur-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-700"></div>
+          
+          <CardHeader className="pb-2 relative z-10">
             <div className="flex items-center gap-4">
-              <div className="p-2.5 rounded-xl bg-gradient-to-br from-white/10 to-white/5 backdrop-blur-sm border border-white/10 shadow-md group-hover:from-white/15 group-hover:to-white/10 transition-all duration-300">
+              <motion.div 
+                whileHover={{ rotate: [0, -10, 0, 10, 0], scale: 1.05 }}
+                transition={{ duration: 0.5 }}
+                className="p-3 rounded-xl bg-gradient-to-br from-white/8 to-transparent backdrop-blur-md border border-white/10 shadow-sm group-hover:from-white/12 group-hover:border-white/15 transition-all duration-300"
+              >
                 {icon}
-              </div>
+              </motion.div>
               <div>
-                <CardTitle className="text-[17px] font-medium tracking-wide text-white/90 bg-clip-text text-transparent bg-gradient-to-r from-white via-white/95 to-white/90 group-hover:from-white group-hover:to-white/95 transition-all duration-300">
+                <CardTitle className="text-[17px] font-light tracking-wide text-white/80 group-hover:text-white/95 transition-all duration-300">
                   {title}
                 </CardTitle>
-                <CardDescription className="text-white/50 text-xs mt-1">
+                <CardDescription className="text-white/40 text-xs mt-1 group-hover:text-white/50 transition-all duration-300">
                   {description}
                 </CardDescription>
               </div>
             </div>
           </CardHeader>
-          <Separator className="bg-white/[0.07]" />
-          <CardContent className="pt-5 relative">
-            {/* Efeito sutil de gradiente ao passar o mouse */}
-            <div className="absolute -inset-1 bg-gradient-to-r from-indigo-500/0 via-blue-500/0 to-purple-500/0 group-hover:from-indigo-500/5 group-hover:via-blue-500/5 group-hover:to-purple-500/5 transition-all duration-700 rounded-xl opacity-0 group-hover:opacity-100">
+          <Separator className="bg-white/[0.03]" />
+          <CardContent className="pt-5 relative z-10">
+            {/* Efeito de brilho sutil em hover */}
+            <div className="absolute inset-0 bg-gradient-to-r from-rose-500/0 via-amber-500/0 to-rose-500/0 group-hover:from-rose-500/3 group-hover:via-amber-500/3 group-hover:to-rose-500/3 opacity-0 group-hover:opacity-100 transition-all duration-700 rounded-xl">
             </div>
             
             <div className="relative z-10">

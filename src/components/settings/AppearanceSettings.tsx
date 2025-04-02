@@ -2,13 +2,15 @@ import { useState, useEffect } from "react";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Switch } from "@/components/ui/switch";
-import { Palette, Monitor, Moon, Sun, Layout as LayoutIcon, Sparkles, Zap } from "lucide-react";
+import { Palette, Monitor, Moon, Sun, Sparkles, Zap, EyeOff } from "lucide-react";
 import { SettingsSection } from "./SettingsSection";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
+import { Slider } from "@/components/ui/slider";
+import { cn } from "@/lib/utils";
 
 type Theme = "dark" | "light" | "system";
 
@@ -16,6 +18,8 @@ export function AppearanceSettings() {
   const [theme, setTheme] = useState<Theme>("dark");
   const [reduceAnimations, setReduceAnimations] = useState(false);
   const [highContrastMode, setHighContrastMode] = useState(false);
+  const [blurLevel, setBlurLevel] = useState(50);
+  const [transparencyLevel, setTransparencyLevel] = useState(70);
   const [activeTab, setActiveTab] = useState("temas");
   const { t } = useLanguage();
   
@@ -34,6 +38,16 @@ export function AppearanceSettings() {
     const savedHighContrast = localStorage.getItem("high-contrast");
     if (savedHighContrast !== null) {
       setHighContrastMode(savedHighContrast === "true");
+    }
+    
+    const savedBlurLevel = localStorage.getItem("blur-level");
+    if (savedBlurLevel !== null) {
+      setBlurLevel(parseInt(savedBlurLevel));
+    }
+    
+    const savedTransparencyLevel = localStorage.getItem("transparency-level");
+    if (savedTransparencyLevel !== null) {
+      setTransparencyLevel(parseInt(savedTransparencyLevel));
     }
   }, []);
   
@@ -82,75 +96,148 @@ export function AppearanceSettings() {
       document.documentElement.classList.remove("high-contrast");
     }
   };
+  
+  // Salvar e aplicar nível de blur
+  const handleBlurLevelChange = (value: number[]) => {
+    const level = value[0];
+    setBlurLevel(level);
+    localStorage.setItem("blur-level", String(level));
+    
+    // Aqui você poderia aplicar a alteração ao documento também
+    const blurClass = document.documentElement.classList;
+    ["blur-low", "blur-medium", "blur-high"].forEach(cls => blurClass.remove(cls));
+    
+    if (level < 33) {
+      blurClass.add("blur-low");
+    } else if (level < 66) {
+      blurClass.add("blur-medium");
+    } else {
+      blurClass.add("blur-high");
+    }
+  };
+  
+  // Salvar e aplicar nível de transparência
+  const handleTransparencyLevelChange = (value: number[]) => {
+    const level = value[0];
+    setTransparencyLevel(level);
+    localStorage.setItem("transparency-level", String(level));
+    
+    // Aqui você poderia aplicar a alteração ao documento também
+    const transparencyClass = document.documentElement.classList;
+    ["transparency-low", "transparency-medium", "transparency-high"].forEach(cls => transparencyClass.remove(cls));
+    
+    if (level < 33) {
+      transparencyClass.add("transparency-low");
+    } else if (level < 66) {
+      transparencyClass.add("transparency-medium");
+    } else {
+      transparencyClass.add("transparency-high");
+    }
+  };
 
   return (
     <motion.div 
-      variants={{ hidden: { opacity: 0 }, visible: { opacity: 1 } }}
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -10 }}
+      transition={{ duration: 0.5 }}
       className="space-y-6"
     >
       <SettingsSection
         title="Personalização Visual"
         description="Adapte a aparência da plataforma ao seu estilo"
-        icon={<Palette className="h-5 w-5 text-purple-400" />}
-        className="bg-gradient-to-br from-purple-900/5 to-indigo-900/5"
+        icon={<Palette className="h-5 w-5 text-rose-400/70" />}
       >
         <Tabs defaultValue={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid grid-cols-2 bg-black/20 rounded-lg p-1 w-full mb-6">
-            <TabsTrigger value="temas" className="rounded-md data-[state=active]:bg-gradient-to-r data-[state=active]:from-purple-600/30 data-[state=active]:to-indigo-600/30 data-[state=active]:shadow-md py-2">
+          <TabsList className="grid grid-cols-3 bg-black/20 rounded-xl p-1 mb-6 border border-white/5">
+            <TabsTrigger 
+              value="temas" 
+              className="rounded-md data-[state=active]:bg-gradient-to-r data-[state=active]:from-rose-500/20 data-[state=active]:to-amber-500/20 data-[state=active]:shadow-sm py-2"
+            >
               <Palette className="h-4 w-4 mr-2" />
               Temas
             </TabsTrigger>
-            <TabsTrigger value="efeitos" className="rounded-md data-[state=active]:bg-gradient-to-r data-[state=active]:from-purple-600/30 data-[state=active]:to-indigo-600/30 data-[state=active]:shadow-md py-2">
+            <TabsTrigger 
+              value="transparencia" 
+              className="rounded-md data-[state=active]:bg-gradient-to-r data-[state=active]:from-rose-500/20 data-[state=active]:to-amber-500/20 data-[state=active]:shadow-sm py-2"
+            >
+              <EyeOff className="h-4 w-4 mr-2" />
+              Transparência
+            </TabsTrigger>
+            <TabsTrigger 
+              value="efeitos" 
+              className="rounded-md data-[state=active]:bg-gradient-to-r data-[state=active]:from-rose-500/20 data-[state=active]:to-amber-500/20 data-[state=active]:shadow-sm py-2"
+            >
               <Sparkles className="h-4 w-4 mr-2" />
-              Efeitos Visuais
+              Efeitos
             </TabsTrigger>
           </TabsList>
           
           <TabsContent value="temas" className="focus-visible:outline-none focus-visible:ring-0">
             <div className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
                 {/* Tema Escuro */}
                 <motion.div 
-                  className={`relative overflow-hidden rounded-xl cursor-pointer transition-all duration-300 ${theme === 'dark' ? 'ring-2 ring-purple-500 ring-offset-2 ring-offset-black/80' : 'hover:ring-1 hover:ring-purple-500/50'}`}
-                  whileHover={{ scale: 1.02 }}
+                  className={cn(
+                    "relative overflow-hidden rounded-xl cursor-pointer transition-all duration-300",
+                    theme === 'dark' 
+                      ? 'ring-2 ring-rose-500/80 ring-offset-2 ring-offset-black/90' 
+                      : 'hover:ring-1 hover:ring-white/20'
+                  )}
+                  whileHover={{ scale: 1.03, y: -3 }}
                   onClick={() => handleThemeChange('dark')}
                 >
-                  <div className="absolute inset-0 bg-gradient-to-br from-gray-800/80 to-gray-900/90"></div>
+                  <div className="absolute inset-0 bg-gradient-to-br from-black/90 to-slate-900/90"></div>
                   <div className="relative p-4 text-center h-full">
                     <div className="flex flex-col items-center justify-center space-y-2 p-4">
-                      <div className="rounded-full bg-gray-700/70 p-2 mb-2">
-                        <Moon className="h-5 w-5 text-blue-300" />
-                      </div>
-                      <h3 className="font-medium text-white">Escuro</h3>
-                      <p className="text-xs text-white/60">Modo noturno</p>
+                      <motion.div 
+                        className="rounded-full bg-black/70 p-3 mb-2 border border-white/10"
+                        whileHover={{ rotate: 15 }}
+                        animate={{ y: theme === 'dark' ? [0, -5, 0] : 0 }}
+                        transition={{ duration: 1, repeat: theme === 'dark' ? Infinity : 0, repeatDelay: 3 }}
+                      >
+                        <Moon className="h-5 w-5 text-rose-300/80" />
+                      </motion.div>
+                      <h3 className="font-medium text-white/90">Escuro</h3>
+                      <p className="text-xs text-white/50">Modo noturno</p>
                     </div>
                     
                     {/* Mini preview */}
-                    <div className="bg-gray-900/80 border border-gray-700/50 rounded-lg p-2 mt-2">
-                      <div className="h-2 w-16 bg-gray-700/80 rounded mb-2"></div>
-                      <div className="h-2 w-12 bg-gray-700/80 rounded"></div>
+                    <div className="bg-black/50 border border-white/10 rounded-lg p-3 mt-2">
+                      <div className="h-2 w-16 bg-white/10 rounded mb-2"></div>
+                      <div className="h-2 w-12 bg-white/10 rounded"></div>
                     </div>
                   </div>
                 </motion.div>
                 
                 {/* Tema Claro */}
                 <motion.div 
-                  className={`relative overflow-hidden rounded-xl cursor-pointer transition-all duration-300 ${theme === 'light' ? 'ring-2 ring-amber-500 ring-offset-2 ring-offset-black/80' : 'hover:ring-1 hover:ring-amber-500/50'}`}
-                  whileHover={{ scale: 1.02 }}
+                  className={cn(
+                    "relative overflow-hidden rounded-xl cursor-pointer transition-all duration-300",
+                    theme === 'light' 
+                      ? 'ring-2 ring-amber-500/80 ring-offset-2 ring-offset-black/90' 
+                      : 'hover:ring-1 hover:ring-white/20'
+                  )}
+                  whileHover={{ scale: 1.03, y: -3 }}
                   onClick={() => handleThemeChange('light')}
                 >
                   <div className="absolute inset-0 bg-gradient-to-br from-slate-100/90 to-slate-200/90"></div>
                   <div className="relative p-4 text-center h-full">
                     <div className="flex flex-col items-center justify-center space-y-2 p-4">
-                      <div className="rounded-full bg-slate-200 p-2 mb-2">
-                        <Sun className="h-5 w-5 text-amber-500" />
-                      </div>
+                      <motion.div 
+                        className="rounded-full bg-white/80 p-3 mb-2 border border-black/5 shadow-sm"
+                        whileHover={{ rotate: 15 }}
+                        animate={{ y: theme === 'light' ? [0, -5, 0] : 0 }}
+                        transition={{ duration: 1, repeat: theme === 'light' ? Infinity : 0, repeatDelay: 3 }}
+                      >
+                        <Sun className="h-5 w-5 text-amber-500/90" />
+                      </motion.div>
                       <h3 className="font-medium text-slate-800">Claro</h3>
                       <p className="text-xs text-slate-600">Modo diurno</p>
                     </div>
                     
                     {/* Mini preview */}
-                    <div className="bg-white border border-slate-200 rounded-lg p-2 mt-2">
+                    <div className="bg-white/80 border border-slate-200 rounded-lg p-3 mt-2 shadow-sm">
                       <div className="h-2 w-16 bg-slate-200 rounded mb-2"></div>
                       <div className="h-2 w-12 bg-slate-200 rounded"></div>
                     </div>

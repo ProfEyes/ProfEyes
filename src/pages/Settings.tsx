@@ -262,535 +262,450 @@ const Settings = () => {
 
   return (
     <Layout>
-      <motion.div 
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        className="space-y-6 relative z-10 bg-black min-h-screen"
-      >
-        {/* Efeitos decorativos de fundo */}
-        <div className="absolute inset-0 z-0 overflow-hidden">
-          <motion.div 
-            className="absolute -top-24 -right-20 w-96 h-96 rounded-full bg-gradient-to-br from-white/[0.02] via-transparent to-transparent blur-3xl"
-            animate={{
-              scale: [1, 1.1, 1],
-              opacity: [0.3, 0.5, 0.3]
-            }}
-            transition={{
-              duration: 8,
-              repeat: Infinity,
-              ease: "easeInOut"
-            }}
-          />
-          <motion.div 
-            className="absolute top-1/3 -left-20 w-80 h-80 rounded-full bg-gradient-to-tr from-white/[0.01] via-transparent to-transparent blur-3xl"
-            animate={{
-              scale: [1, 1.05, 1],
-              opacity: [0.2, 0.4, 0.2]
-            }}
-            transition={{
-              duration: 6,
-              repeat: Infinity,
-              ease: "easeInOut"
-            }}
-          />
-          <motion.div 
-            className="absolute bottom-0 right-1/4 w-72 h-72 rounded-full bg-gradient-to-tr from-white/[0.01] via-transparent to-transparent blur-3xl"
-            animate={{
-              scale: [1, 1.08, 1],
-              opacity: [0.1, 0.3, 0.1]
-            }}
-            transition={{
-              duration: 7,
-              repeat: Infinity,
-              ease: "easeInOut"
-            }}
-          />
-        </div>
+      <div className="relative min-h-screen">
+        {/* Efeitos de fundo decorativos */}
+        <div className="absolute top-[-200px] left-[-200px] w-[500px] h-[500px] rounded-full bg-rose-900/5 blur-[120px] opacity-40 pointer-events-none"></div>
+        <div className="absolute bottom-[-300px] right-[-200px] w-[600px] h-[600px] rounded-full bg-amber-900/5 blur-[120px] opacity-30 pointer-events-none"></div>
         
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <motion.div 
-            className="space-y-1"
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.5 }}
-          >
-            <h1 className="text-3xl font-light tracking-wide flex items-center gap-2 text-white/80">
-              <motion.div
-                initial={{ rotate: -10, scale: 0.8 }}
-                animate={{ rotate: 0, scale: 1 }}
-                transition={{ duration: 0.5, delay: 0.2 }}
-                className="p-2 rounded-xl bg-white/[0.02] backdrop-blur-md border border-white/[0.02] shadow-xl"
-                whileHover={{ scale: 1.05, rotate: 5 }}
-                whileTap={{ scale: 0.95 }}
-              >
-                <SettingsIcon className="h-8 w-8 text-white/40" />
-              </motion.div>
-              <span className="bg-clip-text text-transparent bg-gradient-to-r from-white via-white/80 to-white/60">
-                {t('settings.title')}
-              </span>
-            </h1>
-            <p className="text-white/30 text-sm tracking-wide ml-1">
-              {t('settings.subtitle')}
-            </p>
-          </motion.div>
-          
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.2 }}
-          >
-            <motion.div
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-            >
-              <Button 
-                variant="default" 
-                onClick={saveSettings}
-                disabled={saveStatus === "saving" || saveStatus === "saved"}
-                className="relative overflow-hidden bg-white/[0.02] hover:bg-white/[0.03] text-white/60 border border-white/[0.02] shadow-lg hover:shadow-xl transition-all duration-300"
-              >
-                {saveStatus === "idle" && (
-                  <>
-                    <motion.div
-                      initial={{ scale: 0.8 }}
-                      animate={{ scale: 1 }}
-                      transition={{ duration: 0.2 }}
-                      className="mr-2 h-4 w-4"
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
-                        <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
-                        <polyline points="17 21 17 13 7 13 7 21" />
-                        <polyline points="7 3 7 8 15 8" />
-                      </svg>
-                    </motion.div>
-                    {t('settings.save')}
-                  </>
-                )}
-                {saveStatus === "saving" && (
-                  <>
-                    <motion.div
-                      animate={{ rotate: 360 }}
-                      transition={{ repeat: Infinity, duration: 1, ease: "linear" }}
-                      className="mr-2 h-4 w-4 border-2 border-t-transparent border-white/40 rounded-full"
-                    />
-                    {t('settings.saving')}
-                  </>
-                )}
-                {saveStatus === "saved" && (
-                  <>
-                    <motion.div
-                      initial={{ scale: 0 }}
-                      animate={{ scale: 1 }}
-                      transition={{ type: "spring", stiffness: 200, damping: 10 }}
-                      className="mr-2 h-4 w-4"
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
-                        <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
-                        <polyline points="22 4 12 14.01 9 11.01" />
-                      </svg>
-                    </motion.div>
-                    {t('settings.saved')}
-                  </>
-                )}
-              </Button>
-            </motion.div>
-          </motion.div>
-        </div>
-        
-        <Tabs 
-          value={activeTab}
-          onValueChange={handleTabChange}
-          className="space-y-6"
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5 }}
+          className="relative z-10 container max-w-6xl mx-auto py-12 px-4 sm:px-6"
         >
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.3 }}
-            className="sticky top-0 z-30 py-2 backdrop-blur-xl bg-transparent rounded-xl mb-4"
-          >
-            <TabsList className="bg-transparent border border-white/[0.02] rounded-lg h-auto p-1.5 w-full overflow-x-auto flex flex-nowrap justify-start md:justify-center shadow-xl">
-              <TabsTrigger 
-                value="perfil" 
-                className="py-2.5 px-4 data-[state=active]:bg-white/[0.02] data-[state=active]:text-white/80 data-[state=active]:shadow-lg rounded-md transition-all duration-300"
-              >
-                <User className="w-4 h-4 mr-2 text-white/40" />
-                {t('settings.profile')}
-              </TabsTrigger>
-              <TabsTrigger 
-                value="geral" 
-                className="py-2.5 px-4 data-[state=active]:bg-white/[0.02] data-[state=active]:text-white/80 data-[state=active]:shadow-lg rounded-md transition-all duration-300"
-              >
-                <Sliders className="w-4 h-4 mr-2 text-white/40" />
-                {t('settings.general')}
-              </TabsTrigger>
-              <TabsTrigger 
-                value="notificacoes" 
-                className="py-2.5 px-4 data-[state=active]:bg-white/[0.02] data-[state=active]:text-white/80 data-[state=active]:shadow-lg rounded-md transition-all duration-300"
-              >
-                <Bell className="w-4 h-4 mr-2 text-white/40" />
-                {t('settings.notifications')}
-              </TabsTrigger>
-              <TabsTrigger 
-                value="aparencia" 
-                className="py-2.5 px-4 data-[state=active]:bg-white/[0.02] data-[state=active]:text-white/80 data-[state=active]:shadow-lg rounded-md transition-all duration-300"
-              >
-                <Palette className="w-4 h-4 mr-2 text-white/40" />
-                {t('settings.appearance')}
-              </TabsTrigger>
-              <TabsTrigger 
-                value="ajuda" 
-                className="py-2.5 px-4 data-[state=active]:bg-white/[0.02] data-[state=active]:text-white/80 data-[state=active]:shadow-lg rounded-md transition-all duration-300"
-              >
-                <HelpCircle className="w-4 h-4 mr-2 text-white/40" />
-                {t('settings.help')}
-              </TabsTrigger>
-            </TabsList>
-          </motion.div>
-          
-          <TabsContent value="geral" className="space-y-6">
-            <AnimatePresence mode="wait">
-              <motion.div
-                key="geral"
-                initial="hidden"
-                animate="visible"
-                exit="exit"
-                variants={tabVariants}
-                className="grid grid-cols-1 md:grid-cols-2 gap-6"
-              >
-                {/* Seção de Idioma */}
-                <motion.div variants={itemVariants}>
-                  <SettingsSection
-                    title={t('settings.language')}
-                    description={t('settings.language.description')}
-                    icon={<Globe className="h-5 w-5 text-white/70" />}
-                  >
-                    <div className="space-y-4">
-                      <LanguageSelector />
-                    </div>
-                  </SettingsSection>
-                </motion.div>
-                
-                {/* Seção de Backup */}
-                <motion.div variants={itemVariants}>
-                  <SettingsSection
-                    title="Backup e Exportação"
-                    description="Configure o backup e exportação dos seus dados"
-                    icon={<Database className="h-5 w-5 text-white/70" />}
-                  >
-                    <div className="space-y-4">
-                      <div className="flex items-center justify-between">
-                        <div className="space-y-0.5">
-                          <Label className="text-sm font-medium text-white/90">Backup Automático</Label>
-                          <p className="text-xs text-white/50">Backup automático diário dos seus dados</p>
-                        </div>
-                        <Switch
-                          checked={autoBackup}
-                          onCheckedChange={setAutoBackup}
-                        />
-                      </div>
-                      
-                      <div className="flex items-center justify-between">
-                        <div className="space-y-0.5">
-                          <Label className="text-sm font-medium text-white/90">Exportação de Dados</Label>
-                          <p className="text-xs text-white/50">Permitir exportação de dados para CSV</p>
-                        </div>
-                        <Switch
-                          checked={dataExport}
-                          onCheckedChange={setDataExport}
-                        />
-                      </div>
-                    </div>
-                  </SettingsSection>
-                </motion.div>
-              </motion.div>
-            </AnimatePresence>
-          </TabsContent>
-          
-          <TabsContent value="perfil" className="space-y-6">
-            <AnimatePresence mode="wait">
-              <motion.div
-                key="perfil"
-                initial="hidden"
-                animate="visible"
-                exit="exit"
-                variants={tabVariants}
-                className="grid grid-cols-1 md:grid-cols-2 gap-6"
-              >
-                <motion.div variants={itemVariants} className="md:col-span-2">
-                  <ProfileSettings />
-                </motion.div>
-                <motion.div variants={itemVariants} className="md:col-span-2">
-                  <AccountLoginSection />
-                </motion.div>
-                <motion.div variants={itemVariants} className="md:col-span-2">
-                  <SettingsSection
-                    title="Autenticação e Segurança"
-                    description="Configure métodos de autenticação e segurança da conta"
-                    icon={<Lock className="h-5 w-5 text-indigo-400" />}
-                    className="bg-gradient-to-br from-indigo-900/5 to-blue-900/5"
-                  >
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      <div className="space-y-4 bg-black/20 rounded-xl p-4 backdrop-blur-sm border border-white/5">
-                        <div className="flex items-center gap-3 mb-3">
-                          <div className="p-2 rounded-lg bg-indigo-900/20 text-indigo-300">
-                            <Shield className="h-4 w-4" />
-                          </div>
-                          <h3 className="text-base font-medium text-white/90">Autenticação Avançada</h3>
-                        </div>
-
-                        <div className="flex items-center justify-between">
-                          <div className="space-y-0.5">
-                            <Label className="text-sm font-medium text-white/90">Autenticação de Dois Fatores</Label>
-                            <p className="text-xs text-white/50">Ativar verificação em duas etapas</p>
-                          </div>
-                          <Switch
-                            checked={twoFactorAuth}
-                            onCheckedChange={setTwoFactorAuth}
-                            className="data-[state=checked]:bg-indigo-600"
-                          />
-                        </div>
-                      </div>
-
-                      <div className="space-y-4 bg-black/20 rounded-xl p-4 backdrop-blur-sm border border-white/5">
-                        <div className="flex items-center gap-3 mb-3">
-                          <div className="p-2 rounded-lg bg-blue-900/20 text-blue-300">
-                            <Mail className="h-4 w-4" />
-                          </div>
-                          <h3 className="text-base font-medium text-white/90">Verificação de Identidade</h3>
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <div className="space-y-0.5">
-                            <Label className="text-sm font-medium text-white/90">Autenticação por Email</Label>
-                            <p className="text-xs text-white/50">Receber email de autenticação ao entrar</p>
-                          </div>
-                          <Switch
-                            checked={emailAuth}
-                            onCheckedChange={setEmailAuth}
-                            className="data-[state=checked]:bg-blue-600"
-                          />
-                        </div>
-                      </div>
-
-                      <div className="space-y-4 bg-gradient-to-br from-indigo-900/10 to-purple-900/5 rounded-xl p-4 backdrop-blur-md border border-white/5 md:col-span-2">
-                        <div className="flex items-center gap-3 mb-2">
-                          <div className="p-2 rounded-lg bg-purple-900/20 text-purple-300">
-                            <Lock className="h-4 w-4" />
-                          </div>
-                          <h3 className="text-base font-medium text-white/90">Sessões Ativas</h3>
-                        </div>
-                        <div className="space-y-2 mt-3">
-                          <div className="flex items-center justify-between p-2 bg-black/30 rounded-lg border border-white/5">
-                            <div className="flex items-center gap-3">
-                              <div className="p-1.5 rounded-lg bg-white/5">
-                                <Laptop className="h-4 w-4 text-white/70" />
-                              </div>
-                              <div>
-                                <p className="text-sm font-medium text-white/90">Windows - Chrome</p>
-                                <p className="text-xs text-white/50">Ativo agora • Este dispositivo</p>
-                              </div>
-                            </div>
-                            <Badge className="bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30">
-                              Atual
-                            </Badge>
-                          </div>
-
-                          <Button variant="outline" size="sm" className="mt-2 text-xs text-white/70 border-white/10 bg-white/5 hover:bg-white/10">
-                            Gerenciar Todas as Sessões
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
-                  </SettingsSection>
-                </motion.div>
-              </motion.div>
-            </AnimatePresence>
-          </TabsContent>
-          
-          <TabsContent value="notificacoes" className="space-y-6">
-            <AnimatePresence mode="wait">
-              <motion.div
-                key="notificacoes"
-                initial="hidden"
-                animate="visible"
-                exit="exit"
-                variants={tabVariants}
-                className="grid grid-cols-1 md:grid-cols-1 gap-6"
-              >
-                <motion.div variants={itemVariants}>
-                  <NotificationSettings 
-                    onSettingsChange={(settings) => {
-                      setNotificationSettings(settings);
-                    }}
-                    onNotificationTestSent={handleNotificationTestSent}
-                    onPermissionChange={handleNotificationPermissionChange}
-                  />
-                </motion.div>
-              </motion.div>
-            </AnimatePresence>
-          </TabsContent>
-          
-          <TabsContent value="aparencia" className="space-y-6">
-            <AnimatePresence mode="wait">
-              <motion.div
-                key="aparencia"
-                initial="hidden"
-                animate="visible"
-                exit="exit"
-                variants={tabVariants}
-                className="grid grid-cols-1 md:grid-cols-1 gap-6"
-              >
-                <motion.div variants={itemVariants}>
-                  <AppearanceSettings />
-                </motion.div>
-              </motion.div>
-            </AnimatePresence>
-          </TabsContent>
-          
-          <TabsContent value="ajuda" className="space-y-6">
-            <AnimatePresence mode="wait">
-              <motion.div
-                key="ajuda"
-                initial="hidden"
-                animate="visible"
-                exit="exit"
-                variants={tabVariants}
-                className="grid grid-cols-1 md:grid-cols-2 gap-6"
-              >
-                <motion.div variants={itemVariants} className="md:col-span-2">
-                  <SettingsSection
-                    title="Suporte"
-                    description="Obtenha suporte para a plataforma"
-                    icon={<HelpCircle className="h-5 w-5 text-white/70" />}
-                  >
-                    <div className="space-y-6">
-                      <div className="bg-white/5 rounded-lg p-4 border border-white/10">
-                        <h3 className="text-sm font-medium text-white/90 mb-2">Termos de Uso</h3>
-                        <p className="text-xs text-white/70 mb-3">
-                          Acesse os termos de uso da plataforma e políticas de privacidade.
-                        </p>
-                        <Button 
-                          variant="outline" 
-                          size="sm" 
-                          className="w-full bg-black/20 border-white/10 text-white/80"
-                          onClick={() => setShowTermsModal(true)}
-                        >
-                          <Info className="mr-2 h-4 w-4" />
-                          Ver Termos de Uso
-                        </Button>
-                      </div>
-                      
-                      <div className="bg-white/5 rounded-lg p-4 border border-white/10">
-                        <h3 className="text-sm font-medium text-white/90 mb-2">Suporte</h3>
-                        <p className="text-xs text-white/70 mb-3">
-                          Entre em contato com nossa equipe de suporte para resolver suas dúvidas.
-                        </p>
-                        <Button variant="outline" size="sm" className="w-full bg-black/20 border-white/10 text-white/80">
-                          <Mail className="mr-2 h-4 w-4" />
-                          Contatar Suporte
-                        </Button>
-                      </div>
-                      
-                      <div className="bg-white/5 rounded-lg p-4 border border-white/10">
-                        <h3 className="text-sm font-medium text-white/90 mb-2">Tutoriais</h3>
-                        <p className="text-xs text-white/70 mb-3">
-                          Acesse nossos tutoriais em vídeo para aprender a utilizar a plataforma.
-                        </p>
-                        <Button variant="outline" size="sm" className="w-full bg-black/20 border-white/10 text-white/80">
-                          <Video className="mr-2 h-4 w-4" />
-                          Ver Tutoriais
-                        </Button>
-                      </div>
-                    </div>
-                  </SettingsSection>
-                </motion.div>
-              </motion.div>
-            </AnimatePresence>
-          </TabsContent>
-        </Tabs>
-      </motion.div>
-      
-      {/* Modal de Termos e Condições */}
-      <Dialog open={showTermsModal} onOpenChange={setShowTermsModal}>
-        <DialogContent className="max-w-3xl max-h-[80vh] overflow-auto bg-black/90 border-white/10 text-white/80">
-          <DialogHeader>
-            <div className="flex items-center justify-between">
-              <DialogTitle className="text-lg font-medium text-white/90">Termos e Condições</DialogTitle>
-              <Button 
-                variant="ghost" 
-                size="icon" 
-                onClick={() => setShowTermsModal(false)}
-                className="h-8 w-8 text-white/70 hover:text-white/90 hover:bg-white/10"
-              >
-                <X className="h-4 w-4" />
-              </Button>
+          <header className="mb-12">
+            <div className="flex items-center gap-4 mb-4">
+              <div className="p-3 rounded-full bg-gradient-to-br from-white/5 to-transparent border border-white/10 shadow-sm">
+                <SettingsIcon className="h-6 w-6 text-white/70" />
+              </div>
+              <div>
+                <h1 className="text-3xl font-extralight tracking-tight text-white/90">{t('settings.title') || "Configurações"}</h1>
+                <p className="text-white/50 text-sm mt-1">{t('settings.subtitle') || "Personalize sua experiência na plataforma"}</p>
+              </div>
             </div>
+            <Separator className="bg-white/[0.03] my-6" />
+          </header>
+          
+          <div className="grid grid-cols-12 gap-8">
+            {/* Navegação lateral */}
+            <div className="col-span-12 md:col-span-3">
+              <motion.div 
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.4, delay: 0.1 }}
+                className="sticky top-24"
+              >
+                <Card className="border-[0.5px] border-white/[0.03] bg-white/[0.01] backdrop-blur-lg shadow-sm">
+                  <CardContent className="p-3">
+                    <nav className="flex flex-col gap-1">
+                      {[
+                        { id: "perfil", label: "Perfil", icon: <User className="h-4 w-4" /> },
+                        { id: "notificacoes", label: "Notificações", icon: <Bell className="h-4 w-4" /> },
+                        { id: "aparencia", label: "Aparência", icon: <Palette className="h-4 w-4" /> },
+                        { id: "privacidade", label: "Privacidade & Segurança", icon: <Shield className="h-4 w-4" /> },
+                      ].map((item) => (
+                        <motion.button
+                          key={item.id}
+                          whileHover={{ x: 3 }}
+                          whileTap={{ scale: 0.98 }}
+                          onClick={() => handleTabChange(item.id)}
+                          className={cn(
+                            "flex items-center gap-3 w-full px-4 py-3 rounded-lg text-left transition-all duration-200",
+                            activeTab === item.id 
+                              ? "bg-gradient-to-r from-white/10 to-white/5 text-white/90 shadow-sm" 
+                              : "hover:bg-white/[0.02] text-white/50"
+                          )}
+                        >
+                          <span className={cn(
+                            "p-1.5 rounded-md",
+                            activeTab === item.id ? "bg-white/10" : "bg-white/5"
+                          )}>
+                            {item.icon}
+                          </span>
+                          <span className="text-sm font-light">{item.label}</span>
+                          {activeTab === item.id && (
+                            <motion.div 
+                              layoutId="activeTabIndicator"
+                              className="ml-auto w-1.5 h-1.5 rounded-full bg-gradient-to-r from-white/80 to-white/60"
+                            />
+                          )}
+                        </motion.button>
+                      ))}
+                    </nav>
+                  </CardContent>
+                </Card>
+                
+                <Button 
+                  onClick={saveSettings}
+                  disabled={saveStatus === "saving"}
+                  className="group w-full mt-6 relative overflow-hidden bg-gradient-to-r from-black via-black to-[#006400]/90 hover:from-black hover:via-black hover:to-[#006400] text-white/80 border border-black/70 h-12 shadow-md shadow-black/60 hover:shadow-lg hover:shadow-black/70 transition-all duration-300"
+                >
+                  <span className="absolute inset-0 w-full h-full bg-gradient-to-r from-transparent via-transparent to-[#006400]/5 opacity-0 group-hover:opacity-100 animate-shimmer"></span>
+                  <span className="absolute bottom-0 right-0 w-[15%] h-[1px] bg-gradient-to-r from-transparent to-[#006400]/80"></span>
+                  
+                  <AnimatePresence mode="wait">
+                    {saveStatus === "idle" && (
+                      <motion.div 
+                        key="idle" 
+                        initial={{ opacity: 0 }} 
+                        animate={{ opacity: 1 }} 
+                        exit={{ opacity: 0 }}
+                        className="flex items-center justify-center w-full"
+                      >
+                        <motion.div
+                          className="relative flex items-center"
+                          whileHover={{ scale: 1.03 }}
+                          transition={{ duration: 0.2 }}
+                        >
+                          <motion.div 
+                            className="absolute -left-1 -top-1 w-6 h-6 rounded-full bg-[#006400]/10"
+                            animate={{ 
+                              scale: [1, 1.1, 1],
+                              opacity: [0.2, 0.3, 0.2]
+                            }}
+                            transition={{ 
+                              duration: 2,
+                              repeat: Infinity,
+                              ease: "easeInOut"
+                            }}
+                          />
+                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" className="mr-2.5 text-[#006400]/80" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M19.5 9L12 16.5L4.5 9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                            <path d="M12 16.5V3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                            <path d="M19.5 16.5H4.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                          </svg>
+                          <span>Salvar alterações</span>
+                        </motion.div>
+                      </motion.div>
+                    )}
+                    
+                    {saveStatus === "saving" && (
+                      <motion.div 
+                        key="saving" 
+                        initial={{ opacity: 0 }} 
+                        animate={{ opacity: 1 }} 
+                        exit={{ opacity: 0 }}
+                        className="flex items-center justify-center w-full"
+                      >
+                        <svg className="animate-spin mr-2 h-4 w-4 text-green-600/80" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        <span>Processando...</span>
+                      </motion.div>
+                    )}
+                    
+                    {saveStatus === "saved" && (
+                      <motion.div 
+                        key="saved" 
+                        initial={{ opacity: 0 }} 
+                        animate={{ 
+                          opacity: 1,
+                          transition: { duration: 0.4 }
+                        }} 
+                        exit={{ opacity: 0 }}
+                        className="flex items-center justify-center w-full space-x-3"
+                      >
+                        <motion.div
+                          initial={{ scale: 0.6 }}
+                          animate={{ scale: 1 }}
+                          transition={{
+                            type: "spring",
+                            stiffness: 260,
+                            damping: 20
+                          }}
+                          className="relative flex items-center justify-center"
+                        >
+                          <motion.div 
+                            className="absolute inset-0 rounded-full bg-[#006400]/10"
+                            initial={{ scale: 0.6, opacity: 0 }}
+                            animate={{ 
+                              scale: [0.6, 1.5, 1],
+                              opacity: [0, 0.25, 0]
+                            }}
+                            transition={{ 
+                              duration: 1.4,
+                              ease: [0.22, 1, 0.36, 1]
+                            }}
+                          />
+                          <svg 
+                            width="22" 
+                            height="22" 
+                            viewBox="0 0 24 24" 
+                            fill="none" 
+                            xmlns="http://www.w3.org/2000/svg" 
+                            className="text-[#006400]"
+                            style={{ overflow: 'visible' }}
+                          >
+                            <motion.path 
+                              d="M20 6L9 17L4 12" 
+                              stroke="currentColor" 
+                              strokeWidth="2.8" 
+                              strokeLinecap="round" 
+                              strokeLinejoin="round"
+                              initial={{ pathLength: 0, opacity: 0 }}
+                              animate={{ pathLength: 1, opacity: 1 }}
+                              transition={{ 
+                                pathLength: { duration: 0.8, ease: [0.16, 1, 0.3, 1] },
+                                opacity: { duration: 0.3 }
+                              }}
+                            />
+                          </svg>
+                        </motion.div>
+                        <motion.span 
+                          initial={{ opacity: 0, x: -8 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          transition={{ 
+                            delay: 0.4, 
+                            duration: 0.5,
+                            ease: [0.16, 1, 0.3, 1]
+                          }}
+                          className="text-white font-medium"
+                        >
+                          Configurações salvas
+                        </motion.span>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </Button>
+              </motion.div>
+            </div>
+            
+            {/* Conteúdo */}
+            <div className="col-span-12 md:col-span-9">
+              <AnimatePresence mode="wait">
+                {activeTab === "perfil" && (
+                  <motion.div
+                    key="perfil"
+                    variants={tabVariants}
+                    initial="hidden"
+                    animate="visible"
+                    exit="exit"
+                    className="space-y-6"
+                  >
+                    <ProfileSettings />
+                    
+                    <AccountLoginSection />
+                  </motion.div>
+                )}
+                
+                {activeTab === "notificacoes" && (
+                  <motion.div
+                    key="notificacoes"
+                    variants={tabVariants}
+                    initial="hidden"
+                    animate="visible"
+                    exit="exit"
+                    className="space-y-6"
+                  >
+                    <NotificationSettings 
+                      onSettingsChange={(settings) => setNotificationSettings(settings)}
+                      onNotificationTestSent={handleNotificationTestSent}
+                      onPermissionChange={handleNotificationPermissionChange}
+                    />
+                  </motion.div>
+                )}
+                
+                {activeTab === "aparencia" && (
+                  <motion.div
+                    key="aparencia"
+                    variants={tabVariants}
+                    initial="hidden"
+                    animate="visible"
+                    exit="exit"
+                    className="space-y-6"
+                  >
+                    <AppearanceSettings />
+                  </motion.div>
+                )}
+                
+                {activeTab === "privacidade" && (
+                  <motion.div
+                    key="privacidade"
+                    variants={tabVariants}
+                    initial="hidden"
+                    animate="visible"
+                    exit="exit"
+                    className="space-y-6"
+                  >
+                    <div className="grid grid-cols-1 gap-6">
+                      {/* Backup automático */}
+                      <SettingsSection
+                        title="Backup e Exportação"
+                        description="Gerenciar seus dados e backups"
+                        icon={<Database className="h-5 w-5 text-amber-400/70" />}
+                      >
+                        <div className="space-y-4">
+                          <div className="flex items-center justify-between">
+                            <div className="space-y-0.5">
+                              <Label className="text-white/80">Backup automático</Label>
+                              <p className="text-xs text-white/40">Armazena suas configurações na nuvem automaticamente</p>
+                            </div>
+                            <Switch
+                              checked={autoBackup}
+                              onCheckedChange={setAutoBackup}
+                              className="data-[state=checked]:bg-gradient-to-r data-[state=checked]:from-amber-500/90 data-[state=checked]:to-amber-400/90"
+                            />
+                          </div>
+                          
+                          <div className="flex items-center justify-between">
+                            <div className="space-y-0.5">
+                              <Label className="text-white/80">Exportação de dados</Label>
+                              <p className="text-xs text-white/40">Permite exportar seus dados em formato CSV</p>
+                            </div>
+                            <Switch
+                              checked={dataExport}
+                              onCheckedChange={setDataExport}
+                              className="data-[state=checked]:bg-gradient-to-r data-[state=checked]:from-amber-500/90 data-[state=checked]:to-amber-400/90"
+                            />
+                          </div>
+                          
+                          <div className="flex gap-4 mt-6">
+                            <Button variant="outline" size="sm" className="text-xs bg-white/5 border-white/10 hover:bg-white/10 text-white/70">
+                              Exportar dados
+                            </Button>
+                            <Button variant="outline" size="sm" className="text-xs bg-white/5 border-white/10 hover:bg-white/10 text-white/70">
+                              Fazer backup agora
+                            </Button>
+                          </div>
+                        </div>
+                      </SettingsSection>
+                      
+                      {/* Autenticação */}
+                      <SettingsSection
+                        title="Autenticação em Duas Etapas"
+                        description="Proteja sua conta com segurança adicional"
+                        icon={<Shield className="h-5 w-5 text-rose-400/70" />}
+                      >
+                        <div className="space-y-4">
+                          <div className="flex items-center justify-between">
+                            <div className="space-y-0.5">
+                              <Label className="text-white/80">Autenticação em duas etapas</Label>
+                              <p className="text-xs text-white/40">Solicita um código adicional ao fazer login</p>
+                            </div>
+                            <Switch
+                              checked={twoFactorAuth}
+                              onCheckedChange={setTwoFactorAuth}
+                              className="data-[state=checked]:bg-gradient-to-r data-[state=checked]:from-rose-500/90 data-[state=checked]:to-rose-400/90"
+                            />
+                          </div>
+                          
+                          <div className="flex items-center justify-between">
+                            <div className="space-y-0.5">
+                              <Label className="text-white/80">Autenticação por e-mail</Label>
+                              <p className="text-xs text-white/40">Receba códigos de verificação por e-mail</p>
+                            </div>
+                            <Switch
+                              checked={emailAuth}
+                              onCheckedChange={setEmailAuth}
+                              className="data-[state=checked]:bg-gradient-to-r data-[state=checked]:from-rose-500/90 data-[state=checked]:to-rose-400/90"
+                            />
+                          </div>
+                          
+                          <div className="mt-6">
+                            {twoFactorAuth ? (
+                              <div className="p-3 rounded-lg border border-white/10 bg-white/5">
+                                <h4 className="text-sm font-medium text-white/80 mb-2">Configuração segura</h4>
+                                <p className="text-xs text-white/60 mb-3">
+                                  A autenticação em duas etapas está ativada e funcionando corretamente.
+                                </p>
+                                <Button variant="outline" size="sm" className="text-xs bg-white/5 border-white/10 hover:bg-white/10 text-white/70">
+                                  Alterar configurações
+                                </Button>
+                              </div>
+                            ) : (
+                              <div className="p-3 rounded-lg border border-amber-500/20 bg-amber-900/5">
+                                <h4 className="text-sm font-medium text-amber-200/80 mb-2">Recomendação de segurança</h4>
+                                <p className="text-xs text-white/60 mb-3">
+                                  Recomendamos ativar a autenticação em duas etapas para aumentar a segurança da sua conta.
+                                </p>
+                                <Button size="sm" className="text-xs bg-gradient-to-r from-amber-500/80 to-rose-500/80 hover:from-amber-500/90 hover:to-rose-500/90 border-0">
+                                  Ativar agora
+                                </Button>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </SettingsSection>
+                      
+                      {/* Termos de uso */}
+                      <SettingsSection
+                        title="Termos e Políticas"
+                        description="Informações legais e políticas da plataforma"
+                        icon={<Info className="h-5 w-5 text-white/70" />}
+                      >
+                        <div className="space-y-4">
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {["Termos de Uso", "Política de Privacidade", "Política de Cookies", "Conformidade LGPD"].map((term) => (
+                              <motion.button
+                                key={term}
+                                whileHover={{ y: -2 }}
+                                className="text-left p-4 rounded-lg border border-white/5 bg-white/[0.02] hover:bg-white/[0.04] transition-all duration-200"
+                                onClick={() => setShowTermsModal(true)}
+                              >
+                                <h4 className="text-sm font-medium text-white/80 mb-1">{term}</h4>
+                                <p className="text-xs text-white/40">Última atualização: 10/10/2023</p>
+                              </motion.button>
+                            ))}
+                          </div>
+                        </div>
+                      </SettingsSection>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          </div>
+        </motion.div>
+      </div>
+      
+      {/* Modal para termos e políticas */}
+      <Dialog open={showTermsModal} onOpenChange={setShowTermsModal}>
+        <DialogContent className="bg-gradient-to-b from-slate-900/95 to-black/95 border-white/10 backdrop-blur-xl max-w-2xl max-h-[80vh]">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-light text-white/90">Termos de Uso</DialogTitle>
             <DialogDescription className="text-white/50">
-              Leia atentamente nossos termos e condições de uso
+              Última atualização: 10/10/2023
             </DialogDescription>
           </DialogHeader>
-          
-          <div className="space-y-4 mt-2 text-sm text-white/70">
-            <h3 className="font-medium text-white/90">1. Introdução</h3>
-            <p>
-              Estes Termos e Condições regem o uso do ProfEyes, plataforma de análise de sinais de trading. 
-              Ao acessar ou utilizar nossa plataforma, você concorda com estes termos em sua totalidade.
-            </p>
-            
-            <h3 className="font-medium text-white/90">2. Licença de Uso</h3>
-            <p>
-              Concedemos a você uma licença limitada, não exclusiva e não transferível para acessar e utilizar 
-              nossa plataforma para fins pessoais e comerciais, sujeita a estes Termos e Condições.
-            </p>
-            
-            <h3 className="font-medium text-white/90">3. Limitação de Responsabilidade</h3>
-            <p>
-              A plataforma é fornecida "como está", sem garantias de qualquer tipo. Não garantimos que os sinais de 
-              trading gerados resultarão em lucros. O trading de ativos financeiros envolve alto risco, e você deve 
-              estar ciente de que pode perder parte ou todo o seu investimento.
-            </p>
-            
-            <h3 className="font-medium text-white/90">4. Uso de Dados</h3>
-            <p>
-              Ao utilizar nossa plataforma, você concorda que podemos coletar e utilizar dados sobre seu uso, 
-              conforme descrito em nossa Política de Privacidade.
-            </p>
-            
-            <h3 className="font-medium text-white/90">5. Restrições de Uso</h3>
-            <p>
-              Você concorda em não:
-            </p>
-            <ul className="list-disc pl-5 space-y-1">
-              <li>Usar a plataforma para qualquer finalidade ilegal ou não autorizada</li>
-              <li>Modificar, adaptar ou piratear a plataforma</li>
-              <li>Compartilhar sua conta com terceiros</li>
-              <li>Tentar acessar dados não destinados a você</li>
-              <li>Usar a plataforma de maneira que possa danificá-la ou prejudicar sua disponibilidade</li>
-            </ul>
-            
-            <h3 className="font-medium text-white/90">6. Rescisão</h3>
-            <p>
-              Reservamos o direito de rescindir ou suspender seu acesso à plataforma, por qualquer motivo, 
-              incluindo violação destes Termos e Condições.
-            </p>
-            
-            <h3 className="font-medium text-white/90">7. Alterações aos Termos</h3>
-            <p>
-              Podemos atualizar estes Termos e Condições periodicamente. Notificaremos você sobre mudanças 
-              significativas por meio da plataforma ou por email.
-            </p>
-            
-            <h3 className="font-medium text-white/90">8. Lei Aplicável</h3>
-            <p>
-              Estes Termos e Condições são regidos pelas leis do Brasil, sem considerar seus princípios de 
-              conflito de leis.
-            </p>
-            
-            <div className="pt-4 border-t border-white/10">
-              <p className="text-white/50 text-xs">
-                Última atualização: 15 de Março de 2024
+          <ScrollArea className="mt-4 max-h-[60vh]">
+            <div className="space-y-4 text-sm text-white/70 p-1">
+              <p>
+                Estes termos e condições ("Termos") regem o uso do serviço ProfEyes ("Serviço") operado pela nossa empresa.
+              </p>
+              <p>
+                Ao acessar ou usar o Serviço, você concorda em estar vinculado a estes Termos. Se você discordar de qualquer parte dos termos, você não poderá acessar o Serviço.
+              </p>
+              <h4 className="text-white/90 font-medium text-base mt-6 mb-2">1. Contas</h4>
+              <p>
+                Quando você cria uma conta conosco, você garante que as informações fornecidas são precisas, completas e atualizadas. Informações imprecisas, incompletas ou desatualizadas podem resultar no encerramento imediato da sua conta no Serviço.
+              </p>
+              <h4 className="text-white/90 font-medium text-base mt-6 mb-2">2. Privacidade e Proteção de Dados</h4>
+              <p>
+                Nossa Política de Privacidade explica como coletamos, usamos e protegemos as informações que você fornece ao usar nosso Serviço. Ao usar nosso Serviço, você concorda com a coleta e uso de informações de acordo com esta política.
+              </p>
+              <h4 className="text-white/90 font-medium text-base mt-6 mb-2">3. Segurança</h4>
+              <p>
+                A segurança de sua conta é importante para nós, mas lembre-se de que nenhum método de transmissão pela Internet ou método de armazenamento eletrônico é 100% seguro. Enquanto nos esforçamos para usar meios comercialmente aceitáveis para proteger suas informações pessoais, não podemos garantir sua segurança absoluta.
+              </p>
+              <h4 className="text-white/90 font-medium text-base mt-6 mb-2">4. Limitação de Responsabilidade</h4>
+              <p>
+                Em nenhum caso nossa empresa, nossos diretores, executivos, funcionários, afiliados, agentes, contratados, estagiários, fornecedores, prestadores de serviços ou licenciadores serão responsáveis por quaisquer danos diretos, indiretos, incidentais, especiais, consequenciais ou punitivos, incluindo, mas não se limitando a, perda de lucros, dados, uso, boa vontade, ou outras perdas intangíveis, resultantes do uso ou da incapacidade de usar o serviço.
+              </p>
+              <h4 className="text-white/90 font-medium text-base mt-6 mb-2">5. Alterações</h4>
+              <p>
+                Reservamo-nos o direito, a nosso exclusivo critério, de modificar ou substituir estes Termos a qualquer momento. Se uma revisão for material, tentaremos fornecer um aviso com pelo menos 30 dias de antecedência antes que quaisquer novos termos entrem em vigor.
+              </p>
+              <h4 className="text-white/90 font-medium text-base mt-6 mb-2">6. Contato</h4>
+              <p>
+                Se você tiver alguma dúvida sobre estes Termos, entre em contato conosco através do e-mail suporte@profeyes.com.
               </p>
             </div>
+          </ScrollArea>
+          <div className="flex justify-end mt-4">
+            <Button onClick={() => setShowTermsModal(false)} variant="outline" className="border-white/10 bg-white/5 hover:bg-white/10 text-white/80">
+              Fechar
+            </Button>
           </div>
         </DialogContent>
       </Dialog>

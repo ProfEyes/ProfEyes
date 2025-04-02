@@ -1,0 +1,135 @@
+warning: in the working copy of 'src/contexts/AuthContext.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/pages/Auth.tsx', LF will be replaced by CRLF the next time Git touches it
+[1mdiff --git a/src/contexts/AuthContext.tsx b/src/contexts/AuthContext.tsx[m
+[1mindex b473523..a4c8842 100644[m
+[1m--- a/src/contexts/AuthContext.tsx[m
+[1m+++ b/src/contexts/AuthContext.tsx[m
+[36m@@ -492,28 +492,8 @@[m [mexport function AuthProvider({ children }: AuthProviderProps) {[m
+         };[m
+       }[m
+       [m
+[31m-      // Verificar se o email já existe usando o endpoint auth.signInWithOtp[m
+[31m-      // Esta é uma forma indireta de verificar se o email existe, sem realmente fazer login[m
+[31m-      const { error: existingUserError } = await supabase.auth.signInWithOtp({[m
+[31m-        email,[m
+[31m-        options: {[m
+[31m-          shouldCreateUser: false, // Não criar usuário se não existir[m
+[31m-        }[m
+[31m-      });[m
+[31m-      [m
+[31m-      // Se não retornar erro de "user not found", é porque o usuário já existe[m
+[31m-      // No Supabase, se tentarmos enviar OTP para um email inexistente, dará erro[m
+[31m-      if (!existingUserError || !existingUserError.message.includes('not found')) {[m
+[31m-        console.log('Email já existe:', email);[m
+[31m-        return { [m
+[31m-          error: {[m
+[31m-            message: 'Este email já está cadastrado. Por favor, faça login com sua conta existente.',[m
+[31m-            name: 'UserExists'[m
+[31m-          } as any [m
+[31m-        };[m
+[31m-      }[m
+[31m-      [m
+[31m-      // Realizar o cadastro utilizando o Supabase[m
+[32m+[m[32m      // Realizar o cadastro utilizando o Supabase diretamente[m
+[32m+[m[32m      // Não fazemos mais a verificação prévia com OTP que estava gerando falsos positivos[m
+       const { data, error } = await supabase.auth.signUp({[m
+         email,[m
+         password,[m
+[36m@@ -530,11 +510,19 @@[m [mexport function AuthProvider({ children }: AuthProviderProps) {[m
+       if (error) {[m
+         console.error('Erro ao criar conta:', error);[m
+         [m
+[31m-        // Traduzir as mensagens de erro comuns do Supabase[m
+[31m-        if (error.message.includes('already registered') || [m
+[31m-            error.message.includes('User already registered') ||[m
+[32m+[m[32m        // Verificar se é um erro de usuário já existente[m
+[32m+[m[32m        if (error.message && ([m
+[32m+[m[32m            error.message.includes('already registered') ||[m[41m [m
+             error.message.includes('already exists') ||[m
+[31m-            error.message.includes('email taken')) {[m
+[32m+[m[32m            error.message.includes('já existe') ||[m
+[32m+[m[32m            error.message.includes('já cadastrado') ||[m
+[32m+[m[32m            error.message.includes('email taken') ||[m
+[32m+[m[32m            error.message.includes('duplicate key') ||[m
+[32m+[m[32m            error.message.includes('unique constraint') ||[m
+[32m+[m[32m            error.message.includes('uniqueness violation') ||[m
+[32m+[m[32m            error.status === 400[m
+[32m+[m[32m          )) {[m
+[32m+[m[32m          console.log('Email já cadastrado detectado (catch):', email, error.message);[m
+           return { [m
+             error: {[m
+               message: 'Este email já está cadastrado. Por favor, faça login com sua conta existente.',[m
+[36m@@ -572,8 +560,14 @@[m [mexport function AuthProvider({ children }: AuthProviderProps) {[m
+           error.message.includes('already registered') || [m
+           error.message.includes('already exists') ||[m
+           error.message.includes('já existe') ||[m
+[31m-          error.message.includes('já cadastrado')[m
+[32m+[m[32m          error.message.includes('já cadastrado') ||[m
+[32m+[m[32m          error.message.includes('email taken') ||[m
+[32m+[m[32m          error.message.includes('duplicate key') ||[m
+[32m+[m[32m          error.message.includes('unique constraint') ||[m
+[32m+[m[32m          error.message.includes('uniqueness violation') ||[m
+[32m+[m[32m          error.status === 400[m
+         )) {[m
+[32m+[m[32m        console.log('Email já cadastrado detectado (catch):', email, error.message);[m
+         return { [m
+           error: {[m
+             message: 'Este email já está cadastrado. Por favor, faça login com sua conta existente.',[m
+[1mdiff --git a/src/pages/Auth.tsx b/src/pages/Auth.tsx[m
+[1mindex 95e15bb..b28707d 100644[m
+[1m--- a/src/pages/Auth.tsx[m
+[1m+++ b/src/pages/Auth.tsx[m
+[36m@@ -506,12 +506,12 @@[m [mexport default function Auth() {[m
+       return;[m
+     }[m
+     [m
+[32m+[m[32m    // Criar um ID de toast para poder atualizar depois[m
+[32m+[m[32m    const signupToast = toast.loading('Processando cadastro...');[m
+[32m+[m[41m    [m
+     try {[m
+       setLoadingAction('signup');[m
+       [m
+[31m-      // Mostrar indicação de progresso[m
+[31m-      const signupToast = toast.loading('Processando cadastro...');[m
+[31m-      [m
+       // Extrair a data de nascimento do formato DD/MM/YYYY para o formato ISO (YYYY-MM-DD)[m
+       const rawBirthdate = birthdate.replace(/\D/g, '');[m
+       const day = rawBirthdate.substring(0, 2);[m
+[36m@@ -525,7 +525,12 @@[m [mexport default function Auth() {[m
+         // Verificar especificamente se o erro é de email já cadastrado[m
+         if (authError.message.includes('já está cadastrado') || [m
+             authError.name === 'UserExists' || [m
+[31m-            authError.message.includes('already registered')) {[m
+[32m+[m[32m            authError.message.includes('already registered') ||[m
+[32m+[m[32m            authError.message.includes('already exists') ||[m
+[32m+[m[32m            authError.message.includes('email taken') ||[m
+[32m+[m[32m            authError.message.includes('duplicate key') ||[m
+[32m+[m[32m            authError.message.includes('unique constraint') ||[m
+[32m+[m[32m            authError.message.includes('uniqueness violation')) {[m
+           setError({ [m
+             field: 'email', [m
+             message: 'Este email já está cadastrado. Por favor, utilize outro email ou faça login.' [m
+[36m@@ -590,7 +595,22 @@[m [mexport default function Auth() {[m
+       [m
+     } catch (error: any) {[m
+       console.error('Erro ao criar conta:', error);[m
+[31m-      animateErrorField();[m
+[32m+[m[41m      [m
+[32m+[m[32m      if (!error.message?.includes('já está cadastrado') &&[m[41m [m
+[32m+[m[32m          error.name !== 'UserExists' &&[m
+[32m+[m[32m          !error.message?.includes('already registered') &&[m
+[32m+[m[32m          !error.message?.includes('already exists') &&[m
+[32m+[m[32m          !error.message?.includes('email taken') &&[m
+[32m+[m[32m          !error.message?.includes('duplicate key') &&[m
+[32m+[m[32m          !error.message?.includes('unique constraint') &&[m
+[32m+[m[32m          !error.message?.includes('uniqueness violation')) {[m
+[32m+[m[32m        // Apenas exibir o toast genérico para erros diferentes do email já cadastrado[m
+[32m+[m[32m        toast.error('Falha no cadastro', {[m
+[32m+[m[32m          id: signupToast,[m
+[32m+[m[32m          description: 'Ocorreu um erro durante o cadastro. Tente novamente.'[m
+[32m+[m[32m        });[m
+[32m+[m[32m        animateErrorField();[m
+[32m+[m[32m      }[m
+     } finally {[m
+       setLoadingAction(null);[m
+     }[m

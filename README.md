@@ -168,3 +168,44 @@ Para contribuir com o projeto, siga as práticas padrão de desenvolvimento:
 3. Faça commit das suas alterações (`git commit -m 'Adiciona nova feature'`)
 4. Envie para a branch (`git push origin feature/nome-da-feature`)
 5. Abra um Pull Request
+
+# Sistema de Gerenciamento de Usuários
+
+O aplicativo inclui um sistema completo de gerenciamento de usuários com controle administrativo. Através do painel de administração, os administradores podem:
+
+- Visualizar todos os usuários cadastrados no sistema
+- Adicionar novos usuários manualmente
+- Excluir contas de usuário
+- Redefinir senhas
+- Verificar logs de atividades administrativas
+
+## Configuração
+
+Para configurar o sistema de gerenciamento de usuários:
+
+1. Execute a migração do Supabase incluída no projeto:
+```bash
+npx supabase migration up
+```
+
+2. O primeiro usuário registrado no sistema receberá automaticamente permissões de administrador.
+
+3. Para acessar o painel de administração, navegue para `/admin` após fazer login como um usuário administrador.
+
+## Segurança
+
+O sistema foi projetado com segurança em mente:
+
+- Todas as operações administrativas são registradas em logs
+- Políticas de segurança no nível de linha (RLS) restringem o acesso a dados sensíveis
+- Operações administrativas sensíveis exigem confirmação
+- Senhas armazenadas com hash seguro através do Supabase Auth
+
+## Integração com Supabase
+
+O sistema utiliza a API de autenticação e banco de dados do Supabase:
+
+- Tabela `user_profiles` estendida com campo `is_admin`
+- Nova tabela `user_management_logs` para rastreamento de atividades
+- Políticas RLS configuradas para controle de acesso
+- Triggers para atribuição automática de permissões de administrador

@@ -1,8 +1,8 @@
 import { createClient } from '@supabase/supabase-js';
 import type { Database } from '@/types/supabase';
 
-const supabaseUrl = 'https://nkvqddfphyiiufkuqavd.supabase.co';
-const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5rdnFkZGZwaHlpaXVma3VxYXZkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDE0MDY3MzgsImV4cCI6MjA1Njk4MjczOH0.fX9wm_fBTigakGCcH2nW2VVr_aqbtsusVMeEKQz2Fpw';
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://vaxiqvowvavrfyjmrxpl.supabase.co';
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZheGlxdm93dmF2cmZ5am1yeHBsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDM1NTgzMTIsImV4cCI6MjA1OTEzNDMxMn0.t4u27nvbPmvtC25WMdSCxxb3nZVGvUFxr6GC34lg7Ok';
 
 // Função para fazer fetch com retry
 const fetchWithRetry = async (url, options = {}, retries = 3, backoff = 300) => {

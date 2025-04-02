@@ -9,7 +9,12 @@
     "build:dev": "vite build --mode development",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview",
-    "setup-db": "node scripts/setup-database.mjs"
+    "setup-db": "node scripts/setup-database.mjs",
+    "setup-postgres": "node scripts/setup-database-postgres.mjs",
+    "prepare-migrations": "node scripts/prepare-migrations.mjs",
+    "test-connection": "node scripts/test-supabase-connection.mjs",
+    "test-auth": "node scripts/test-supabase-auth.mjs",
+    "backup-db": "node scripts/backup-supabase.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.0",
@@ -41,7 +46,7 @@
     "@radix-ui/react-toggle": "^1.1.2",
     "@radix-ui/react-toggle-group": "^1.1.0",
     "@radix-ui/react-tooltip": "^1.1.4",
-    "@supabase/supabase-js": "^2.49.1",
+    "@supabase/supabase-js": "^2.49.4",
     "@tanstack/query-sync-storage-persister": "^5.69.0",
     "@tanstack/react-query": "^5.56.2",
     "@tanstack/react-query-persist-client": "^5.69.0",
