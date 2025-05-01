@@ -44,15 +44,22 @@ const BreadcrumbLink = React.forwardRef<
   React.ComponentPropsWithoutRef<"a"> & {
     asChild?: boolean
   }
->(({ asChild, className, ...props }, ref) => {
+>(({ asChild, className, children, ...props }, ref) => {
   const Comp = asChild ? Slot : "a"
+
+  if (asChild && React.Children.count(children) !== 1) {
+    console.error("BreadcrumbLink with asChild prop must have exactly one child element")
+    return null
+  }
 
   return (
     <Comp
       ref={ref}
       className={cn("transition-colors hover:text-foreground", className)}
       {...props}
-    />
+    >
+      {children}
+    </Comp>
   )
 })
 BreadcrumbLink.displayName = "BreadcrumbLink"

@@ -30,8 +30,22 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
-import { ReloadIcon, TrashIcon, PlusIcon, EyeIcon, SearchIcon, FilterIcon, ClockIcon } from "@radix-ui/react-icons";
+import { ReloadIcon, TrashIcon, PlusIcon, EyeIcon, SearchIcon, FilterIcon, ClockIcon, Video } from "@radix-ui/react-icons";
 import { UserData, checkAdminPermission, createUser, deleteUser, listUsers, getAdminLogs } from '@/lib/admin-api';
+import {
+  Tabs,
+  TabsList,
+  TabsTrigger,
+  TabsContent,
+} from "@/components/ui/tabs";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Loader2 } from "lucide-react";
 
 export default function Admin() {
   const { user, session } = useAuth();
@@ -54,6 +68,12 @@ export default function Admin() {
     name: '',
     birthdate: ''
   });
+  const [activeTab, setActiveTab] = useState("users");
+  const [streamers, setStreamers] = useState<any[]>([]);
+  const [loadingStreamers, setLoadingStreamers] = useState<boolean>(true);
+  const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
+  const [isGranting, setIsGranting] = useState<boolean>(false);
+  const [isRevoking, setIsRevoking] = useState<boolean>(false);
 
   const itemsPerPage = 10;
 
@@ -244,6 +264,107 @@ export default function Admin() {
     };
     return actions[action] || action;
   };
+
+  // Carregar usuários com permissão para transmissão
+  const loadStreamers = async () => {
+    setLoadingStreamers(true);
+    try {
+      const { data, error } = await supabase
+        .from('stream_permissions')
+        .select('*, profiles:user_id(*)')
+        .eq('can_stream', true);
+      
+      if (error) {
+        console.error('Erro ao carregar streamers:', error);
+        toast.error('Erro ao carregar streamers');
+        return;
+      }
+      
+      setStreamers(data || []);
+    } catch (error) {
+      console.error('Erro ao carregar streamers:', error);
+      toast.error('Erro ao carregar streamers');
+    } finally {
+      setLoadingStreamers(false);
+    }
+  };
+  
+  // Conceder permissão para usuários selecionados
+  const grantStreamPermission = async () => {
+    if (selectedUsers.length === 0) {
+      toast.warning('Selecione pelo menos um usuário');
+      return;
+    }
+    
+    setIsGranting(true);
+    
+    try {
+      // Preparar dados para inserção
+      const permissionsData = selectedUsers.map(userId => ({
+        user_id: userId,
+        can_stream: true
+      }));
+      
+      // Inserir permissões
+      const { error } = await supabase
+        .from('stream_permissions')
+        .upsert(permissionsData, { onConflict: 'user_id' });
+      
+      if (error) {
+        console.error('Erro ao conceder permissões:', error);
+        toast.error('Erro ao conceder permissões');
+        return;
+      }
+      
+      toast.success(`Permissão concedida para ${selectedUsers.length} usuário(s)`);
+      
+      // Recarregar streamers
+      loadStreamers();
+      
+      // Limpar seleção
+      setSelectedUsers([]);
+    } catch (error) {
+      console.error('Erro ao conceder permissões:', error);
+      toast.error('Erro ao conceder permissões');
+    } finally {
+      setIsGranting(false);
+    }
+  };
+  
+  // Revogar permissão de transmissão
+  const revokeStreamPermission = async (userId: string) => {
+    setIsRevoking(true);
+    
+    try {
+      const { error } = await supabase
+        .from('stream_permissions')
+        .delete()
+        .eq('user_id', userId);
+      
+      if (error) {
+        console.error('Erro ao revogar permissão:', error);
+        toast.error('Erro ao revogar permissão');
+        return;
+      }
+      
+      toast.success('Permissão revogada com sucesso');
+      
+      // Atualizar lista de streamers
+      setStreamers(streamers.filter(s => s.user_id !== userId));
+    } catch (error) {
+      console.error('Erro ao revogar permissão:', error);
+      toast.error('Erro ao revogar permissão');
+    } finally {
+      setIsRevoking(false);
+    }
+  };
+  
+  // Carregar streamers quando a aba for selecionada
+  useEffect(() => {
+    if (activeTab === 'streamers') {
+      loadStreamers();
+    }
+  }, [activeTab]);
 
   if (!isAuthorized) {
     return (
@@ -713,6 +834,125 @@ export default function Admin() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <Tabs defaultValue={activeTab} onValueChange={setActiveTab}>
+        <TabsList className="grid w-full grid-cols-3">
+          <TabsTrigger value="users">{t('admin.tabs.users')}</TabsTrigger>
+          <TabsTrigger value="logs">{t('admin.tabs.logs')}</TabsTrigger>
+          <TabsTrigger value="streamers">{t('admin.tabs.streamers') || 'Transmissões'}</TabsTrigger>
+        </TabsList>
+        <TabsContent value="users">
+          {/* Conteúdo existente da aba de usuários */}
+        </TabsContent>
+        <TabsContent value="logs">
+          {/* Conteúdo existente da aba de logs */}
+        </TabsContent>
+        <TabsContent value="streamers">
+          <Card>
+            <CardHeader>
+              <CardTitle>{t('admin.streamers.title') || 'Gerenciar Transmissões ao Vivo'}</CardTitle>
+              <CardDescription>
+                {t('admin.streamers.description') || 
+                 'Gerencie quais usuários têm permissão para iniciar transmissões ao vivo.'}
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-6">
+                {/* Seleção de usuários para conceder permissão */}
+                <div className="p-4 border rounded-lg">
+                  <h3 className="text-lg font-medium mb-4">
+                    {t('admin.streamers.grant_permission') || 'Conceder Permissão'}
+                  </h3>
+                  
+                  <Select 
+                    isMulti 
+                    options={users.filter(user => 
+                      !streamers.some(s => s.user_id === user.id)
+                    ).map(user => ({
+                      value: user.id,
+                      label: `${user.email} (${user.name || 'Sem nome'})`
+                    }))} 
+                    placeholder={t('admin.streamers.select_users') || 'Selecione usuários...'}
+                    onChange={(selected) => 
+                      setSelectedUsers(selected ? selected.map(option => option.value) : [])
+                    }
+                    className="mb-4"
+                  />
+                  
+                  <Button 
+                    onClick={grantStreamPermission} 
+                    disabled={isGranting || selectedUsers.length === 0}
+                    className="w-full"
+                  >
+                    {isGranting ? 
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : 
+                      <Video className="mr-2 h-4 w-4" />
+                    }
+                    {t('admin.streamers.grant') || 'Conceder Permissão de Transmissão'}
+                  </Button>
+                </div>
+                
+                {/* Lista de usuários com permissão */}
+                <div>
+                  <h3 className="text-lg font-medium mb-4">
+                    {t('admin.streamers.current_streamers') || 'Usuários com Permissão'}
+                  </h3>
+                  
+                  {loadingStreamers ? (
+                    <div className="flex justify-center p-8">
+                      <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                    </div>
+                  ) : streamers.length === 0 ? (
+                    <div className="text-center py-8 text-muted-foreground">
+                      {t('admin.streamers.no_streamers') || 
+                       'Nenhum usuário com permissão para transmissão.'}
+                    </div>
+                  ) : (
+                    <div className="border rounded-md">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>{t('admin.users.name') || 'Nome'}</TableHead>
+                            <TableHead>{t('admin.users.email') || 'Email'}</TableHead>
+                            <TableHead>{t('admin.streamers.permission_date') || 'Data'}</TableHead>
+                            <TableHead className="text-right">{t('admin.users.actions') || 'Ações'}</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {streamers.map((streamer) => (
+                            <TableRow key={streamer.user_id}>
+                              <TableCell className="font-medium">
+                                {streamer.profiles?.name || t('admin.users.unnamed')}
+                              </TableCell>
+                              <TableCell>{streamer.profiles?.email}</TableCell>
+                              <TableCell>
+                                {new Date(streamer.created_at).toLocaleDateString()}
+                              </TableCell>
+                              <TableCell className="text-right">
+                                <Button
+                                  variant="destructive"
+                                  size="sm"
+                                  onClick={() => revokeStreamPermission(streamer.user_id)}
+                                  disabled={isRevoking}
+                                >
+                                  {isRevoking ? 
+                                    <Loader2 className="h-4 w-4 animate-spin" /> : 
+                                    t('admin.streamers.revoke') || 'Revogar'
+                                  }
+                                </Button>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 } 

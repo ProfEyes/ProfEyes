@@ -2,112 +2,93 @@ import React, { useState, useEffect } from "react";
 import Layout from "@/components/Layout";
 import { NotificationList } from "@/components/notification/NotificationList";
 import { useNotifications } from "@/contexts/NotificationContext";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Bell, BellOff, Check, Filter, Zap, Trash, Info, AlertTriangle, MessageSquare, BellRing } from "lucide-react";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Bell, Settings2, Check, AlertTriangle, Volume2, Clock } from "lucide-react";
 import { motion } from "framer-motion";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useLocation, useNavigate } from "react-router-dom";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import { Slider } from "@/components/ui/slider";
+import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 
 const NotificationsPage: React.FC = () => {
   const { 
     notifications, 
-    unreadCount, 
-    testNotification, 
-    addNotification 
+    settings,
+    updateSettings,
+    requestPermission,
+    hasPermission,
+    testNotification
   } = useNotifications();
   
   const location = useLocation();
   const navigate = useNavigate();
   
-  // Tipo de filtro e estado inicial
-  const [filter, setFilter] = useState<"all" | "unread" | "read">("all");
-  const [typeFilter, setTypeFilter] = useState<string>("all");
+  // Estado local para as configurações que estão sendo editadas
+  const [editableSettings, setEditableSettings] = useState(settings);
+  const [savedSettings, setSavedSettings] = useState(settings);
   
-  // Atualiza o filtro com base nos parâmetros da URL
+  // Atualizar o estado local quando as configurações globais mudarem
   useEffect(() => {
-    const searchParams = new URLSearchParams(location.search);
-    const filterParam = searchParams.get("filter");
-    
-    if (filterParam === "unread") {
-      setFilter("unread");
-    } else if (filterParam === "read") {
-      setFilter("read");
-    } else {
-      setFilter("all");
-    }
-  }, [location.search]);
+    setEditableSettings(settings);
+    setSavedSettings(settings);
+  }, [settings]);
   
-  // Atualiza a URL quando o filtro muda
-  useEffect(() => {
-    if (filter === "all") {
-      navigate("/notifications", { replace: true });
-    } else {
-      navigate(`/notifications?filter=${filter}`, { replace: true });
-    }
-  }, [filter, navigate]);
+  // Verificar se houve alterações
+  const hasChanges = JSON.stringify(editableSettings) !== JSON.stringify(savedSettings);
   
-  const filteredNotifications = notifications.filter(notif => {
-    // Filtragem por lidos/não lidos
-    if (filter === "unread" && notif.read) return false;
-    if (filter === "read" && !notif.read) return false;
-    
-    // Filtragem por tipo
-    if (typeFilter !== "all" && notif.type !== typeFilter) return false;
-    
-    return true;
-  });
-  
-  // Contadores para o resumo
-  const readCount = notifications.filter(n => n.read).length;
-  
-  // Quantidade de cada tipo de notificação
-  const typeCounts = {
-    signals: notifications.filter(n => n.type === "signals").length,
-    news: notifications.filter(n => n.type === "news").length,
-    alerts: notifications.filter(n => n.type === "alerts").length,
-    portfolio: notifications.filter(n => n.type === "portfolio").length,
-    test: notifications.filter(n => n.type === "test").length,
+  // Função para salvar as configurações
+  const saveSettings = () => {
+    updateSettings(editableSettings);
+    setSavedSettings(editableSettings);
+    toast.success("Configurações de notificação salvas com sucesso");
   };
   
-  // Gerador de notificações de teste de diferentes tipos para fins de demonstração
-  const generateExampleNotification = (type: string) => {
-    const notificationTypes: Record<string, { title: string; message: string; priority: "high" | "medium" | "low" }> = {
-      signals: {
-        title: "Novo sinal de trading detectado",
-        message: "Um sinal de compra foi gerado para BTC/USDT. O preço atingiu o nível de suporte chave.",
-        priority: "high"
-      },
-      news: {
-        title: "Notícia de mercado importante",
-        message: "Uma nova regulamentação para criptomoedas foi anunciada. Isso pode afetar o mercado nos próximos dias.",
-        priority: "medium"
-      },
-      alerts: {
-        title: "Alerta de preço atingido",
-        message: "ETH/USDT atingiu o preço alvo de $3,500 que você definiu em seu alerta.",
-        priority: "high"
-      },
-      portfolio: {
-        title: "Atualização do portfólio",
-        message: "Seu portfólio valorizou 5.2% nas últimas 24 horas. Confira os ativos com melhor desempenho.",
-        priority: "low"
+  // Atualizar um tipo de notificação específico
+  const updateType = (typeId: string, field: string, value: boolean) => {
+    setEditableSettings(prev => ({
+      ...prev,
+      types: prev.types.map(type => 
+        type.id === typeId 
+          ? { ...type, [field]: value } 
+          : type
+      )
+    }));
+  };
+  
+  // Solicitar permissão para notificações do navegador
+  const handleRequestPermission = async () => {
+    try {
+      const granted = await requestPermission();
+      if (granted) {
+        toast.success("Permissão de notificações concedida!");
+        
+        // Atualizar configurações após conceder permissão
+        if (!editableSettings.browserNotifications) {
+          setEditableSettings(prev => ({
+            ...prev,
+            browserNotifications: true
+          }));
+        }
+      } else {
+        toast.error("Permissão não concedida. Verifique as configurações do seu navegador.");
       }
-    };
-    
-    if (type in notificationTypes) {
-      const notifTemplate = notificationTypes[type];
-      addNotification({
-        title: notifTemplate.title,
-        message: notifTemplate.message,
-        type: type,
-        priority: notifTemplate.priority,
-        icon: "/logo.png"
-      });
+    } catch (error) {
+      toast.error("Ocorreu um erro ao solicitar permissão de notificações");
+      console.error(error);
     }
+  };
+  
+  // Função para enviar uma notificação de teste
+  const handleTestNotification = () => {
+    testNotification();
+    toast.success("Notificação de teste enviada!");
   };
   
   return (
@@ -136,73 +117,32 @@ const NotificationsPage: React.FC = () => {
               Centro de Notificações
             </h1>
             <p className="text-white/60">
-              Gerencie suas notificações e fique por dentro das atualizações
+              Gerencie suas notificações e configure suas preferências
             </p>
           </motion.div>
-          
-          <div className="flex flex-wrap gap-2">
-            <div className="bg-white/5 border border-white/10 rounded-lg p-1 flex">
-              <Button 
-                variant={filter === "all" ? "default" : "ghost"}
-                size="sm"
-                className={`h-9 rounded-md ${filter === "all" ? "bg-white/10" : "hover:bg-white/5"}`}
-                onClick={() => setFilter("all")}
-              >
-                <Bell className="h-4 w-4 mr-2" />
-                Todas
-              </Button>
-              <Button 
-                variant={filter === "unread" ? "default" : "ghost"}
-                size="sm"
-                className={`h-9 rounded-md ${filter === "unread" ? "bg-blue-500/20" : "hover:bg-white/5"}`}
-                onClick={() => setFilter("unread")}
-              >
-                <BellRing className="h-4 w-4 mr-2" />
-                Não lidas
-                {unreadCount > 0 && (
-                  <Badge className="ml-1 bg-blue-500 text-white">
-                    {unreadCount}
-                  </Badge>
-                )}
-              </Button>
-              <Button 
-                variant={filter === "read" ? "default" : "ghost"}
-                size="sm"
-                className={`h-9 rounded-md ${filter === "read" ? "bg-green-500/20" : "hover:bg-white/5"}`}
-                onClick={() => setFilter("read")}
-              >
-                <Check className="h-4 w-4 mr-2" />
-                Lidas
-                {readCount > 0 && (
-                  <Badge className="ml-1 bg-green-500/80 text-white">
-                    {readCount}
-                  </Badge>
-                )}
-              </Button>
-            </div>
-            
-            <Select value={typeFilter} onValueChange={setTypeFilter}>
-              <SelectTrigger className="w-auto h-9 bg-white/5 border-white/10 focus:ring-0">
-                <div className="flex items-center gap-2">
-                  <Filter className="h-4 w-4" />
-                  <SelectValue placeholder="Filtrar por tipo" />
-                </div>
-              </SelectTrigger>
-              <SelectContent className="bg-black/90 border-white/10">
-                <SelectItem value="all">Todos os tipos</SelectItem>
-                <SelectItem value="signals">Sinais de Trading</SelectItem>
-                <SelectItem value="news">Notícias</SelectItem>
-                <SelectItem value="alerts">Alertas de Preço</SelectItem>
-                <SelectItem value="portfolio">Portfólio</SelectItem>
-                <SelectItem value="test">Testes</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
         </div>
         
+        <Tabs defaultValue="notifications" className="w-full">
+          <TabsList className="mb-6">
+            <TabsTrigger value="notifications">
+              <Bell className="h-4 w-4 mr-2" />
+              Notificações
+              {notifications.filter(n => !n.read).length > 0 && (
+                <Badge variant="default" className="ml-2 bg-primary">
+                  {notifications.filter(n => !n.read).length}
+                </Badge>
+              )}
+            </TabsTrigger>
+            <TabsTrigger value="settings">
+              <Settings2 className="h-4 w-4 mr-2" />
+              Configurações
+            </TabsTrigger>
+          </TabsList>
+          
+          <TabsContent value="notifications">
         <div className="grid grid-cols-1 xl:grid-cols-4 gap-6">
           <div className="xl:col-span-3">
-            <NotificationList maxHeight="700px" viewFilter={filter} />
+                <NotificationList />
           </div>
           
           <div className="space-y-6">
@@ -227,139 +167,329 @@ const NotificationsPage: React.FC = () => {
                   
                   <div className="flex justify-between items-center">
                     <span className="text-white/80">Não lidas</span>
-                    <Badge className={unreadCount > 0 ? "bg-blue-500" : "bg-white/10"}>
-                      {unreadCount}
+                        <Badge className={notifications.filter(n => !n.read).length > 0 ? "bg-blue-500" : "bg-white/10"}>
+                          {notifications.filter(n => !n.read).length}
                     </Badge>
                   </div>
                   
                   <div className="flex justify-between items-center">
                     <span className="text-white/80">Lidas</span>
-                    <Badge className={readCount > 0 ? "bg-green-500/80" : "bg-white/10"}>
-                      {readCount}
-                    </Badge>
+                        <Badge className={notifications.filter(n => n.read).length > 0 ? "bg-green-500/80" : "bg-white/10"}>
+                          {notifications.filter(n => n.read).length}
+                        </Badge>
+                      </div>
+                      
+                      <Separator className="bg-white/5" />
+                      
+                      <div className="space-y-3">
+                        <p className="text-white/80 text-sm">Por tipo</p>
+                        
+                        {settings.types.map(type => (
+                          <div key={type.id} className="flex justify-between items-center">
+                            <span className="text-white/70 text-sm">{type.name}</span>
+                            <Badge variant="outline" className={cn(
+                              "bg-white/5",
+                              type.id === 'signals' && "text-blue-400",
+                              type.id === 'completed' && "text-green-400",
+                              type.id === 'stopped' && "text-red-400",
+                              type.id === 'system' && "text-purple-400",
+                              type.id === 'alerts' && "text-orange-400"
+                            )}>
+                              {notifications.filter(n => n.type === type.id).length}
+                        </Badge>
+                      </div>
+                        ))}
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+                  </div>
+                </div>
+          </TabsContent>
+            
+          <TabsContent value="settings">
+            <Card className="border-white/5 bg-gradient-to-br from-black/40 via-black/30 to-black/20 backdrop-blur-sm">
+              <CardHeader>
+                <CardTitle className="text-xl text-white/90">Configurações de Notificações</CardTitle>
+                <CardDescription className="text-white/60">
+                  Personalize como e quando deseja receber notificações do sistema
+                </CardDescription>
+              </CardHeader>
+              
+              <CardContent className="space-y-6">
+                {/* Configurações gerais */}
+                <div className="space-y-4">
+                  <h3 className="text-lg font-medium text-white/90">Geral</h3>
+                  
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-0.5">
+                      <Label htmlFor="notifications-enabled" className="text-white/80">Notificações</Label>
+                      <p className="text-sm text-white/60">
+                        Ativar ou desativar todas as notificações
+                      </p>
+                    </div>
+                    <Switch
+                      id="notifications-enabled"
+                      checked={editableSettings.enabled}
+                      onCheckedChange={(checked) => 
+                        setEditableSettings(prev => ({ ...prev, enabled: checked }))
+                      }
+                    />
+                  </div>
+              
+              <Separator className="bg-white/5" />
+              
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-0.5">
+                      <Label htmlFor="app-notifications" className="text-white/80">Notificações no Aplicativo</Label>
+                      <p className="text-sm text-white/60">
+                        Mostrar notificações dentro do aplicativo
+                      </p>
+                    </div>
+                    <Switch
+                      id="app-notifications"
+                      checked={editableSettings.appNotifications}
+                      disabled={!editableSettings.enabled}
+                      onCheckedChange={(checked) => 
+                        setEditableSettings(prev => ({ ...prev, appNotifications: checked }))
+                      }
+                    />
                   </div>
                   
-                  <Separator className="bg-white/5" />
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-0.5">
+                      <Label htmlFor="browser-notifications" className="text-white/80">Notificações do Navegador</Label>
+                      <p className="text-sm text-white/60">
+                        Receber notificações mesmo quando o aplicativo estiver em segundo plano
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {!hasPermission && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                          className="bg-white/5 border-white/10 hover:bg-white/10"
+                          onClick={handleRequestPermission}
+                  >
+                          Solicitar Permissão
+                  </Button>
+                      )}
+                      <Switch
+                        id="browser-notifications"
+                        checked={editableSettings.browserNotifications}
+                        disabled={!editableSettings.enabled || !hasPermission}
+                        onCheckedChange={(checked) => 
+                          setEditableSettings(prev => ({ ...prev, browserNotifications: checked }))
+                        }
+                      />
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Configurações de som */}
+                <div className="space-y-4">
+                  <h3 className="text-lg font-medium text-white/90">Som</h3>
+                  
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-0.5">
+                      <Label htmlFor="sound-enabled" className="text-white/80">Sons de Notificação</Label>
+                      <p className="text-sm text-white/60">
+                        Tocar sons quando receber novas notificações
+                      </p>
+                    </div>
+                    <Switch
+                      id="sound-enabled"
+                      checked={editableSettings.sound}
+                      disabled={!editableSettings.enabled}
+                      onCheckedChange={(checked) => 
+                        setEditableSettings(prev => ({ ...prev, sound: checked }))
+                      }
+                    />
+                  </div>
                   
                   <div className="space-y-2">
-                    <h4 className="text-sm font-medium text-white/80">Por tipo</h4>
-                    
-                    <div className="grid gap-2">
-                      <div className="flex justify-between items-center px-2 py-1.5 rounded-md bg-white/5">
-                        <div className="flex items-center gap-2">
-                          <Zap className="h-4 w-4 text-blue-400" />
-                          <span className="text-sm text-white/70">Sinais de Trading</span>
-                        </div>
-                        <Badge variant="outline" className="bg-black/30">
-                          {typeCounts.signals}
-                        </Badge>
+                    <div className="flex justify-between">
+                      <Label htmlFor="volume" className="text-white/80">Volume</Label>
+                      <span className="text-sm text-white/60">
+                        {editableSettings.volume}%
+                      </span>
+                    </div>
+                    <Slider
+                      id="volume"
+                      disabled={!editableSettings.enabled || !editableSettings.sound}
+                      value={[editableSettings.volume]}
+                      min={0}
+                      max={100}
+                      step={5}
+                      onValueChange={(value) => 
+                        setEditableSettings(prev => ({ ...prev, volume: value[0] }))
+                      }
+                      className="w-full"
+                    />
+                  </div>
+                </div>
+                
+                {/* Horário silencioso */}
+                <div className="space-y-4">
+                  <h3 className="text-lg font-medium text-white/90">Horário Silencioso</h3>
+                  
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-0.5">
+                      <Label htmlFor="quiet-hours" className="text-white/80">Ativar Horário Silencioso</Label>
+                      <p className="text-sm text-white/60">
+                        Não receber notificações durante certos horários
+                      </p>
+                    </div>
+                    <Switch
+                      id="quiet-hours"
+                      checked={editableSettings.quietHoursEnabled}
+                      disabled={!editableSettings.enabled}
+                      onCheckedChange={(checked) => 
+                        setEditableSettings(prev => ({ ...prev, quietHoursEnabled: checked }))
+                      }
+                    />
+                  </div>
+                  
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="quiet-start" className="text-white/80">Início</Label>
+                      <div className="flex items-center">
+                        <Clock className="h-4 w-4 mr-2 text-white/60" />
+                        <Input
+                          id="quiet-start"
+                          type="time"
+                          value={editableSettings.quietHoursStart}
+                          disabled={!editableSettings.enabled || !editableSettings.quietHoursEnabled}
+                          onChange={(e) => 
+                            setEditableSettings(prev => ({ ...prev, quietHoursStart: e.target.value }))
+                          }
+                          className="bg-white/5 border-white/10"
+                        />
                       </div>
-                      
-                      <div className="flex justify-between items-center px-2 py-1.5 rounded-md bg-white/5">
-                        <div className="flex items-center gap-2">
-                          <Info className="h-4 w-4 text-amber-400" />
-                          <span className="text-sm text-white/70">Notícias</span>
-                        </div>
-                        <Badge variant="outline" className="bg-black/30">
-                          {typeCounts.news}
-                        </Badge>
-                      </div>
-                      
-                      <div className="flex justify-between items-center px-2 py-1.5 rounded-md bg-white/5">
-                        <div className="flex items-center gap-2">
-                          <AlertTriangle className="h-4 w-4 text-red-400" />
-                          <span className="text-sm text-white/70">Alertas de Preço</span>
-                        </div>
-                        <Badge variant="outline" className="bg-black/30">
-                          {typeCounts.alerts}
-                        </Badge>
-                      </div>
-                      
-                      <div className="flex justify-between items-center px-2 py-1.5 rounded-md bg-white/5">
-                        <div className="flex items-center gap-2">
-                          <MessageSquare className="h-4 w-4 text-purple-400" />
-                          <span className="text-sm text-white/70">Portfólio</span>
-                        </div>
-                        <Badge variant="outline" className="bg-black/30">
-                          {typeCounts.portfolio}
-                        </Badge>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="quiet-end" className="text-white/80">Fim</Label>
+                      <div className="flex items-center">
+                        <Clock className="h-4 w-4 mr-2 text-white/60" />
+                        <Input
+                          id="quiet-end"
+                          type="time"
+                          value={editableSettings.quietHoursEnd}
+                          disabled={!editableSettings.enabled || !editableSettings.quietHoursEnabled}
+                          onChange={(e) => 
+                            setEditableSettings(prev => ({ ...prev, quietHoursEnd: e.target.value }))
+                          }
+                          className="bg-white/5 border-white/10"
+                        />
                       </div>
                     </div>
                   </div>
                 </div>
-              </CardContent>
-            </Card>
-            
-            <Card className="border-white/5 bg-gradient-to-br from-black/40 via-black/30 to-black/20 backdrop-blur-sm">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-lg font-semibold text-white/90">
-                  Criar notificação de teste
-                </CardTitle>
-                <CardDescription className="text-white/60">
-                  Simule diferentes tipos de notificações
-                </CardDescription>
-              </CardHeader>
-              
-              <Separator className="bg-white/5" />
-              
-              <CardContent className="pt-4">
-                <div className="grid gap-2">
+                
+                {/* Tipos de notificação */}
+                <div className="space-y-4">
+                  <h3 className="text-lg font-medium text-white/90">Tipos de Notificação</h3>
+                  <p className="text-sm text-white/60">
+                    Escolha quais tipos de notificação deseja receber e se devem ter som
+                  </p>
+                  
+                  <div className="space-y-3">
+                    {editableSettings.types.map((type) => (
+                      <div key={type.id} className="flex flex-col space-y-3 p-4 rounded-lg border border-white/10 bg-white/5">
+                        <div className="flex items-start justify-between">
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-2">
+                              <Badge 
+                                variant="outline" 
+                                className={cn(
+                                  "px-2 py-0.5",
+                                  type.id === 'signals' && "bg-blue-950/50 text-blue-300 border-blue-800/30",
+                                  type.id === 'completed' && "bg-green-950/50 text-green-300 border-green-800/30",
+                                  type.id === 'stopped' && "bg-red-950/50 text-red-300 border-red-800/30",
+                                  type.id === 'system' && "bg-purple-950/50 text-purple-300 border-purple-800/30",
+                                  type.id === 'alerts' && "bg-orange-950/50 text-orange-300 border-orange-800/30"
+                                )}
+                              >
+                                {type.id === 'signals' && "Sinais"}
+                                {type.id === 'completed' && "Concluídos"}
+                                {type.id === 'stopped' && "Cancelados"}
+                                {type.id === 'system' && "Sistema"}
+                                {type.id === 'alerts' && "Alertas"}
+                              </Badge>
+                              <h4 className="text-sm font-medium text-white/90">{type.name}</h4>
+                            </div>
+                            <p className="text-sm text-white/60">
+                              {type.description}
+                            </p>
+                          </div>
+                          <Switch
+                            checked={type.enabled}
+                            disabled={!editableSettings.enabled}
+                            onCheckedChange={(checked) => updateType(type.id, 'enabled', checked)}
+                          />
+                        </div>
+                        
+                        <div className="flex items-center justify-between pt-2 border-t border-white/10">
+                          <Label htmlFor={`sound-${type.id}`} className="text-sm text-white/80 flex items-center gap-1">
+                            <Volume2 className="h-3.5 w-3.5" />
+                            Som para este tipo
+                          </Label>
+                          <Switch
+                            id={`sound-${type.id}`}
+                            size="sm"
+                            checked={type.sound}
+                            disabled={!editableSettings.enabled || !type.enabled || !editableSettings.sound}
+                            onCheckedChange={(checked) => updateType(type.id, 'sound', checked)}
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                
+                {/* Teste de notificação */}
+                <div className="bg-black/20 border border-white/10 rounded-lg p-4 space-y-2">
+                  <h3 className="text-sm font-medium text-white/90 flex items-center gap-2">
+                    <AlertTriangle className="h-4 w-4 text-amber-500" />
+                    Testar notificações
+                  </h3>
+                  <p className="text-sm text-white/60">
+                    Envie uma notificação de teste para verificar se as suas configurações estão funcionando corretamente.
+                  </p>
                   <Button
                     variant="outline"
                     size="sm"
-                    className="bg-white/5 border-white/10 hover:bg-blue-900/20 justify-start"
-                    onClick={() => generateExampleNotification("signals")}
+                    className="mt-2 bg-white/5 border-white/10 hover:bg-white/10"
+                    onClick={handleTestNotification}
+                    disabled={!editableSettings.enabled}
                   >
-                    <Zap className="h-4 w-4 mr-2 text-blue-400" />
-                    Sinal de Trading
-                  </Button>
-                  
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="bg-white/5 border-white/10 hover:bg-amber-900/20 justify-start"
-                    onClick={() => generateExampleNotification("news")}
-                  >
-                    <Info className="h-4 w-4 mr-2 text-amber-400" />
-                    Notícia Importante
-                  </Button>
-                  
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="bg-white/5 border-white/10 hover:bg-red-900/20 justify-start"
-                    onClick={() => generateExampleNotification("alerts")}
-                  >
-                    <AlertTriangle className="h-4 w-4 mr-2 text-red-400" />
-                    Alerta de Preço
-                  </Button>
-                  
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="bg-white/5 border-white/10 hover:bg-purple-900/20 justify-start"
-                    onClick={() => generateExampleNotification("portfolio")}
-                  >
-                    <MessageSquare className="h-4 w-4 mr-2 text-purple-400" />
-                    Atualização Portfólio
-                  </Button>
-                  
-                  <Separator className="bg-white/5 my-2" />
-                  
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="bg-white/5 border-white/10 hover:bg-white/10"
-                    onClick={testNotification}
-                  >
-                    <Bell className="h-4 w-4 mr-2" />
-                    Notificação genérica
+                    Enviar notificação de teste
                   </Button>
                 </div>
               </CardContent>
+              
+              <CardFooter className="flex justify-end gap-2 border-t border-white/10 pt-6">
+                <Button
+                  variant="ghost"
+                  className="hover:bg-white/5"
+                  onClick={() => setEditableSettings(savedSettings)}
+                  disabled={!hasChanges}
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  variant="default"
+                  className="bg-green-600 hover:bg-green-700"
+                  onClick={saveSettings}
+                  disabled={!hasChanges}
+                >
+                  <Check className="h-4 w-4 mr-1" />
+                  Salvar Configurações
+                </Button>
+              </CardFooter>
             </Card>
-          </div>
-        </div>
+          </TabsContent>
+        </Tabs>
       </motion.div>
     </Layout>
   );

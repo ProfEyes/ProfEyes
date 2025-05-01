@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Switch } from "@/components/ui/switch";
-import { Palette, Monitor, Moon, Sun, Sparkles, Zap, EyeOff } from "lucide-react";
+import { Palette, Monitor, Moon, Sun, Sparkles, Zap, EyeOff, CircleDashed, CircleDot, Layers, LayoutGrid } from "lucide-react";
 import { SettingsSection } from "./SettingsSection";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
@@ -11,8 +11,89 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
 import { Slider } from "@/components/ui/slider";
 import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
 
 type Theme = "dark" | "light" | "system";
+
+// Componente para card de tema de aparência
+const ThemeCard = ({ 
+  theme, 
+  active, 
+  icon, 
+  title, 
+  description, 
+  onClick,
+  color = "indigo"
+}: { 
+  theme: Theme, 
+  active: boolean, 
+  icon: React.ReactNode, 
+  title: string, 
+  description: string, 
+  onClick: () => void,
+  color?: string 
+}) => {
+  const colorMap: Record<string, string> = {
+    indigo: "ring-indigo-500/80",
+    blue: "ring-blue-500/80",
+    rose: "ring-rose-500/80",
+    amber: "ring-amber-500/80",
+    purple: "ring-purple-500/80"
+  };
+
+  const ringColor = colorMap[color] || colorMap.indigo;
+
+  return (
+    <motion.div 
+      className={cn(
+        "relative overflow-hidden rounded-xl cursor-pointer transition-all duration-300",
+        "bg-slate-900/60 border border-slate-800 backdrop-blur-xl",
+        active ? `ring-2 ${ringColor} ring-offset-2 ring-offset-black/90` : 'hover:ring-1 hover:ring-slate-700'
+      )}
+      whileHover={{ scale: 1.03, y: -3 }}
+      whileTap={{ scale: 0.98 }}
+      onClick={onClick}
+      initial={{ opacity: 0, y: 15 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.3 }}
+    >
+      <div className="relative p-4 text-center h-full">
+        <div className="flex flex-col items-center justify-center space-y-2 p-4">
+          <motion.div 
+            className={cn(
+              "rounded-full p-3 mb-2 border",
+              active ? "bg-slate-800 border-slate-700" : "bg-black/40 border-slate-800"
+            )}
+            whileHover={{ rotate: 15 }}
+            animate={active ? { 
+              y: [0, -5, 0],
+              scale: [1, 1.05, 1]
+            } : {}}
+            transition={{ 
+              duration: 1, 
+              repeat: active ? Infinity : 0, 
+              repeatDelay: 3 
+            }}
+          >
+            {icon}
+          </motion.div>
+          <h3 className="font-medium text-white/90">{title}</h3>
+          <p className="text-xs text-slate-400">{description}</p>
+        </div>
+        
+        {/* Indicador selecionado */}
+        {active && (
+          <motion.div 
+            className="absolute -bottom-1 left-0 right-0 h-1 bg-gradient-to-r from-indigo-600 via-indigo-400 to-indigo-600"
+            initial={{ scaleX: 0 }}
+            animate={{ scaleX: 1 }}
+            transition={{ duration: 0.3 }}
+          />
+        )}
+      </div>
+    </motion.div>
+  );
+};
 
 export function AppearanceSettings() {
   const [theme, setTheme] = useState<Theme>("dark");
@@ -62,9 +143,14 @@ export function AppearanceSettings() {
         ? "dark"
         : "light";
       document.documentElement.classList.toggle("dark", systemTheme === "dark");
+      document.documentElement.setAttribute('data-theme', systemTheme);
     } else {
       document.documentElement.classList.toggle("dark", value === "dark");
+      document.documentElement.setAttribute('data-theme', value);
     }
+    
+    // Disparar evento para avisar o sistema sobre a mudança de tema
+    window.dispatchEvent(new CustomEvent('theme-change', { detail: value }));
     
     toast.success("Tema atualizado", {
       description: `O tema foi alterado para ${
@@ -80,9 +166,14 @@ export function AppearanceSettings() {
     
     if (checked) {
       document.documentElement.classList.add("reduce-animations");
+      document.documentElement.style.setProperty('--animation-duration', '0s');
     } else {
       document.documentElement.classList.remove("reduce-animations");
+      document.documentElement.style.setProperty('--animation-duration', '0.3s');
     }
+    
+    // Disparar evento para avisar o sistema sobre a mudança de animações
+    window.dispatchEvent(new CustomEvent('animation-setting-change', { detail: checked }));
   };
   
   // Salvar e aplicar modo de alto contraste
@@ -92,9 +183,14 @@ export function AppearanceSettings() {
     
     if (checked) {
       document.documentElement.classList.add("high-contrast");
+      document.documentElement.style.setProperty('--contrast-factor', '1.5');
     } else {
       document.documentElement.classList.remove("high-contrast");
+      document.documentElement.style.setProperty('--contrast-factor', '1');
     }
+    
+    // Disparar evento para avisar o sistema sobre a mudança de contraste
+    window.dispatchEvent(new CustomEvent('contrast-setting-change', { detail: checked }));
   };
   
   // Salvar e aplicar nível de blur
@@ -103,17 +199,25 @@ export function AppearanceSettings() {
     setBlurLevel(level);
     localStorage.setItem("blur-level", String(level));
     
-    // Aqui você poderia aplicar a alteração ao documento também
+    // Aplicar nível de blur ao documento
+    document.documentElement.style.setProperty('--blur-factor', `${level * 0.05}px`);
+    
     const blurClass = document.documentElement.classList;
     ["blur-low", "blur-medium", "blur-high"].forEach(cls => blurClass.remove(cls));
     
     if (level < 33) {
       blurClass.add("blur-low");
+      document.documentElement.style.setProperty('--blur-amount', '4px');
     } else if (level < 66) {
       blurClass.add("blur-medium");
+      document.documentElement.style.setProperty('--blur-amount', '8px');
     } else {
       blurClass.add("blur-high");
+      document.documentElement.style.setProperty('--blur-amount', '12px');
     }
+    
+    // Disparar evento para avisar o sistema sobre a mudança de blur
+    window.dispatchEvent(new CustomEvent('blur-setting-change', { detail: level }));
   };
   
   // Salvar e aplicar nível de transparência
@@ -122,208 +226,353 @@ export function AppearanceSettings() {
     setTransparencyLevel(level);
     localStorage.setItem("transparency-level", String(level));
     
-    // Aqui você poderia aplicar a alteração ao documento também
+    // Aplicar nível de transparência ao documento
+    const transparencyValue = level / 100;
+    document.documentElement.style.setProperty('--transparency-factor', String(transparencyValue));
+    
     const transparencyClass = document.documentElement.classList;
     ["transparency-low", "transparency-medium", "transparency-high"].forEach(cls => transparencyClass.remove(cls));
     
     if (level < 33) {
       transparencyClass.add("transparency-low");
+      document.documentElement.style.setProperty('--bg-opacity', '0.9');
     } else if (level < 66) {
       transparencyClass.add("transparency-medium");
+      document.documentElement.style.setProperty('--bg-opacity', '0.7');
     } else {
       transparencyClass.add("transparency-high");
+      document.documentElement.style.setProperty('--bg-opacity', '0.5');
     }
+    
+    // Disparar evento para avisar o sistema sobre a mudança de transparência
+    window.dispatchEvent(new CustomEvent('transparency-setting-change', { detail: level }));
+  };
+
+  // Pré-visualização das configurações
+  const resetToDefaults = () => {
+    handleThemeChange("dark");
+    handleReduceAnimationsChange(false);
+    handleHighContrastChange(false);
+    handleBlurLevelChange([50]);
+    handleTransparencyLevelChange([70]);
+    
+    toast.success("Configurações padrão restauradas", {
+      description: "Todas as configurações de aparência foram redefinidas para os valores padrão."
+    });
   };
 
   return (
-    <motion.div 
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -10 }}
-      transition={{ duration: 0.5 }}
-      className="space-y-6"
-    >
+    <>
       <SettingsSection
         title="Personalização Visual"
         description="Adapte a aparência da plataforma ao seu estilo"
-        icon={<Palette className="h-5 w-5 text-rose-400/70" />}
+        icon={<Palette className="h-5 w-5 text-rose-400" />}
+        accentColor="rose"
       >
-        <Tabs defaultValue={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid grid-cols-3 bg-black/20 rounded-xl p-1 mb-6 border border-white/5">
+        <Tabs 
+          defaultValue={activeTab} 
+          onValueChange={setActiveTab} 
+          className="w-full"
+        >
+          {/* Abas de configuração */}
+          <TabsList className="grid grid-cols-3 bg-black/30 rounded-xl p-1 mb-6 border border-slate-800/60">
             <TabsTrigger 
               value="temas" 
-              className="rounded-md data-[state=active]:bg-gradient-to-r data-[state=active]:from-rose-500/20 data-[state=active]:to-amber-500/20 data-[state=active]:shadow-sm py-2"
+              className="rounded-md data-[state=active]:bg-gradient-to-r data-[state=active]:from-rose-600/30 data-[state=active]:to-rose-600/10 data-[state=active]:shadow-sm py-2"
             >
-              <Palette className="h-4 w-4 mr-2" />
+              <Palette className="h-4 w-4 mr-2 text-rose-400" />
               Temas
             </TabsTrigger>
             <TabsTrigger 
               value="transparencia" 
-              className="rounded-md data-[state=active]:bg-gradient-to-r data-[state=active]:from-rose-500/20 data-[state=active]:to-amber-500/20 data-[state=active]:shadow-sm py-2"
+              className="rounded-md data-[state=active]:bg-gradient-to-r data-[state=active]:from-rose-600/30 data-[state=active]:to-rose-600/10 data-[state=active]:shadow-sm py-2"
             >
-              <EyeOff className="h-4 w-4 mr-2" />
+              <EyeOff className="h-4 w-4 mr-2 text-rose-400" />
               Transparência
             </TabsTrigger>
             <TabsTrigger 
               value="efeitos" 
-              className="rounded-md data-[state=active]:bg-gradient-to-r data-[state=active]:from-rose-500/20 data-[state=active]:to-amber-500/20 data-[state=active]:shadow-sm py-2"
+              className="rounded-md data-[state=active]:bg-gradient-to-r data-[state=active]:from-rose-600/30 data-[state=active]:to-rose-600/10 data-[state=active]:shadow-sm py-2"
             >
-              <Sparkles className="h-4 w-4 mr-2" />
+              <Sparkles className="h-4 w-4 mr-2 text-rose-400" />
               Efeitos
             </TabsTrigger>
           </TabsList>
           
-          <TabsContent value="temas" className="focus-visible:outline-none focus-visible:ring-0">
-            <div className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+          {/* Conteúdo de Temas */}
+          <TabsContent value="temas" className="focus-visible:outline-none focus-visible:ring-0 space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 {/* Tema Escuro */}
-                <motion.div 
-                  className={cn(
-                    "relative overflow-hidden rounded-xl cursor-pointer transition-all duration-300",
-                    theme === 'dark' 
-                      ? 'ring-2 ring-rose-500/80 ring-offset-2 ring-offset-black/90' 
-                      : 'hover:ring-1 hover:ring-white/20'
-                  )}
-                  whileHover={{ scale: 1.03, y: -3 }}
+              <ThemeCard
+                theme="dark"
+                active={theme === 'dark'}
+                icon={<Moon className="h-5 w-5 text-rose-400" />}
+                title="Escuro"
+                description="Modo noturno"
                   onClick={() => handleThemeChange('dark')}
-                >
-                  <div className="absolute inset-0 bg-gradient-to-br from-black/90 to-slate-900/90"></div>
-                  <div className="relative p-4 text-center h-full">
-                    <div className="flex flex-col items-center justify-center space-y-2 p-4">
-                      <motion.div 
-                        className="rounded-full bg-black/70 p-3 mb-2 border border-white/10"
-                        whileHover={{ rotate: 15 }}
-                        animate={{ y: theme === 'dark' ? [0, -5, 0] : 0 }}
-                        transition={{ duration: 1, repeat: theme === 'dark' ? Infinity : 0, repeatDelay: 3 }}
-                      >
-                        <Moon className="h-5 w-5 text-rose-300/80" />
-                      </motion.div>
-                      <h3 className="font-medium text-white/90">Escuro</h3>
-                      <p className="text-xs text-white/50">Modo noturno</p>
+                color="rose"
+              />
+              
+              {/* Tema Claro */}
+              <ThemeCard
+                theme="light"
+                active={theme === 'light'}
+                icon={<Sun className="h-5 w-5 text-amber-400" />}
+                title="Claro"
+                description="Modo diurno"
+                onClick={() => handleThemeChange('light')}
+                color="amber"
+              />
+              
+              {/* Tema Sistema */}
+              <ThemeCard
+                theme="system"
+                active={theme === 'system'}
+                icon={<Monitor className="h-5 w-5 text-blue-400" />}
+                title="Sistema"
+                description="Segue as configurações do sistema"
+                onClick={() => handleThemeChange('system')}
+                color="blue"
+              />
                     </div>
                     
-                    {/* Mini preview */}
-                    <div className="bg-black/50 border border-white/10 rounded-lg p-3 mt-2">
-                      <div className="h-2 w-16 bg-white/10 rounded mb-2"></div>
-                      <div className="h-2 w-12 bg-white/10 rounded"></div>
+            <div className="mt-8">
+              <p className="text-sm text-slate-400 mb-4">
+                O tema escolhido afeta a aparência geral da plataforma. O tema escuro é ótimo para ambientes com pouca luz e reduz o cansaço visual.
+              </p>
                     </div>
+          </TabsContent>
+          
+          {/* Conteúdo de Transparência */}
+          <TabsContent value="transparencia" className="focus-visible:outline-none focus-visible:ring-0">
+            <div className="space-y-8">
+              {/* Controle de Transparência */}
+              <div className="space-y-6">
+                <div className="flex items-center justify-between mb-2">
+                  <div>
+                    <Label htmlFor="transparency-level" className="text-sm font-medium text-slate-200">
+                      Nível de transparência
+                    </Label>
+                    <p className="text-xs text-slate-400 mt-1">
+                      Ajuste o nível de transparência dos elementos da interface
+                    </p>
                   </div>
-                </motion.div>
+                  <span className="text-sm font-medium text-rose-400">{transparencyLevel}%</span>
+                </div>
                 
-                {/* Tema Claro */}
-                <motion.div 
-                  className={cn(
-                    "relative overflow-hidden rounded-xl cursor-pointer transition-all duration-300",
-                    theme === 'light' 
-                      ? 'ring-2 ring-amber-500/80 ring-offset-2 ring-offset-black/90' 
-                      : 'hover:ring-1 hover:ring-white/20'
-                  )}
-                  whileHover={{ scale: 1.03, y: -3 }}
-                  onClick={() => handleThemeChange('light')}
-                >
-                  <div className="absolute inset-0 bg-gradient-to-br from-slate-100/90 to-slate-200/90"></div>
-                  <div className="relative p-4 text-center h-full">
-                    <div className="flex flex-col items-center justify-center space-y-2 p-4">
-                      <motion.div 
-                        className="rounded-full bg-white/80 p-3 mb-2 border border-black/5 shadow-sm"
-                        whileHover={{ rotate: 15 }}
-                        animate={{ y: theme === 'light' ? [0, -5, 0] : 0 }}
-                        transition={{ duration: 1, repeat: theme === 'light' ? Infinity : 0, repeatDelay: 3 }}
-                      >
-                        <Sun className="h-5 w-5 text-amber-500/90" />
-                      </motion.div>
-                      <h3 className="font-medium text-slate-800">Claro</h3>
-                      <p className="text-xs text-slate-600">Modo diurno</p>
+                <div className="relative">
+                  <div className="absolute inset-0 bg-gradient-to-r from-black/50 via-slate-900/50 to-black/50 rounded-lg opacity-30"></div>
+                  <Slider
+                    id="transparency-level"
+                    defaultValue={[transparencyLevel]}
+                    max={100}
+                    step={5}
+                    onValueChange={handleTransparencyLevelChange}
+                    className="pt-1 z-10 relative"
+                  />
                     </div>
                     
-                    {/* Mini preview */}
-                    <div className="bg-white/80 border border-slate-200 rounded-lg p-3 mt-2 shadow-sm">
-                      <div className="h-2 w-16 bg-slate-200 rounded mb-2"></div>
-                      <div className="h-2 w-12 bg-slate-200 rounded"></div>
-                    </div>
+                {/* Prévia de transparência */}
+                <div className="grid grid-cols-3 gap-3 mt-4">
+                  <div className="relative border border-slate-800/40 bg-slate-900/30 rounded-lg p-3 text-center">
+                    <p className="text-xs font-medium">Baixa</p>
+                    <p className="text-[9px] text-slate-400">10%</p>
                   </div>
-                </motion.div>
+                  <div className="relative border border-slate-800/40 bg-slate-900/60 rounded-lg p-3 text-center">
+                    <p className="text-xs font-medium">Média</p>
+                    <p className="text-[9px] text-slate-400">50%</p>
+                    </div>
+                  <div className="relative border border-slate-800/40 bg-slate-900/90 rounded-lg p-3 text-center">
+                    <p className="text-xs font-medium">Alta</p>
+                    <p className="text-[9px] text-slate-400">90%</p>
+                  </div>
+                </div>
+              </div>
                 
-                {/* Tema Sistema */}
-                <motion.div 
-                  className={`relative overflow-hidden rounded-xl cursor-pointer transition-all duration-300 ${theme === 'system' ? 'ring-2 ring-emerald-500 ring-offset-2 ring-offset-black/80' : 'hover:ring-1 hover:ring-emerald-500/50'}`}
-                  whileHover={{ scale: 1.02 }}
-                  onClick={() => handleThemeChange('system')}
-                >
-                  <div className="absolute inset-0 bg-gradient-to-br from-slate-700/80 to-slate-800/90"></div>
-                  <div className="relative p-4 text-center h-full">
-                    <div className="flex flex-col items-center justify-center space-y-2 p-4">
-                      <div className="rounded-full bg-slate-600/70 p-2 mb-2">
-                        <Monitor className="h-5 w-5 text-emerald-400" />
+              {/* Controle de Blur */}
+              <div className="space-y-6 pt-4">
+                <Separator className="bg-slate-800/40 my-6" />
+                
+                <div className="flex items-center justify-between mb-2">
+                  <div>
+                    <Label htmlFor="blur-level" className="text-sm font-medium text-slate-200">
+                      Efeito de desfoque (blur)
+                    </Label>
+                    <p className="text-xs text-slate-400 mt-1">
+                      Ajuste a intensidade do efeito de desfoque em fundos e elementos
+                    </p>
+                  </div>
+                  <span className="text-sm font-medium text-rose-400">{blurLevel}%</span>
                       </div>
-                      <h3 className="font-medium text-white">Sistema</h3>
-                      <p className="text-xs text-white/60">Sincronizado</p>
+                
+                <div className="relative">
+                  <div className="absolute inset-0 bg-gradient-to-r from-black/50 via-slate-900/50 to-black/50 rounded-lg opacity-30"></div>
+                  <Slider
+                    id="blur-level"
+                    defaultValue={[blurLevel]}
+                    max={100}
+                    step={5}
+                    onValueChange={handleBlurLevelChange}
+                    className="pt-1 z-10 relative"
+                  />
                     </div>
                     
-                    {/* Mini preview */}
-                    <div className="bg-slate-800/80 border border-slate-700/50 rounded-lg p-2 mt-2">
-                      <div className="flex space-x-2">
-                        <div className="h-2 w-8 bg-slate-700/80 rounded"></div>
-                        <div className="h-2 w-8 bg-white/20 rounded"></div>
+                {/* Prévia de blur */}
+                <div className="grid grid-cols-3 gap-3 mt-4">
+                  <div className="relative overflow-hidden border border-slate-800/40 bg-slate-900/30 rounded-lg p-3 text-center">
+                    <p className="text-xs font-medium">Sutil</p>
+                    <div className="absolute inset-0 backdrop-blur-[2px]"></div>
                       </div>
+                  <div className="relative overflow-hidden border border-slate-800/40 bg-slate-900/30 rounded-lg p-3 text-center">
+                    <p className="text-xs font-medium">Médio</p>
+                    <div className="absolute inset-0 backdrop-blur-[8px]"></div>
                     </div>
+                  <div className="relative overflow-hidden border border-slate-800/40 bg-slate-900/30 rounded-lg p-3 text-center">
+                    <p className="text-xs font-medium">Intenso</p>
+                    <div className="absolute inset-0 backdrop-blur-[16px]"></div>
                   </div>
-                </motion.div>
+                </div>
               </div>
             </div>
           </TabsContent>
           
+          {/* Conteúdo de Efeitos */}
           <TabsContent value="efeitos" className="focus-visible:outline-none focus-visible:ring-0">
-            <div className="space-y-6">
-              {/* Reduzir Animações */}
-              <motion.div 
-                whileHover={{ y: -2 }}
-                className="relative overflow-hidden rounded-xl border border-white/10 bg-black/20 backdrop-blur-sm p-4"
-              >
-                <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-bl from-purple-500/5 via-transparent to-transparent rounded-bl-full"></div>
-                <div className="flex items-center justify-between">
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                      <Zap className="h-4 w-4 text-amber-400" />
-                      <Label className="text-base font-medium text-white/90">Reduzir Animações</Label>
-                    </div>
-                    <p className="text-sm text-white/50 max-w-md">Minimiza os efeitos animados em toda a plataforma para melhorar o desempenho e reduzir distrações</p>
+            <div className="space-y-8">
+              <div className="divide-y divide-slate-800/40 space-y-4">
+                {/* Redução de animações */}
+                <div className="flex items-center justify-between pb-4">
+                  <div>
+                    <Label htmlFor="reduce-animations" className="text-sm font-medium text-slate-200">
+                      Reduzir animações
+                    </Label>
+                    <p className="text-xs text-slate-400 mt-1">
+                      Diminui ou desativa efeitos animados na interface
+                    </p>
                   </div>
                   <Switch
+                    id="reduce-animations"
                     checked={reduceAnimations}
                     onCheckedChange={handleReduceAnimationsChange}
-                    className="data-[state=checked]:bg-amber-500"
+                    className="data-[state=checked]:bg-rose-600"
                   />
                 </div>
-              </motion.div>
               
-              <Separator className="bg-white/5 my-6" />
-              
-              {/* Alto Contraste */}
-              <motion.div 
-                whileHover={{ y: -2 }}
-                className="relative overflow-hidden rounded-xl border border-white/10 bg-black/20 backdrop-blur-sm p-4"
-              >
-                <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-bl from-blue-500/5 via-transparent to-transparent rounded-bl-full"></div>
-                <div className="flex items-center justify-between">
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                      <Palette className="h-4 w-4 text-blue-400" />
-                      <Label className="text-base font-medium text-white/90">Modo de Alto Contraste</Label>
-                    </div>
-                    <p className="text-sm text-white/50 max-w-md">Aumenta o contraste entre elementos para melhorar a acessibilidade e leitura em diferentes condições</p>
+                {/* Alto contraste */}
+                <div className="flex items-center justify-between py-4">
+                  <div>
+                    <Label htmlFor="high-contrast" className="text-sm font-medium text-slate-200">
+                      Modo de alto contraste
+                    </Label>
+                    <p className="text-xs text-slate-400 mt-1">
+                      Aumenta o contraste entre elementos para melhor visualização
+                    </p>
                   </div>
                   <Switch
+                    id="high-contrast"
                     checked={highContrastMode}
                     onCheckedChange={handleHighContrastChange}
-                    className="data-[state=checked]:bg-blue-500"
+                    className="data-[state=checked]:bg-rose-600"
                   />
                 </div>
+                
+                {/* Separador */}
+                <div className="pt-4"></div>
+              </div>
+              
+              {/* Animações de demonstração */}
+              {!reduceAnimations && (
+                <div className="pt-2">
+                  <p className="text-sm text-slate-400 mb-4">
+                    Prévia de animações
+                  </p>
+                  
+                  <div className="grid grid-cols-4 gap-3">
+                    <motion.div 
+                      className="bg-slate-800/30 border border-slate-700/30 rounded-lg p-4 flex justify-center items-center"
+                      animate={{ 
+                        y: [0, -10, 0],
+                        opacity: [1, 0.8, 1]
+                      }}
+                      transition={{ 
+                        duration: 2, 
+                        repeat: Infinity,
+                        repeatDelay: 0.5
+                      }}
+                    >
+                      <Zap className="h-6 w-6 text-amber-400" />
+                    </motion.div>
+                    
+                    <motion.div 
+                      className="bg-slate-800/30 border border-slate-700/30 rounded-lg p-4 flex justify-center items-center"
+                      animate={{ 
+                        rotate: [0, 180, 360],
+                        scale: [1, 1.1, 1]
+                      }}
+                      transition={{ 
+                        duration: 3, 
+                        repeat: Infinity,
+                        repeatDelay: 1
+                      }}
+                    >
+                      <CircleDashed className="h-6 w-6 text-rose-400" />
+                    </motion.div>
+                    
+                    <motion.div 
+                      className="bg-slate-800/30 border border-slate-700/30 rounded-lg p-4 flex justify-center items-center"
+                      animate={{ 
+                        scale: [1, 1.2, 1],
+                        filter: ["brightness(1)", "brightness(1.3)", "brightness(1)"]
+                      }}
+                      transition={{ 
+                        duration: 2, 
+                        repeat: Infinity,
+                        repeatDelay: 0.5
+                      }}
+                    >
+                      <Sparkles className="h-6 w-6 text-indigo-400" />
+                    </motion.div>
+                    
+                    <motion.div 
+                      className="bg-slate-800/30 border border-slate-700/30 rounded-lg p-4 flex justify-center items-center"
+                      animate={{ 
+                        x: [-5, 5, -5],
+                        rotateZ: [-5, 5, -5]
+                      }}
+                      transition={{ 
+                        duration: 2, 
+                        repeat: Infinity,
+                        repeatDelay: 0.3
+                      }}
+                    >
+                      <LayoutGrid className="h-6 w-6 text-teal-400" />
               </motion.div>
+                  </div>
+                </div>
+              )}
+              
+              {reduceAnimations && (
+                <div className="rounded-lg border border-slate-800 p-4 bg-black/20">
+                  <p className="text-center text-sm text-slate-400">
+                    Animações reduzidas para melhor desempenho e acessibilidade
+                  </p>
+                </div>
+              )}
             </div>
           </TabsContent>
         </Tabs>
+        
+        {/* Botões de ação */}
+        <div className="flex justify-end pt-6">
+          <Button
+            variant="outline"
+            onClick={resetToDefaults}
+            className="text-sm border-slate-700 bg-slate-900/50 hover:bg-slate-800/70 text-slate-300"
+          >
+            Restaurar Padrões
+          </Button>
+        </div>
       </SettingsSection>
-    </motion.div>
+    </>
   );
 } 

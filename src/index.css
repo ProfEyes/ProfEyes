@@ -244,21 +244,27 @@
 
 /* Customize scrollbar */
 .custom-scrollbar::-webkit-scrollbar {
-  width: 4px;
+  width: 0px;
+  display: none;
+}
+
+.custom-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .custom-scrollbar::-webkit-scrollbar-track {
-  background: rgba(255, 255, 255, 0.05);
-  border-radius: 10px;
+  background: transparent;
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 10px;
+  background: transparent;
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.15);
+  background: transparent;
 }
 
 /* Animações para os elementos da aplicação */
@@ -418,6 +424,8 @@
   backface-visibility: hidden;
   transform: translateZ(0);
   position: relative;
+  background-color: transparent !important;
+  z-index: 1;
 }
 
 /* Classe para estabilizar os itens de sinal durante a atualização */
@@ -534,6 +542,7 @@
   overflow: hidden;
   isolation: isolate;
   border: 1px solid rgba(255, 255, 255, 0.07);
+  background-color: rgba(0, 0, 0, 0.2) !important;
 }
 
 .signal-header-gradient {
@@ -544,12 +553,33 @@
 .signal-item-hover {
   position: relative;
   transition: all 0.3s ease-out;
+  background-color: rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(5px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  z-index: 2;
 }
 
 .signal-item-hover:hover {
   transform: translateY(-2px);
   box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
   background-color: rgba(255, 255, 255, 0.04);
+}
+
+/* Efeito de hover mais intenso para sinais de venda */
+.signal-venda-hover:hover {
+  background-color: rgba(255, 0, 0, 0.08) !important;
+  box-shadow: 0 5px 20px rgba(255, 0, 0, 0.15) !important;
+}
+
+/* Expandir linha de acento vermelha no hover */
+.signal-venda-hover:hover .venda-accent.signal-accent-line {
+  width: 5px;
+}
+
+.signal-venda-hover:hover .venda-accent.signal-accent-glow {
+  width: 5px;
+  opacity: 0.9;
+  filter: blur(10px);
 }
 
 .signal-accent-line {
@@ -578,8 +608,14 @@
 }
 
 .venda-accent {
-  background: linear-gradient(to bottom, #ef4444, #b91c1c);
-  box-shadow: 0 0 10px rgba(239, 68, 68, 0.5);
+  background: linear-gradient(to bottom, #ff0000, #cc0000);
+  box-shadow: 0 0 15px rgba(255, 0, 0, 0.7);
+}
+
+/* Versão mais intensa da venda-accent para hover */
+.signal-venda-hover:hover .venda-accent {
+  background: linear-gradient(to bottom, #ff0000, #cc0000);
+  box-shadow: 0 0 20px rgba(255, 0, 0, 0.9);
 }
 
 .signal-time-badge {
@@ -643,4 +679,174 @@
 
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 255, 255, 0.15);
+}
+
+/* Estilos para o indicador de digitação no chat */
+.typing-indicator {
+  display: flex;
+  align-items: center;
+  column-gap: 4px;
+}
+
+.typing-indicator span {
+  display: block;
+  width: 8px;
+  height: 8px;
+  background-color: rgba(255, 255, 255, 0.5);
+  border-radius: 50%;
+  opacity: 0.4;
+}
+
+.typing-indicator span:nth-child(1) {
+  animation: bounce 1.2s infinite 0.2s;
+}
+
+.typing-indicator span:nth-child(2) {
+  animation: bounce 1.2s infinite 0.4s;
+}
+
+.typing-indicator span:nth-child(3) {
+  animation: bounce 1.2s infinite 0.6s;
+}
+
+@keyframes bounce {
+  0%, 100% {
+    transform: translateY(0);
+    opacity: 0.4;
+  }
+  50% {
+    transform: translateY(-5px);
+    opacity: 0.8;
+  }
+}
+
+/* Animação para mensagens aparecendo */
+.animate-fadeIn {
+  animation: fadeIn 0.3s ease-in-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Estilo para o scroll personalizado */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 10px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+/* Efeitos para o TimeZoneSelector */
+@keyframes fadeParticles {
+  0% {
+    opacity: 0.1;
+  }
+  50% {
+    opacity: 0.3;
+  }
+  100% {
+    opacity: 0.1;
+  }
+}
+
+@keyframes floatParticle {
+  0% {
+    transform: translateY(0) translateX(0);
+  }
+  50% {
+    transform: translateY(-10px) translateX(5px);
+  }
+  100% {
+    transform: translateY(0) translateX(0);
+  }
+}
+
+.particles-subtle, .particles-deep {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  overflow: hidden;
+}
+
+.particles-subtle::before,
+.particles-subtle::after,
+.particles-deep::before,
+.particles-deep::after {
+  content: "";
+  position: absolute;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(58, 110, 165, 0.3) 0%, rgba(10, 22, 37, 0) 70%);
+  animation: fadeParticles 6s infinite ease-in-out, floatParticle 8s infinite ease-in-out;
+}
+
+.particles-subtle::before {
+  width: 15px;
+  height: 15px;
+  top: 10%;
+  left: 20%;
+  animation-delay: 0s;
+}
+
+.particles-subtle::after {
+  width: 10px;
+  height: 10px;
+  top: 60%;
+  left: 80%;
+  animation-delay: 2s;
+}
+
+.particles-deep::before {
+  width: 30px;
+  height: 30px;
+  top: 30%;
+  left: 15%;
+  animation-delay: 1s;
+}
+
+.particles-deep::after {
+  width: 20px;
+  height: 20px;
+  top: 70%;
+  left: 75%;
+  animation-delay: 3s;
+}
+
+.filter.drop-shadow-glow {
+  filter: drop-shadow(0 0 3px rgba(255, 177, 15, 0.4));
+}
+
+/* Fim dos efeitos do TimeZoneSelector */
+
+@keyframes shine {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+.animate-shine {
+  animation: shine 1.5s infinite;
 }

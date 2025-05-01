@@ -22,7 +22,6 @@ ATIVOS_CATEGORIAS = {
     "Tesla (OTC)": "Blitz",
     "SOL/USD (OTC)": "Blitz",
     "1000Sats (OTC)": "Binary",
-    "XAUUSD (OTC)": "Digital",
     "McDonald´s Corporation (OTC)": "Blitz",
     "Meta (OTC)": "Blitz",
     "Coca-Cola Company (OTC)": "Blitz",
@@ -39,7 +38,6 @@ ATIVOS_CATEGORIAS = {
     "AIG (OTC)": "Binary",
     "Alibaba Group Holding (OTC)": "Blitz",
     "Snap Inc. (OTC)": "Blitz",
-    "US 500 (OTC)": "Digital",
     "AUD/CHF (OTC)": "Blitz",
     "Amazon/Alibaba (OTC)": "Blitz",
     "Pepe (OTC)": "Binary",
@@ -83,10 +81,48 @@ ATIVOS_CATEGORIAS = {
     "SP 35 (OTC)": "Binary",
     "UK 100 (OTC)": "Binary",
     # Ativos Digital
-    "EUR/THB (OTC)": "Digital",
-    "JPY Currency Index": "Digital",
-    "USD Currency Index": "Digital",
-    "AUS 200 (OTC)": "Digital"
+    "Gold/Silver (OTC)": "Digital",
+    "Worldcoin (OTC)": "Digital",
+    "USD/THB (OTC)": "Digital",
+    "ETH/USD (OTC)": "Digital",
+    "CHF/JPY (OTC)": "Digital",
+    "Pepe (OTC)": "Digital",
+    "GBP/AUD (OTC)": "Digital",
+    "GBP/CHF": "Digital",
+    "GBP/CAD (OTC)": "Digital",
+    "EUR/JPY (OTC)": "Digital",
+    "AUD/CHF": "Digital",
+    "GER 30 (OTC)": "Digital",
+    "AUD/CHF (OTC)": "Digital",
+    "EUR/AUD": "Digital", 
+    "USD/CAD (OTC)": "Digital",
+    "BTC/USD": "Digital",
+    "Amazon/Ebay (OTC)": "Digital",
+    "Coca-Cola Company (OTC)": "Digital",
+    "AIG (OTC)": "Digital",
+    "Amazon/Alibaba (OTC)": "Digital",
+    "Bitcoin Cash (OTC)": "Digital",
+    "AUD/USD": "Digital",
+    "DASH (OTC)": "Digital",
+    "BTC/USD (OTC)": "Digital",
+    "SP 35 (OTC)": "Digital",
+    "TRUMP Coin (OTC)": "Digital",
+    "US 100 (OTC)": "Digital",
+    "EUR/CAD (OTC)": "Digital",
+    "HK 33 (OTC)": "Digital",
+    "Alphabet/Microsoft (OTC)": "Digital",
+    "1000Sats (OTC)": "Digital",
+    "USD/ZAR (OTC)": "Digital",
+    "Litecoin (OTC)": "Digital",
+    "Hamster Kombat (OTC)": "Digital",
+    "USD Currency Index (OTC)": "Digital",
+    "AUS 200 (OTC)": "Digital",
+    "USD/CAD": "Digital",
+    "MELANIA Coin (OTC)": "Digital",
+    "JP 225 (OTC)": "Digital",
+    "AUD/CAD (OTC)": "Digital",
+    "AUD/JPY (OTC)": "Digital",
+    "US 500 (OTC)": "Digital"
 }
 
 # Configurações de horários específicos para cada ativo
@@ -333,6 +369,159 @@ HORARIOS_PADRAO = {
         "Friday": ["00:00-23:59"],
         "Saturday": ["00:00-23:59"],
         "Sunday": ["00:00-11:30", "12:00-17:30", "18:00-23:59"]
+    },
+    "Gold_Silver_OTC": {
+        "Monday": ["00:00-05:00", "05:30-12:00", "12:30-23:59"],
+        "Tuesday": ["00:00-05:00", "05:30-12:00", "12:30-23:59"],
+        "Wednesday": ["00:00-05:00", "05:30-12:00", "12:30-23:59"],
+        "Thursday": ["00:00-05:00", "05:30-12:00", "12:30-23:59"],
+        "Friday": ["00:00-05:00", "05:30-12:00", "12:30-23:59"],
+        "Saturday": ["00:00-05:00", "05:30-12:00", "12:30-23:59"],
+        "Sunday": ["00:00-05:00", "05:30-12:00", "12:30-23:59"]
+    },
+    "Worldcoin_OTC": {
+        "Monday": ["00:00-05:00", "05:30-12:00", "12:30-23:59"],
+        "Tuesday": ["00:00-05:00", "05:30-12:00", "12:30-23:59"],
+        "Wednesday": ["00:00-05:00", "05:30-12:00", "12:30-23:59"],
+        "Thursday": ["00:00-05:00", "05:30-12:00", "12:30-23:59"],
+        "Friday": ["00:00-05:00", "05:30-12:00", "12:30-23:59"],
+        "Saturday": ["00:00-05:00", "05:30-12:00", "12:30-23:59"],
+        "Sunday": ["00:00-05:00", "05:30-12:00", "12:30-23:59"]
+    },
+    "USD_THB_OTC": {
+        "Monday": ["00:00-03:00", "03:30-22:00", "22:30-23:59"],
+        "Tuesday": ["00:00-03:00", "03:30-22:00", "22:30-23:59"],
+        "Wednesday": ["00:00-03:00", "03:30-22:00", "22:30-23:59"],
+        "Thursday": ["00:00-03:00", "03:30-22:00", "22:30-23:59"],
+        "Friday": ["00:00-03:00", "03:30-22:00", "22:30-23:59"],
+        "Saturday": ["00:00-03:00", "03:30-22:00", "22:30-23:59"],
+        "Sunday": ["00:00-03:00", "03:30-22:00", "22:30-23:59"]
+    },
+    "CHF_JPY_OTC": {
+        "Monday": ["00:00-05:00", "05:30-12:00", "12:30-23:59"],
+        "Tuesday": ["00:00-05:00", "05:30-12:00", "12:30-23:59"],
+        "Wednesday": ["00:00-05:00", "05:30-12:00", "12:30-23:59"],
+        "Thursday": ["00:00-05:00", "05:30-12:00", "12:30-23:59"],
+        "Friday": ["00:00-05:00", "05:30-12:00", "12:30-23:59"],
+        "Saturday": ["00:00-05:00", "05:30-12:00", "12:30-23:59"],
+        "Sunday": ["00:00-05:00", "05:30-12:00", "12:30-23:59"]
+    },
+    "Pepe_OTC": {
+        "Monday": ["00:00-05:00", "05:30-12:00", "12:30-23:59"],
+        "Tuesday": ["00:00-05:00", "05:30-12:00", "12:30-23:59"],
+        "Wednesday": ["00:00-05:00", "05:30-12:00", "12:30-23:59"],
+        "Thursday": ["00:00-05:00", "05:30-12:00", "12:30-23:59"],
+        "Friday": ["00:00-05:00", "05:30-12:00", "12:30-23:59"],
+        "Saturday": ["00:00-05:00", "05:30-12:00", "12:30-23:59"],
+        "Sunday": ["00:00-05:00", "05:30-12:00", "12:30-23:59"]
+    },
+    "GBP_AUD_OTC": {
+        "Monday": ["00:00-05:00", "05:30-12:00", "12:30-23:59"],
+        "Tuesday": ["00:00-05:00", "05:30-12:00", "12:30-23:59"],
+        "Wednesday": ["00:00-05:00", "05:30-12:00", "12:30-23:59"],
+        "Thursday": ["00:00-05:00", "05:30-12:00", "12:30-23:59"],
+        "Friday": ["00:00-05:00", "05:30-12:00", "12:30-23:59"],
+        "Saturday": ["00:00-05:00", "05:30-12:00", "12:30-23:59"],
+        "Sunday": ["00:00-05:00", "05:30-12:00", "12:30-23:59"]
+    },
+    "GBP_CHF": {
+        "Monday": ["00:00-16:00"],
+        "Tuesday": ["00:00-16:00"],
+        "Wednesday": ["00:00-16:00"],
+        "Thursday": ["00:00-16:00"],
+        "Friday": ["00:00-14:00"],
+        "Saturday": [],
+        "Sunday": []
+    },
+    "GBP_CAD_OTC": {
+        "Monday": ["00:00-05:00", "05:30-12:00", "12:30-23:59"],
+        "Tuesday": ["00:00-05:00", "05:30-12:00", "12:30-23:59"],
+        "Wednesday": ["00:00-05:00", "05:30-12:00", "12:30-23:59"],
+        "Thursday": ["00:00-05:00", "05:30-12:00", "12:30-23:59"],
+        "Friday": ["00:00-05:00", "05:30-12:00", "12:30-23:59"],
+        "Saturday": ["00:00-05:00", "05:30-12:00", "12:30-23:59"],
+        "Sunday": ["00:00-05:00", "05:30-12:00", "12:30-23:59"]
+    },
+    "AUD_CHF": {
+        "Monday": ["00:00-16:00"],
+        "Tuesday": ["00:00-16:00"],
+        "Wednesday": ["00:00-16:00"],
+        "Thursday": ["00:00-16:00"],
+        "Friday": ["00:00-14:00"],
+        "Saturday": [],
+        "Sunday": []
+    },
+    "GER_30_OTC": {
+        "Monday": ["00:00-05:00", "05:30-12:00", "12:30-23:59"],
+        "Tuesday": ["00:00-05:00", "05:30-12:00", "12:30-23:59"],
+        "Wednesday": ["00:00-05:00", "05:30-12:00", "12:30-23:59"],
+        "Thursday": ["00:00-05:00", "05:30-12:00", "12:30-23:59"],
+        "Friday": ["00:00-05:00", "05:30-12:00", "12:30-23:59"],
+        "Saturday": ["00:00-05:00", "05:30-12:00", "12:30-23:59"],
+        "Sunday": ["00:00-05:00", "05:30-12:00", "12:30-23:59"]
+    },
+    "AUD_CHF_OTC": {
+        "Monday": ["00:00-03:00", "03:30-22:00", "22:30-23:59"],
+        "Tuesday": ["00:00-03:00", "03:30-22:00", "22:30-23:59"],
+        "Wednesday": ["00:00-03:00", "03:30-22:00", "22:30-23:59"],
+        "Thursday": ["00:00-03:00", "03:30-22:00", "22:30-23:59"],
+        "Friday": ["00:00-03:00", "03:30-22:00", "22:30-23:59"],
+        "Saturday": ["00:00-03:00", "03:30-22:00", "22:30-23:59"],
+        "Sunday": ["00:00-03:00", "03:30-22:00", "22:30-23:59"]
+    },
+    "EUR_AUD": {
+        "Monday": ["00:00-16:00"],
+        "Tuesday": ["00:00-16:00"],
+        "Wednesday": ["00:00-16:00"],
+        "Thursday": ["00:00-16:00"],
+        "Friday": ["00:00-14:00"],
+        "Saturday": [],
+        "Sunday": []
+    },
+    "BTC_USD": {
+        "Monday": ["03:00-15:00"],
+        "Tuesday": ["03:00-15:00"],
+        "Wednesday": ["03:00-15:00"],
+        "Thursday": ["03:00-15:00"],
+        "Friday": ["03:00-15:00"],
+        "Saturday": [],
+        "Sunday": []
+    },
+    "Amazon_Ebay_OTC": {
+        "Monday": ["00:00-05:00", "05:30-12:00", "12:30-23:59"],
+        "Tuesday": ["00:00-05:00", "05:30-12:00", "12:30-23:59"],
+        "Wednesday": ["00:00-05:00", "05:30-12:00", "12:30-23:59"],
+        "Thursday": ["00:00-05:00", "05:30-12:00", "12:30-23:59"],
+        "Friday": ["00:00-05:00", "05:30-12:00", "12:30-23:59"],
+        "Saturday": ["00:00-05:00", "05:30-12:00", "12:30-23:59"],
+        "Sunday": ["00:00-05:00", "05:30-12:00", "12:30-23:59"]
+    },
+    "Alphabet_Microsoft_OTC": {
+        "Monday": ["00:00-05:00", "05:30-12:00", "12:30-23:59"],
+        "Tuesday": ["00:00-05:00", "05:30-12:00", "12:30-23:59"],
+        "Wednesday": ["00:00-05:00", "05:30-12:00", "12:30-23:59"],
+        "Thursday": ["00:00-05:00", "05:30-12:00", "12:30-23:59"],
+        "Friday": ["00:00-05:00", "05:30-12:00", "12:30-23:59"],
+        "Saturday": ["00:00-05:00", "05:30-12:00", "12:30-23:59"],
+        "Sunday": ["00:00-05:00", "05:30-12:00", "12:30-23:59"]
+    },
+    "USD_Currency_Index_OTC": {
+        "Monday": ["00:00-10:00", "10:30-22:00", "22:30-23:59"],
+        "Tuesday": ["00:00-10:00", "10:30-22:00", "22:30-23:59"],
+        "Wednesday": ["00:00-10:00", "10:30-22:00", "22:30-23:59"],
+        "Thursday": ["00:00-10:00", "10:30-22:00", "22:30-23:59"],
+        "Friday": ["00:00-10:00", "10:30-18:00"],
+        "Saturday": [],
+        "Sunday": ["19:00-23:59"]
+    },
+    "USD_CAD": {
+        "Monday": ["03:00-15:00"],
+        "Tuesday": ["03:00-15:00", "21:00-23:59"],
+        "Wednesday": ["00:00-15:00"],
+        "Thursday": ["03:00-15:00"],
+        "Friday": ["03:00-15:00"],
+        "Saturday": [],
+        "Sunday": []
     }
 }
 
@@ -364,7 +553,24 @@ assets = {
     "Bitcoin Cash (OTC)": HORARIOS_PADRAO["Bitcoin_Cash_OTC"],
     "AUD/CAD (OTC)": HORARIOS_PADRAO["AUD/CAD_OTC"],
     "Tesla/Ford (OTC)": HORARIOS_PADRAO["Tesla/Ford_OTC"],
-    "US 100 (OTC)": HORARIOS_PADRAO["US_100_OTC"]
+    "US 100 (OTC)": HORARIOS_PADRAO["US_100_OTC"],
+    "Gold/Silver (OTC)": HORARIOS_PADRAO["Gold_Silver_OTC"],
+    "Worldcoin (OTC)": HORARIOS_PADRAO["Worldcoin_OTC"],
+    "USD/THB (OTC)": HORARIOS_PADRAO["USD_THB_OTC"],
+    "CHF/JPY (OTC)": HORARIOS_PADRAO["CHF_JPY_OTC"],
+    "Pepe (OTC)": HORARIOS_PADRAO["Pepe_OTC"],
+    "GBP/AUD (OTC)": HORARIOS_PADRAO["GBP_AUD_OTC"],
+    "GBP/CHF": HORARIOS_PADRAO["GBP_CHF"],
+    "GBP/CAD (OTC)": HORARIOS_PADRAO["GBP_CAD_OTC"],
+    "AUD/CHF": HORARIOS_PADRAO["AUD_CHF"],
+    "GER 30 (OTC)": HORARIOS_PADRAO["GER_30_OTC"],
+    "AUD/CHF (OTC)": HORARIOS_PADRAO["AUD_CHF_OTC"],
+    "EUR/AUD": HORARIOS_PADRAO["EUR_AUD"],
+    "BTC/USD": HORARIOS_PADRAO["BTC_USD"],
+    "Amazon/Ebay (OTC)": HORARIOS_PADRAO["Amazon_Ebay_OTC"],
+    "Alphabet/Microsoft (OTC)": HORARIOS_PADRAO["Alphabet_Microsoft_OTC"],
+    "USD Currency Index (OTC)": HORARIOS_PADRAO["USD_Currency_Index_OTC"],
+    "USD/CAD": HORARIOS_PADRAO["USD_CAD"]
 }
 
 def inicializar_horarios_ativos():

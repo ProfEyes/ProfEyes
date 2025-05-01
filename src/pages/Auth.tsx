@@ -154,17 +154,41 @@ export default function Auth() {
   const [showTerms, setShowTerms] = useState(false);
   const [showTermsError, setShowTermsError] = useState(false);
   const [forgotPasswordState, setForgotPasswordState] = useState(false);
-  const [resetEmailSent, setResetEmailSent] = useState(false);
+  const [forgotPasswordEmail, setForgotPasswordEmail] = useState('');
+  const [passwordResetSent, setPasswordResetSent] = useState(false);
+  const [verifyingEmail, setVerifyingEmail] = useState(false);
+  const [emailVerified, setEmailVerified] = useState(false);
+  const [loading, setLoading] = useState(false);
   const emailRef = useRef<HTMLInputElement>(null);
   const passwordRef = useRef<HTMLInputElement>(null);
   const confirmPasswordRef = useRef<HTMLInputElement>(null);
   const verifyEmailRef = useRef<HTMLInputElement>(null);
+  const birthdateRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
   const [rememberMe, setRememberMe] = useState(false);
 
   // Limpar erro quando o usuário digita em qualquer campo
   const clearError = () => {
     if (error) setError(null);
+  };
+
+  // Validar campos de login
+  const validateLoginFields = () => {
+    clearError();
+    
+    if (!email) {
+      setError({ field: 'email', message: 'Por favor, informe seu email.' });
+      emailRef.current?.focus();
+      return false;
+    }
+
+    if (!password) {
+      setError({ field: 'password', message: 'Por favor, informe sua senha.' });
+      passwordRef.current?.focus();
+      return false;
+    }
+    
+    return true;
   };
 
   // Função para validar se o usuário tem pelo menos 18 anos
@@ -262,70 +286,89 @@ export default function Auth() {
   // Função para lidar com a mudança no campo de data de nascimento
   const handleBirthdateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { value, selectionStart } = e.target;
+    const cursorPosition = selectionStart || 0;
     
     // Resetar erro
     setBirthdateError(null);
     
-    // Verificar se é uma operação de apagar (backspace ou delete)
+    // Verificar se estamos apagando algo
     if (value.length < birthdate.length) {
-      // Obter a posição do cursor
-      const cursorPosition = selectionStart || 0;
-      
-      // Se estiver apagando uma barra (/), remover também o dígito anterior
-      if (
-        (birthdate[cursorPosition] === '/' && cursorPosition > 0) || 
-        (birthdate[cursorPosition-1] === '/' && cursorPosition > 0)
-      ) {
-        // Remover a barra e o dígito
-        const rawValue = birthdate.replace(/\D/g, '');
-        const newPosition = cursorPosition === birthdate.length ? cursorPosition - 1 : cursorPosition;
+      // Verificar se estamos apagando um dígito imediatamente antes de uma barra
+      // Isso ocorre em duas posições: dígito antes da primeira barra (posição 2) e dígito antes da segunda barra (posição 5)
+      if ((cursorPosition === 2 && birthdate[2] === '/') || (cursorPosition === 5 && birthdate[5] === '/')) {
+        // Estamos apagando o último dígito antes de uma barra - devemos remover ambos (o dígito e a barra)
         
-        // Determinar qual caractere numérico apagar baseado na posição
-        let digitsToKeep = 0;
+        // Obter apenas os dígitos
+        const digitsOnly = birthdate.replace(/\D/g, '');
         
-        if (newPosition <= 2) { // Apagando no dia
-          digitsToKeep = Math.max(0, Math.min(newPosition, rawValue.length));
-        } else if (newPosition <= 5) { // Apagando no mês
-          // Se estiver apagando logo após a barra entre dia e mês
-          if (newPosition === 3 && birthdate[newPosition-1] === '/') {
-            digitsToKeep = 1; // Manter apenas o primeiro dígito do dia
-          } else {
-            digitsToKeep = Math.max(0, Math.min(newPosition - 1, rawValue.length));
-          }
-        } else { // Apagando no ano
-          // Se estiver apagando logo após a barra entre mês e ano
-          if (newPosition === 6 && birthdate[newPosition-1] === '/') {
-            digitsToKeep = 3; // Manter os dígitos do dia e primeiro do mês
-          } else {
-            digitsToKeep = Math.max(0, Math.min(newPosition - 2, rawValue.length));
-          }
-        }
+        // Determinar qual dígito estamos apagando (0-indexado nos dígitos)
+        let digitIndex = cursorPosition;
+        // Ajustar índice para corresponder à posição nos dígitos (sem barras)
+        if (cursorPosition > 2) digitIndex--;
+        if (cursorPosition > 5) digitIndex--;
         
-        const newRawValue = rawValue.substring(0, digitsToKeep);
-        const formattedValue = formatBirthdate(newRawValue);
-        
+        // Remover o dígito que o usuário está apagando
+        const newDigits = digitsOnly.substring(0, digitIndex-1) + digitsOnly.substring(digitIndex);
+        const formattedValue = formatBirthdate(newDigits);
         setBirthdate(formattedValue);
         
-        // Programar um setTimeout para reposicionar o cursor na próxima renderização
+        // Ajustar a posição do cursor para antes da posição onde estava a barra
         setTimeout(() => {
           const input = e.target as HTMLInputElement;
-          const newCursorPos = formattedValue.length;
-          input.setSelectionRange(newCursorPos, newCursorPos);
+          input.setSelectionRange(cursorPosition-1, cursorPosition-1);
+        }, 0);
+        
+        return;
+      }
+      
+      // Verificar se apagamos um número que causaria a remoção de uma barra
+      // Por exemplo, se temos "12/3" e apagamos o "3", devemos remover a barra também
+      const oldFormatted = birthdate;
+      const newDigits = value.replace(/\D/g, '');
+      const newFormatted = formatBirthdate(newDigits);
+      
+      // Se a formatação nova tem menos barras que a antiga, significa que devemos ajustar o cursor
+      const oldSlashCount = (oldFormatted.match(/\//g) || []).length;
+      const newSlashCount = (newFormatted.match(/\//g) || []).length;
+      
+      if (oldSlashCount > newSlashCount) {
+        // Perdemos uma barra na formatação
+        setBirthdate(newFormatted);
+        
+        // Ajustar a posição do cursor
+        setTimeout(() => {
+          const input = e.target as HTMLInputElement;
+          // Manter o cursor na mesma posição após remover a barra automaticamente
+          input.setSelectionRange(cursorPosition, cursorPosition);
         }, 0);
         
         return;
       }
     }
     
-    // Para outros casos, continuar com o comportamento normal
-    const rawValue = value.replace(/\D/g, '');
+    // Comportamento normal para outros casos
+    const digitsOnly = value.replace(/\D/g, '');
+    const formattedValue = formatBirthdate(digitsOnly);
+    setBirthdate(formattedValue);
     
-    // Atualizar o estado com o valor formatado
-    setBirthdate(formatBirthdate(rawValue));
+    // Ajustar o cursor para a posição correta
+    setTimeout(() => {
+      const input = e.target as HTMLInputElement;
+      let newCursorPos = cursorPosition;
+      
+      // Se adicionamos uma barra automaticamente, avançar o cursor
+      if (formattedValue.length > value.length) {
+        newCursorPos += formattedValue.length - value.length;
+      }
+      
+      // Garantir que a posição do cursor é válida
+      newCursorPos = Math.min(newCursorPos, formattedValue.length);
+      input.setSelectionRange(newCursorPos, newCursorPos);
+    }, 0);
     
-    // Validar idade se o campo estiver completo
-    if (rawValue.length === 8) {
-      validateAge(rawValue);
+    // Validar idade se tiver 8 dígitos
+    if (digitsOnly.length === 8) {
+      validateAge(digitsOnly);
     }
   };
 
@@ -416,82 +459,35 @@ export default function Auth() {
   };
 
   // Função de login
-  const handleLogin = async () => {
-    // Limpar erros anteriores
-    clearError();
-    
-    // Validar campos antes de prosseguir
-    if (!email) {
-      setError({ field: 'email', message: 'Por favor, informe seu email.' });
-      emailRef.current?.focus();
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    // Validar campos
+    if (!validateLoginFields()) {
       return;
     }
-    
-    if (!password) {
-      setError({ field: 'password', message: 'Por favor, informe sua senha.' });
-      passwordRef.current?.focus();
-      return;
-    }
+
+    setLoadingAction('login');
     
     try {
-      // Definir estado de carregamento imediatamente para feedback visual
-      setLoadingAction('login');
-      
-      // Mostrar indicação de progresso
-      const loginToast = toast.loading('Verificando credenciais...');
-      
-      // Simular progresso de verificação local para melhorar experiência
-      setTimeout(() => {
-        if (loadingAction === 'login') {
-          toast.loading('Autenticando...', { id: loginToast });
-        }
-      }, 300);
-      
-      // Realizar login com cache de sessão para acesso rápido
-      const { error } = await signInWithEmail(email, password, rememberMe);
+      const { error } = await signInWithEmail(email, password);
       
       if (error) {
-        // Se houver erro, mostrar mensagem apropriada
-        const errorMsg = error.message || 'Erro ao fazer login. Por favor, tente novamente.';
-        
-        if (error.message.includes('Email not confirmed') || error.name === 'EmailNotVerified') {
-          setVerifyEmailState(true);
-          setVerifyEmailAddress(email);
-          toast.error('Email não verificado', { 
-            id: loginToast,
-            description: 'Por favor, verifique seu email antes de fazer login.' 
-          });
-          return;
-        }
-        
-        // Determinar qual campo tem erro
-        let fieldWithError = 'email';
-        if (error.message.includes('password') || error.message.includes('senha') || 
-            error.message.includes('credentials') || error.message.includes('credenciais')) {
-          fieldWithError = 'password';
-        }
-        
-        setError({ field: fieldWithError, message: errorMsg });
-        toast.error('Erro de login', { id: loginToast, description: errorMsg });
-        return;
+        console.error('Erro no login:', error);
+        setError({
+          field: 'email',
+          message: error.message || 'Erro ao fazer login. Tente novamente.'
+        });
       }
-      
-      // Login bem-sucedido
-      toast.success('Login bem-sucedido!', { id: loginToast });
-      setLoggedInEmail(email);
-      setLoginSuccess(true);
-      
-      // Redirecionar para a página inicial após curto delay
-      setTimeout(() => {
-        navigate('/');
-      }, 1200); // Delay reduzido para melhorar tempo de resposta
-      
     } catch (error) {
-      toast.error('Erro ao fazer login. Por favor, tente novamente.');
-      console.error('Erro ao fazer login:', error);
-    } finally {
-      setLoadingAction(null);
+      console.error('Erro não tratado no login:', error);
+      setError({
+        field: 'email',
+        message: 'Ocorreu um erro inesperado. Tente novamente mais tarde.'
+      });
     }
+    
+    setLoadingAction(null);
   };
   
   // Função para lidar com o cadastro
@@ -1243,7 +1239,7 @@ export default function Auth() {
       exit={{ opacity: 0, y: -10 }}
       transition={{ duration: 0.5 }}
     >
-      {resetEmailSent ? (
+      {passwordResetSent ? (
         <motion.div 
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
@@ -1257,7 +1253,7 @@ export default function Auth() {
           <Button 
             onClick={() => {
               setForgotPasswordState(false);
-              setResetEmailSent(false);
+              setPasswordResetSent(false);
             }}
             className="mt-4"
           >
@@ -1350,7 +1346,7 @@ export default function Auth() {
         return;
       }
       
-      setResetEmailSent(true);
+      setPasswordResetSent(true);
       toast.success('Email de recuperação enviado com sucesso!');
     } catch (error: any) {
       console.error('Erro ao enviar email de recuperação:', error);
@@ -1407,8 +1403,23 @@ export default function Auth() {
             transition={{ delay: 0.2, duration: 0.5 }}
             className="text-center mb-8"
           >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ delay: 0.1, duration: 0.6 }}
+              className="flex justify-center mb-5"
+            >
+              <img 
+                src="/profeyes-logo-removebg-preview.png" 
+                alt="ProfEyes Logo" 
+                className="w-24 h-auto"
+                style={{ 
+                  filter: "drop-shadow(0 0 10px rgba(255, 255, 255, 0.1))"
+                }}
+              />
+            </motion.div>
             <motion.h1 
-              className="text-2xl bg-gradient-to-r from-white to-white/80 bg-clip-text text-transparent mb-2"
+              className="text-xl bg-gradient-to-r from-white to-white/80 bg-clip-text text-transparent mb-2"
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.3, duration: 0.5 }}
@@ -1419,16 +1430,8 @@ export default function Auth() {
                 textShadow: '0 0 15px rgba(255, 255, 255, 0.2)'
               }}
             >
-              NP Exclusive Signals
+              Login / Cadastro
             </motion.h1>
-            <motion.p 
-              className="text-white/40 text-xs tracking-wide"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 0.4, duration: 0.5 }}
-            >
-              Entre ou crie uma conta para continuar
-            </motion.p>
           </motion.div>
 
           <AnimatePresence mode="wait">
@@ -1515,7 +1518,7 @@ export default function Auth() {
                               placeholder="••••••••"
                               className={`bg-black/20 border-[0.5px] border-white/[0.03] h-11 px-4 text-white/70 focus:outline-none focus:ring-1 focus:ring-white/10 hover:bg-black/30 transition-all duration-300 rounded-xl placeholder:text-white/20 ${error?.field === 'password' ? 'border-rose-500/50 animate-shake' : ''}`}
                               disabled={authLoading || loadingAction !== null}
-                              onKeyDown={(e) => e.key === 'Enter' && handleLogin()}
+                              onKeyDown={(e) => e.key === 'Enter' && handleLogin(e)}
                               ref={passwordRef}
                               style={{
                                 backgroundColor: "rgba(0, 0, 0, 0.2)",
@@ -1540,23 +1543,8 @@ export default function Auth() {
                             {error?.field === 'password' && <ErrorMessage message={error.message} />}
                           </AnimatePresence>
                           
-                          {/* Linha com "Permanecer conectado" e "Esqueceu a senha?" */}
-                          <div className="flex items-center justify-between mt-2">
-                            <div className="flex items-center space-x-2">
-                              <Checkbox 
-                                id="remember-me" 
-                                checked={rememberMe}
-                                onCheckedChange={(checked) => setRememberMe(checked === true)}
-                                className="bg-black/20 border-white/10 rounded-md data-[state=checked]:bg-emerald-500/20 data-[state=checked]:border-emerald-500/50 data-[state=checked]:text-emerald-400 transition-all duration-300"
-                              />
-                              <Label 
-                                htmlFor="remember-me" 
-                                className={`text-xs ${rememberMe ? 'text-emerald-400/80' : 'text-white/60'} cursor-pointer transition-colors duration-300`}
-                              >
-                                Permanecer conectado
-                              </Label>
-                            </div>
-                            
+                          {/* Linha apenas com "Esqueceu a senha?" */}
+                          <div className="flex items-center justify-end mt-2">
                             <button
                               onClick={() => setForgotPasswordState(true)}
                               className="text-xs text-white/40 hover:text-white/60 transition-colors"
@@ -1765,6 +1753,7 @@ export default function Auth() {
                               onChange={handleBirthdateChange}
                               placeholder="DD/MM/AAAA"
                               maxLength={10}
+                              ref={birthdateRef}
                               className={`bg-black/20 border-[0.5px] border-white/[0.03] h-11 px-4 text-white/70 focus:outline-none focus:ring-1 focus:ring-white/10 hover:bg-black/30 transition-all duration-300 rounded-xl placeholder:text-white/20 ${error?.field === 'birthdate' ? 'border-rose-500/50 animate-shake' : ''}`}
                               disabled={authLoading || loadingAction !== null}
                               style={{

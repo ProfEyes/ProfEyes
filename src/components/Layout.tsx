@@ -9,15 +9,22 @@ import {
   Signal,
   Bell,
   Check,
-  HelpCircle
+  HelpCircle,
+  MessageSquare,
+  Video
 } from "lucide-react";
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Logo } from "@/components/ui/logo";
-import { useLocation } from 'react-router-dom';
 import { cn } from "@/lib/utils";
 import { motion } from "framer-motion";
 import { useNotifications } from "@/contexts/NotificationContext";
 import { useUser } from "@/contexts/UserContext";
+import { useLanguage } from "@/contexts/LanguageContext";
+import { useState, useEffect } from 'react';
+import { supabase } from "@/lib/supabase";
+import { Badge } from '@/components/ui/badge';
+// Importar o componente de teste apenas em ambiente de desenvolvimento
+// import StreamTestUI from '@/components/dev/StreamTestUI';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -47,6 +54,7 @@ const NotificationBadge = ({ count }: { count: number }) => {
 export default function Layout({ children }: LayoutProps) {
   const navigate = useNavigate();
   const location = useLocation();
+  const { t } = useLanguage();
   
   // Usando o contexto real de notificações
   const { notifications, unreadCount } = useNotifications();
@@ -55,9 +63,49 @@ export default function Layout({ children }: LayoutProps) {
   // Usando o contexto do usuário
   const { userName, avatarUrl } = useUser();
   
+  // Estado para rastrear transmissões ativas
+  const [liveStreamsCount, setLiveStreamsCount] = useState(0);
+  
+  // Verificar transmissões ativas
+  useEffect(() => {
+    const checkActiveStreams = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('live_streams')
+          .select('id')
+          .eq('is_active', true);
+          
+        if (!error && data) {
+          setLiveStreamsCount(data.length);
+        }
+      } catch (error) {
+        console.error('Erro ao verificar transmissões ativas:', error);
+      }
+    };
+    
+    // Verificar inicialmente
+    checkActiveStreams();
+    
+    // Configurar assinatura para atualizações em tempo real
+    const subscription = supabase
+      .channel('public:live_streams')
+      .on('postgres_changes', 
+        { event: '*', schema: 'public', table: 'live_streams' },
+        checkActiveStreams
+      )
+      .subscribe();
+      
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
+  
   const isActive = (path: string) => {
     return location.pathname === path;
   };
+
+  // Verificar se estamos em ambiente de desenvolvimento
+  const isDevelopment = import.meta.env.DEV;
 
   return (
     <SidebarProvider>
@@ -87,7 +135,7 @@ export default function Layout({ children }: LayoutProps) {
                 onClick={() => navigate('/')}
               >
                 <LayoutDashboard className="h-4 w-4 opacity-70" />
-                Dashboard
+                {t('nav.dashboard')}
               </Button>
                
               <Button 
@@ -102,7 +150,7 @@ export default function Layout({ children }: LayoutProps) {
                 onClick={() => navigate('/signals')}
               >
                 <Signal className="h-4 w-4 opacity-70" />
-                Sinais
+                {t('nav.signals') || 'Sinais'}
               </Button>
                
               <Button 
@@ -117,7 +165,7 @@ export default function Layout({ children }: LayoutProps) {
                 onClick={() => navigate('/news')}
               >
                 <Newspaper className="h-4 w-4 opacity-70" />
-                Notícias
+                {t('nav.news') || 'Notícias'}
               </Button>
               
               <Button 
@@ -132,14 +180,36 @@ export default function Layout({ children }: LayoutProps) {
                 onClick={() => navigate('/instructions')}
               >
                 <HelpCircle className="h-4 w-4 opacity-70" />
-                Instruções
+                {t('nav.instructions')}
+              </Button>
+              
+              <Button 
+                variant="ghost" 
+                className={cn(
+                  "w-full justify-start gap-3 py-3 text-sm font-medium transition-all",
+                  "hover:bg-white/5 text-white/80 hover:text-white",
+                  isActive('/live') 
+                    ? "bg-white/5 text-white border-l-2 border-white/60 pl-3" 
+                    : "pl-4"
+                )} 
+                onClick={() => navigate('/live')}
+              >
+                <Video className="h-4 w-4 opacity-70" />
+                {t('nav.live') || 'Ao Vivo'}
+                {/* Indicador de transmissão ativa */}
+                {liveStreamsCount > 0 && (
+                  <span className="ml-auto relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
+                  </span>
+                )}
               </Button>
             </nav>
             
             {/* Divisor que separa as seções */}
             <div className="my-4 flex items-center gap-2 px-2">
               <div className="h-px flex-1 bg-white/5"></div>
-              <span className="text-[10px] uppercase text-white/30 font-medium">Notificações & Configurações</span>
+              <span className="text-[10px] uppercase text-white/30 font-medium">{t('nav.settings.notifications') || 'Notificações & Configurações'}</span>
               <div className="h-px flex-1 bg-white/5"></div>
             </div>
             
@@ -173,7 +243,7 @@ export default function Layout({ children }: LayoutProps) {
                     <span className="absolute -top-1 -right-1 h-2 w-2 bg-red-500 rounded-full animate-pulse" />
                   )}
                 </div>
-                <span>Notificações</span>
+                <span>{t('nav.notifications') || 'Notificações'}</span>
                 {unreadCount > 0 && (
                   <NotificationBadge count={unreadCount} />
                 )}
@@ -193,7 +263,7 @@ export default function Layout({ children }: LayoutProps) {
                   onClick={() => navigate('/notifications?filter=read')}
                 >
                   <Check className="h-4 w-4 opacity-70" />
-                  <span>Notificações Lidas</span>
+                  <span>{t('nav.notifications.read') || 'Notificações Lidas'}</span>
                   <span className="ml-auto bg-green-500/80 text-white text-xs min-w-5 h-5 rounded-full flex items-center justify-center">
                     {readCount}
                   </span>
@@ -212,24 +282,39 @@ export default function Layout({ children }: LayoutProps) {
                 onClick={() => navigate('/settings')}
               >
                 <Settings className="h-4 w-4 opacity-70" />
-                Configurações
+                {t('nav.settings')}
+              </Button>
+              
+              <Button 
+                variant="ghost" 
+                className={cn(
+                  "w-full justify-start gap-3 py-3 text-sm font-medium transition-all",
+                  "hover:bg-white/5 text-white/80 hover:text-white",
+                  isActive('/support') 
+                    ? "bg-white/5 text-white border-l-2 border-white/60 pl-3" 
+                    : "pl-4"
+                )} 
+                onClick={() => navigate('/support')}
+              >
+                <MessageSquare className="h-4 w-4 opacity-70" />
+                {t('nav.support') || "Suporte"}
               </Button>
             </nav>
             
             {/* Status do sistema (movido para o final) */}
             <div className="mt-auto pt-4 border-t border-white/5">
               <div className="rounded-lg bg-black/20 p-3">
-                <p className="text-xs text-white/60 mb-2">Status do sistema</p>
+                <p className="text-xs text-white/60 mb-2">{t('nav.system.status') || 'Status do sistema'}</p>
                 <div className="flex items-center gap-2">
                   <div className="h-2 w-2 rounded-full bg-emerald-500/80 animate-pulse"></div>
-                  <span className="text-xs text-white/80">Online</span>
+                  <span className="text-xs text-white/80">{t('nav.system.online') || 'Online'}</span>
                 </div>
               </div>
             </div>
           </SidebarContent>
         </Sidebar>
         
-        <main className="flex-1 p-4 md:p-6 overflow-y-auto">
+        <main className="flex-1 p-4 md:p-6 overflow-y-auto relative">
           <div className="md:hidden flex items-center mb-4">
             <SidebarTrigger className="h-9 w-9 border-white/10 bg-black/20" />
             <span className="ml-3 text-sm font-medium">{location.pathname === '/' ? 'Dashboard' : location.pathname.substring(1).charAt(0).toUpperCase() + location.pathname.substring(2)}</span>
@@ -241,6 +326,9 @@ export default function Layout({ children }: LayoutProps) {
           </div>
           
           {children}
+          
+          {/* Incluir o componente de teste apenas em desenvolvimento */}
+          {/* {isDevelopment && <StreamTestUI />} */}
         </main>
       </div>
     </SidebarProvider>

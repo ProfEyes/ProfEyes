@@ -1,10 +1,6 @@
 import { createBrowserRouter, redirect } from "react-router-dom";
 import App from "./App";
-import Home from "./pages/Home";
-import Dashboard from "./pages/Dashboard";
-import Settings from "./pages/Settings";
-import Auth from "./pages/Auth";
-import Admin from "./pages/Admin";
+import { Home, Dashboard, Settings, Auth, Admin, TestAuthPage, Live, EmailDiagnostico } from "./pages";
 import { supabase } from "./lib/supabase";
 
 // Função auxiliar para verificar autenticação
@@ -51,11 +47,25 @@ export const router = createBrowserRouter([
         element: <Admin />,
         loader: requireAuth,
       },
+      {
+        path: "live",
+        element: <Live />,
+        loader: requireAuth,
+      },
     ],
   },
   {
     path: "/auth",
     element: <Auth />,
     loader: redirectIfAuthenticated,
+  },
+  {
+    path: "/test-auth",
+    element: <TestAuthPage />,
+    // Sem loader para permitir acesso sem autenticação
+  },
+  {
+    path: "/email-diagnostico",
+    element: <EmailDiagnostico />,
   },
 ]); 

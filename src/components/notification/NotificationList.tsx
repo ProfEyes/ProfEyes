@@ -1,338 +1,595 @@
-import React from "react";
-import { useNotifications, Notification } from "@/contexts/NotificationContext";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Bell, Trash, Check, Clock, AlertTriangle, Info, Zap, MessageSquare, X } from "lucide-react";
-import { cn } from "@/lib/utils";
-import { format } from "date-fns";
-import { ptBR } from "date-fns/locale";
-import { AnimatePresence, motion } from "framer-motion";
+import React, { useState, useEffect } from 'react';
+import { Notification, useNotifications } from '@/contexts/NotificationContext';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import { AnimatePresence, motion } from 'framer-motion';
+import { Bell, Check, Tag, X, ChevronRight, Calendar, Clock, Filter, Trash2, Settings } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Avatar } from '@/components/ui/avatar';
+import { cn } from '@/lib/utils';
 
-// Formatação relativa de data para exibição amigável
-const formatRelativeTime = (date: Date): string => {
+/**
+ * Formata o tempo relativo (há quanto tempo aconteceu)
+ */
+function formatRelativeTime(date: Date): string {
   const now = new Date();
   const diffMs = now.getTime() - date.getTime();
-  const diffSecs = Math.floor(diffMs / 1000);
-  const diffMins = Math.floor(diffSecs / 60);
-  const diffHours = Math.floor(diffMins / 60);
-  const diffDays = Math.floor(diffHours / 24);
+  const diffSec = Math.floor(diffMs / 1000);
+  const diffMin = Math.floor(diffSec / 60);
+  const diffHour = Math.floor(diffMin / 60);
+  const diffDay = Math.floor(diffHour / 24);
 
-  if (diffSecs < 60) {
-    return "Agora";
-  } else if (diffMins < 60) {
-    return `${diffMins} min`;
-  } else if (diffHours < 24) {
-    return `${diffHours}h`;
-  } else if (diffDays === 1) {
-    return "Ontem";
-  } else if (diffDays < 7) {
-    return `${diffDays} dias`;
+  if (diffSec < 60) {
+    return 'Agora mesmo';
+  } else if (diffMin < 60) {
+    return `${diffMin} min atrás`;
+  } else if (diffHour < 24) {
+    return `${diffHour}h atrás`;
+  } else if (diffDay === 1) {
+    return 'Ontem';
+  } else if (diffDay < 7) {
+    return `${diffDay} dias atrás`;
   } else {
-    return format(date, "dd/MM/yyyy", { locale: ptBR });
+    return date.toLocaleDateString('pt-BR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric'
+    });
+  }
+}
+
+/**
+ * Formata a data completa
+ */
+function formatFullDate(date: Date): string {
+  return date.toLocaleDateString('pt-BR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+}
+
+// Configurações de cores por tipo de notificação
+const notificationStyles: Record<string, { icon: React.ReactNode; color: string; bgColor: string }> = {
+  signals: { 
+    icon: <Tag size={16} />, 
+    color: 'text-blue-600 dark:text-blue-500', 
+    bgColor: 'bg-blue-100 dark:bg-blue-900/30' 
+  },
+  completed: { 
+    icon: <Check size={16} />, 
+    color: 'text-green-600 dark:text-green-500', 
+    bgColor: 'bg-green-100 dark:bg-green-900/30' 
+  },
+  stopped: { 
+    icon: <X size={16} />, 
+    color: 'text-red-600 dark:text-red-500', 
+    bgColor: 'bg-red-100 dark:bg-red-900/30' 
+  },
+  system: { 
+    icon: <Bell size={16} />, 
+    color: 'text-purple-600 dark:text-purple-500', 
+    bgColor: 'bg-purple-100 dark:bg-purple-900/30' 
+  },
+  alerts: { 
+    icon: <Bell size={16} />, 
+    color: 'text-orange-600 dark:text-orange-500', 
+    bgColor: 'bg-orange-100 dark:bg-orange-900/30' 
   }
 };
 
-// Componente para cada notificação individual
-const NotificationItem: React.FC<{ notification: Notification; compact?: boolean }> = ({ 
-  notification, 
-  compact = false 
-}) => {
-  const { markAsRead, removeNotification } = useNotifications();
+// Componente para um item de notificação
+interface NotificationItemProps {
+  notification: Notification;
+  onMarkAsRead?: (id: string) => void;
+  onRemove?: (id: string) => void;
+  onClick?: () => void;
+  compact?: boolean;
+}
+
+const NotificationItem = ({ notification, onMarkAsRead, onRemove, onClick, compact = false }: NotificationItemProps) => {
+  const navigate = useNavigate();
+  const style = notificationStyles[notification.type] || notificationStyles.system;
   
-  // Escolher o ícone com base no tipo de notificação
-  const renderIcon = () => {
-    switch (notification.type) {
-      case "alerts":
-        return <AlertTriangle className="h-5 w-5 text-red-400" />;
-      case "signals":
-        return <Zap className="h-5 w-5 text-blue-400" />;
-      case "news":
-        return <Info className="h-5 w-5 text-amber-400" />;
-      case "portfolio":
-        return <MessageSquare className="h-5 w-5 text-purple-400" />;
-      case "test":
-        return <Bell className="h-5 w-5 text-teal-400" />;
-      default:
-        return <Bell className="h-5 w-5 text-white/70" />;
+  const handleAction = () => {
+    if (notification.actionLink) {
+      navigate(notification.actionLink);
+    }
+    if (onClick) onClick();
+    if (!notification.read && onMarkAsRead) {
+      onMarkAsRead(notification.id);
     }
   };
   
-  // Escolher cor de fundo com base na prioridade
-  const getBgColorClass = () => {
-    if (notification.read) return "bg-black/20";
-    
-    switch (notification.priority) {
-      case "high":
-        return "bg-gradient-to-r from-red-950/30 to-red-900/20 border-red-800/30";
-      case "medium":
-        return "bg-gradient-to-r from-amber-950/30 to-amber-900/20 border-amber-800/30";
-      case "low":
-        return "bg-gradient-to-r from-blue-950/30 to-blue-900/20 border-blue-800/30";
-      default:
-        return "bg-gradient-to-r from-white/10 to-white/5 border-white/10";
-    }
-  };
-  
-  // Renderização mais compacta para modo dropdown
-  if (compact) {
-    return (
-      <motion.div
-        initial={{ opacity: 0, y: -5 }}
-        animate={{ opacity: 1, y: 0 }}
-        exit={{ opacity: 0, height: 0 }}
-        className={cn(
-          "p-3 border rounded-md mb-2 last:mb-0 hover:bg-white/5 transition-colors",
-          notification.read ? "border-white/5 opacity-70" : "border-white/10",
-          getBgColorClass()
-        )}
-        onClick={() => !notification.read && markAsRead(notification.id)}
-      >
-        <div className="flex items-start gap-3">
-          <div className="mt-0.5">{renderIcon()}</div>
-          <div className="flex-1 min-w-0">
-            <div className="flex items-start justify-between gap-2">
-              <h4 className={cn(
-                "text-sm font-medium truncate",
-                notification.read ? "text-white/70" : "text-white/90"
-              )}>
-                {notification.title}
-              </h4>
-              <span className="text-xs text-white/50 whitespace-nowrap">
-                {formatRelativeTime(notification.timestamp)}
-              </span>
-            </div>
-            <p className="text-xs text-white/60 line-clamp-1">
-              {notification.message}
-            </p>
-          </div>
-        </div>
-      </motion.div>
-    );
-  }
-  
-  // Renderização completa para página de notificações
   return (
     <motion.div
-      initial={{ opacity: 0, y: -10 }}
+      initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, height: 0 }}
+      exit={{ opacity: 0, x: -10 }}
+      transition={{ duration: 0.2 }}
       className={cn(
-        "p-4 border rounded-lg mb-3 last:mb-0 relative overflow-hidden",
-        notification.read ? "border-white/5 opacity-80" : "border-white/10",
-        getBgColorClass()
+        "relative border p-4 mb-2 rounded-lg transition-all",
+        notification.read 
+          ? "bg-muted/30 border-muted/50" 
+          : "bg-muted/10 border-muted shadow-sm",
+        compact ? "p-3" : "p-4"
       )}
     >
-      {!notification.read && (
-        <div className="absolute top-2 right-2 w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
-      )}
-      
       <div className="flex items-start gap-3">
-        <div className="mt-0.5">{renderIcon()}</div>
+        <div className={cn("p-2 rounded-full flex-shrink-0", style.bgColor)}>
+          <div className={style.color}>{style.icon}</div>
+        </div>
+        
         <div className="flex-1 min-w-0">
           <div className="flex items-start justify-between gap-2">
             <h4 className={cn(
-              "text-sm font-medium",
-              notification.read ? "text-white/70" : "text-white/90"
+              "font-medium line-clamp-1",
+              notification.read ? "text-muted-foreground" : "text-foreground"
             )}>
               {notification.title}
             </h4>
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-white/50 whitespace-nowrap flex items-center">
-                <Clock className="h-3 w-3 mr-1" />
+            
+            <div className="flex items-center gap-1 flex-shrink-0">
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <time className="text-xs text-muted-foreground">
                 {formatRelativeTime(notification.timestamp)}
-              </span>
-              <Badge 
-                variant="outline" 
-                className={cn(
-                  "text-[10px] py-0 h-5",
-                  notification.priority === "high" && "bg-red-500/20 text-red-200",
-                  notification.priority === "medium" && "bg-amber-500/20 text-amber-200",
-                  notification.priority === "low" && "bg-blue-500/20 text-blue-200"
-                )}
-              >
-                {notification.priority === "high" && "Alta"}
-                {notification.priority === "medium" && "Média"}
-                {notification.priority === "low" && "Baixa"}
-              </Badge>
+                    </time>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>{formatFullDate(notification.timestamp)}</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+              
+              {!compact && (
+                <div className="flex gap-1 ml-2">
+                  {!notification.read && (
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            className="h-7 w-7" 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (onMarkAsRead) onMarkAsRead(notification.id);
+                            }}
+                          >
+                            <Check size={14} />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>Marcar como lida</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  )}
+                  
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          className="h-7 w-7 text-muted-foreground hover:text-destructive" 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (onRemove) onRemove(notification.id);
+                          }}
+                        >
+                          <Trash2 size={14} />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Remover notificação</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                </div>
+              )}
             </div>
           </div>
-          <p className="text-sm text-white/60 mt-1 mb-2">
+          
+          <p className={cn(
+            "text-sm mt-1",
+            notification.read ? "text-muted-foreground" : "text-foreground"
+          )}>
             {notification.message}
           </p>
           
-          <div className="flex justify-between items-center mt-2">
-            <div className="text-xs text-white/40">
-              {format(notification.timestamp, "PPp", { locale: ptBR })}
+          {notification.data && !compact && (
+            <div className="mt-2 p-2 bg-muted/20 rounded text-xs">
+              <pre className="overflow-auto max-h-24 whitespace-pre-wrap">
+                {JSON.stringify(notification.data, null, 2)}
+              </pre>
             </div>
-            <div className="flex gap-1">
-              {!notification.read && (
-                <Button 
-                  size="sm" 
-                  variant="ghost" 
-                  className="h-7 px-2 text-xs hover:bg-white/10"
-                  onClick={() => markAsRead(notification.id)}
-                >
-                  <Check className="h-3.5 w-3.5 mr-1" />
-                  Marcar como lida
-                </Button>
-              )}
-              <Button
-                size="sm"
-                variant="ghost"
-                className="h-7 px-2 text-xs text-red-300 hover:text-red-200 hover:bg-red-950/30"
-                onClick={() => removeNotification(notification.id)}
-              >
-                <X className="h-3.5 w-3.5 mr-1" />
-                Remover
-              </Button>
-            </div>
-          </div>
-        </div>
-      </div>
-    </motion.div>
-  );
-};
-
-// Componente principal da lista de notificações
-export const NotificationList: React.FC<{ 
-  maxHeight?: string; 
-  compact?: boolean;
-  showClearButton?: boolean;
-  emptyMessage?: string;
-  viewFilter?: "all" | "unread" | "read";
-}> = ({ 
-  maxHeight = "500px", 
-  compact = false,
-  showClearButton = true,
-  emptyMessage = "Não há notificações no momento",
-  viewFilter = "all"
-}) => {
-  const { notifications, unreadCount, markAllAsRead, clearAllNotifications } = useNotifications();
-  
-  // Aplicando o filtro às notificações
-  const filteredNotifications = notifications.filter(notif => {
-    if (viewFilter === "unread" && notif.read) return false;
-    if (viewFilter === "read" && !notif.read) return false;
-    return true;
-  });
-  
-  if (filteredNotifications.length === 0) {
-    return (
-      <Card className="border-white/5 bg-black/20 backdrop-blur-sm">
-        <CardContent className="p-6 flex flex-col items-center justify-center h-48">
-          <Bell className="h-12 w-12 text-white/10 mb-3" />
-          <p className="text-white/50 text-center">
-            {viewFilter === "unread" 
-              ? "Não há notificações não lidas no momento" 
-              : viewFilter === "read" 
-                ? "Não há notificações lidas no momento"
-                : emptyMessage}
-          </p>
-        </CardContent>
-      </Card>
-    );
-  }
-  
-  return (
-    <Card className="border-white/5 bg-gradient-to-br from-black/40 via-black/30 to-black/20 backdrop-blur-sm relative overflow-hidden">
-      <CardHeader className="pb-2">
-        <div className="flex justify-between items-center">
-          <div>
-            <CardTitle className="text-lg font-semibold text-white/90 flex items-center gap-2">
-              <Bell className="h-5 w-5 text-purple-400" />
-              {viewFilter === "unread" 
-                ? "Notificações não lidas" 
-                : viewFilter === "read"
-                  ? "Notificações lidas"
-                  : "Todas as notificações"}
-              {viewFilter === "unread" && unreadCount > 0 && (
-                <Badge className="bg-blue-500 text-white ml-2">
-                  {unreadCount} nova{unreadCount !== 1 ? 's' : ''}
-                </Badge>
-              )}
-            </CardTitle>
-            <CardDescription className="text-white/60">
-              {viewFilter === "unread" 
-                ? `Você tem ${unreadCount} notificação(ões) não lida(s)`
-                : viewFilter === "read"
-                  ? `Você tem ${notifications.filter(n => n.read).length} notificação(ões) lida(s)`
-                  : `Você tem ${notifications.length} notificação(ões) no total`}
-            </CardDescription>
-          </div>
+          )}
           
-          {showClearButton && (
-            <div className="flex items-center gap-2">
-              {viewFilter !== "read" && unreadCount > 0 && (
-                <Button 
-                  variant="ghost" 
-                  size="sm" 
-                  onClick={markAllAsRead}
-                  className="text-xs h-8 px-2 hover:bg-white/10"
-                >
-                  <Check className="h-3.5 w-3.5 mr-1" />
-                  Marcar todas como lidas
-                </Button>
-              )}
-              <Button 
-                variant="destructive" 
-                size="sm" 
-                onClick={clearAllNotifications}
-                className="text-xs h-8 px-2 bg-red-950/50 hover:bg-red-900/50 border border-red-800/50"
+          {notification.actionLink && !compact && (
+            <div className="mt-3">
+              <Button
+                variant="secondary" 
+                size="sm"
+                className="text-xs h-7 gap-1"
+                onClick={handleAction}
               >
-                <Trash className="h-3.5 w-3.5 mr-1" />
-                Limpar todas
+                <ChevronRight size={12} />
+                Ver mais detalhes
               </Button>
             </div>
           )}
         </div>
-      </CardHeader>
+      </div>
       
-      <Separator className="bg-white/5" />
+      {!notification.read && (
+        <span className="absolute top-4 right-4 w-2 h-2 rounded-full bg-primary" />
+      )}
       
-      <CardContent className="pt-4 px-4 pb-2">
-        <ScrollArea className={`${maxHeight ? `max-h-[${maxHeight}]` : ''} pr-2`}>
-          <AnimatePresence>
-            {filteredNotifications.map(notification => (
+      {/* Overlay para clique quando compacto */}
+      {compact && (
+        <button 
+          className="absolute inset-0 w-full h-full cursor-pointer"
+          onClick={handleAction}
+          aria-label="Ver notificação"
+        />
+      )}
+    </motion.div>
+  );
+};
+
+// Componente para o filtro de notificações
+interface NotificationFilterProps {
+  selectedType: string;
+  onSelectType: (type: string) => void;
+  onClear: () => void;
+  onMarkAllAsRead: () => void;
+  unreadOnly: boolean;
+  setUnreadOnly: (value: boolean) => void;
+}
+
+const NotificationFilter = ({
+  selectedType,
+  onSelectType,
+  onClear,
+  onMarkAllAsRead,
+  unreadOnly,
+  setUnreadOnly
+}: NotificationFilterProps) => {
+  const { settings } = useNotifications();
+  const notificationTypes = settings.types;
+  
+  return (
+    <div className="mb-4">
+      <div className="flex justify-between items-center mb-3">
+        <h3 className="text-lg font-semibold">Suas Notificações</h3>
+        
+        <div className="flex gap-2">
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="outline" size="sm" onClick={onMarkAllAsRead}>
+                  <Check size={14} className="mr-1" />
+                  <span className="hidden sm:inline">Marcar todas</span>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Marcar todas como lidas</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+          
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="outline" size="sm" onClick={onClear}>
+                  <Trash2 size={14} className="mr-1" />
+                  <span className="hidden sm:inline">Limpar todas</span>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Remover todas as notificações</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+          
+          <DropdownMenu>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" size="icon" className="h-8 w-8">
+                      <Filter size={14} />
+                    </Button>
+                  </DropdownMenuTrigger>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Filtrar notificações</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+            
+            <DropdownMenuContent align="end" className="w-52">
+              <DropdownMenuLabel>Filtrar por tipo</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              
+              <DropdownMenuItem 
+                onClick={() => onSelectType('all')}
+                className={selectedType === 'all' ? 'bg-muted' : ''}
+              >
+                <span className="flex items-center gap-2">
+                  <Bell size={14} />
+                  Todas
+                </span>
+                {selectedType === 'all' && <Check size={14} className="ml-auto" />}
+              </DropdownMenuItem>
+              
+              {notificationTypes.map(type => (
+                <DropdownMenuItem 
+                  key={type.id}
+                  onClick={() => onSelectType(type.id)}
+                  className={selectedType === type.id ? 'bg-muted' : ''}
+                >
+                  <span className="flex items-center gap-2">
+                    {notificationStyles[type.id]?.icon || <Bell size={14} />}
+                    {type.name}
+                  </span>
+                  {selectedType === type.id && <Check size={14} className="ml-auto" />}
+                </DropdownMenuItem>
+              ))}
+              
+              <DropdownMenuSeparator />
+              <DropdownMenuLabel>Exibição</DropdownMenuLabel>
+              <DropdownMenuItem 
+                onClick={() => setUnreadOnly(!unreadOnly)}
+                className="flex items-center justify-between"
+              >
+                <span>Apenas não lidas</span>
+                {unreadOnly && <Check size={14} />}
+              </DropdownMenuItem>
+              
+              <DropdownMenuSeparator />
+              <DropdownMenuItem asChild>
+                <button 
+                  className="flex items-center w-full" 
+                  onClick={() => window.location.href = '/settings'}
+                >
+                  <Settings size={14} className="mr-2" />
+                  Configurações de notificações
+                </button>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      </div>
+      
+      {selectedType !== 'all' && (
+        <div className="mb-3">
+          <Badge variant="outline" className="flex items-center gap-1 px-3 py-1">
+            {notificationStyles[selectedType]?.icon || <Bell size={12} />}
+            <span>
+              {settings.types.find(t => t.id === selectedType)?.name || 'Filtrando por tipo'}
+            </span>
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              className="h-4 w-4 ml-1" 
+              onClick={() => onSelectType('all')}
+            >
+              <X size={10} />
+            </Button>
+          </Badge>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// Componente principal
+interface NotificationListProps {
+  compact?: boolean;
+  maxItems?: number;
+}
+
+export const NotificationList = ({ compact = false, maxItems }: NotificationListProps) => {
+  const { 
+    notifications, 
+    markAsRead, 
+    removeNotification, 
+    markAllAsRead, 
+    clearAllNotifications 
+  } = useNotifications();
+  
+  const [selectedType, setSelectedType] = useState('all');
+  const [unreadOnly, setUnreadOnly] = useState(false);
+  const [loading, setLoading] = useState(true);
+  
+  // Simulação de carregamento para UX
+  useEffect(() => {
+    const timer = setTimeout(() => setLoading(false), 800);
+    return () => clearTimeout(timer);
+  }, []);
+  
+  // Filtra notificações com base nos critérios selecionados
+  const filteredNotifications = notifications
+    .filter(notification => 
+      (selectedType === 'all' || notification.type === selectedType) &&
+      (!unreadOnly || !notification.read)
+    )
+    .slice(0, maxItems);
+  
+  // Renderiza esqueletos durante o carregamento
+  if (loading) {
+    return (
+      <div className="space-y-3">
+        {Array(3).fill(0).map((_, i) => (
+          <div key={i} className="flex items-start gap-3 p-4 border rounded-lg">
+            <Skeleton className="h-10 w-10 rounded-full" />
+            <div className="space-y-2 flex-1">
+              <Skeleton className="h-4 w-3/4" />
+              <Skeleton className="h-4 w-full" />
+              <Skeleton className="h-4 w-1/2" />
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  }
+  
+  // Interface para listagem completa
+  if (!compact) {
+  return (
+      <div className="space-y-2">
+        <NotificationFilter
+          selectedType={selectedType}
+          onSelectType={setSelectedType}
+          onClear={clearAllNotifications}
+          onMarkAllAsRead={markAllAsRead}
+          unreadOnly={unreadOnly}
+          setUnreadOnly={setUnreadOnly}
+        />
+        
+        <Tabs defaultValue="all">
+          <TabsList className="mb-4">
+            <TabsTrigger value="all">Todas</TabsTrigger>
+            <TabsTrigger value="unread">Não lidas {notifications.filter(n => !n.read).length > 0 && (
+              <Badge className="ml-1 bg-primary">{notifications.filter(n => !n.read).length}</Badge>
+            )}</TabsTrigger>
+          </TabsList>
+          
+          <TabsContent value="all">
+            <ScrollArea className="h-[calc(100vh-240px)]">
+              <AnimatePresence initial={false}>
+                {filteredNotifications.length > 0 ? (
+                  filteredNotifications.map(notification => (
+                    <NotificationItem
+                      key={notification.id}
+                      notification={notification}
+                      onMarkAsRead={markAsRead}
+                      onRemove={removeNotification}
+                    />
+                  ))
+                ) : (
+                  <div className="flex flex-col items-center justify-center py-10 text-center">
+                    <Bell size={40} className="text-muted-foreground opacity-20 mb-4" />
+                    <h3 className="text-lg font-medium">Nenhuma notificação encontrada</h3>
+                    <p className="text-muted-foreground mt-1">
+                      {unreadOnly 
+                        ? "Você já leu todas as suas notificações" 
+                        : selectedType !== 'all' 
+                          ? "Nenhuma notificação deste tipo foi encontrada" 
+                          : "Quando houver novidades, elas aparecerão aqui"}
+                    </p>
+                  </div>
+                )}
+              </AnimatePresence>
+            </ScrollArea>
+          </TabsContent>
+          
+          <TabsContent value="unread">
+            <ScrollArea className="h-[calc(100vh-240px)]">
+              <AnimatePresence initial={false}>
+                {notifications.filter(n => !n.read).length > 0 ? (
+                  notifications
+                    .filter(n => !n.read)
+                    .filter(n => selectedType === 'all' || n.type === selectedType)
+                    .map(notification => (
+                      <NotificationItem
+                        key={notification.id}
+                        notification={notification}
+                        onMarkAsRead={markAsRead}
+                        onRemove={removeNotification}
+                      />
+                    ))
+                ) : (
+                  <div className="flex flex-col items-center justify-center py-10 text-center">
+                    <Check size={40} className="text-muted-foreground opacity-20 mb-4" />
+                    <h3 className="text-lg font-medium">Nenhuma notificação não lida</h3>
+                    <p className="text-muted-foreground mt-1">
+                      Você leu todas as suas notificações
+                    </p>
+                  </div>
+                )}
+              </AnimatePresence>
+            </ScrollArea>
+          </TabsContent>
+        </Tabs>
+      </div>
+    );
+  }
+  
+  // Interface compacta para sidebar/dropdown
+  return (
+    <div className="w-full">
+      <div className="flex justify-between items-center mb-2">
+        <h3 className="text-sm font-semibold">Notificações recentes</h3>
+              <Button 
+          variant="link" 
+                size="sm" 
+          className="text-xs h-auto p-0"
+          onClick={() => window.location.href = '/notifications'}
+              >
+          Ver todas
+              </Button>
+            </div>
+      
+      <div className="space-y-1">
+        <AnimatePresence initial={false}>
+          {filteredNotifications.length > 0 ? (
+            filteredNotifications.map(notification => (
               <NotificationItem 
                 key={notification.id} 
                 notification={notification} 
-                compact={compact}
+                onMarkAsRead={markAsRead}
+                onRemove={removeNotification}
+                compact={true}
               />
-            ))}
+            ))
+          ) : (
+            <div className="text-center py-5">
+              <Bell size={24} className="text-muted-foreground opacity-20 mx-auto mb-2" />
+              <p className="text-xs text-muted-foreground">
+                Nenhuma notificação
+              </p>
+            </div>
+          )}
           </AnimatePresence>
-        </ScrollArea>
-      </CardContent>
+      </div>
       
-      {showClearButton && (
-        <>
-          <Separator className="bg-white/5" />
-          <CardFooter className="pt-3 pb-3 flex justify-end gap-2">
-            {viewFilter !== "read" && unreadCount > 0 && (
+      {notifications.length > 0 && (
+        <div className="mt-3 flex justify-end gap-2">
               <Button
-                variant="outline"
+            variant="ghost" 
                 size="sm"
-                className="text-xs bg-white/5 border-white/10 hover:bg-white/10"
+            className="text-xs h-7" 
                 onClick={markAllAsRead}
               >
-                <Check className="h-3.5 w-3.5 mr-1" />
-                Marcar todas como lidas
+            Marcar como lidas
               </Button>
-            )}
-            <Button
-              variant="destructive"
-              size="sm"
-              className="text-xs bg-red-950/50 hover:bg-red-900/50 border border-red-800/50"
-              onClick={clearAllNotifications}
-            >
-              <Trash className="h-3.5 w-3.5 mr-1" />
-              Limpar notificações
-            </Button>
-          </CardFooter>
-        </>
+        </div>
       )}
-    </Card>
+    </div>
   );
 }; 

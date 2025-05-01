@@ -9,7 +9,8 @@ import { useQuery } from "@tanstack/react-query";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR as ptBR } from "date-fns/locale";
 import { MarketNews } from "@/services/types";
-import { fetchMarketNews, symbolToCompanyName } from '@/services/newsService';
+import { fetchMarketNews } from '@/services/news';
+import { symbolToCompanyName } from '@/services/newsService';
 import { cn } from '@/lib/utils';
 import { toast } from "sonner";
 import {
@@ -19,6 +20,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { useNavigate } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 
 // Verificar se o cache de notícias está válido
 function isNewsCacheValid(): boolean {
@@ -41,6 +43,24 @@ function shouldPrefetchNews(): boolean {
   // Se não houver cache ou se o cache for inválido, buscar notícias
   return !isNewsCacheValid();
 }
+
+// Tipo mais abrangente para notícias que inclui todas as propriedades possíveis
+type ExtendedMarketNews = Partial<MarketNews> & {
+  headline?: string;
+  title?: string;
+  description?: string;
+  summary?: string;
+  content?: string;
+  source?: string;
+  url?: string;
+  publishedAt?: number | string;
+  published_at?: string;
+  datetime?: number | string;
+  imageUrl?: string;
+  image?: string;
+  relatedSymbols?: string[];
+  [key: string]: any; // Permite qualquer propriedade adicional
+};
 
 export function NewsCard() {
   const navigate = useNavigate();
@@ -68,9 +88,10 @@ export function NewsCard() {
     isSuccess,
     dataUpdatedAt
   } = useQuery({
-    queryKey: ['marketNews'],
+    queryKey: ['dashboardMarketNews'],
     queryFn: async () => {
-      return await fetchMarketNews({ limit: 5 });
+      // Buscar notícias do Finnhub
+      return await fetchMarketNews();
     },
     // Não buscar automaticamente se o cache estiver válido
     enabled: shouldPrefetchNews(),
@@ -80,6 +101,8 @@ export function NewsCard() {
     retry: 1,
     retryDelay: 2000
   });
+  
+  const queryClient = useQueryClient();
   
   // Efeito para adicionar o atraso adicional de um segundo após o carregamento real
   useEffect(() => {
@@ -135,11 +158,98 @@ export function NewsCard() {
         setRefreshButtonState('default');
       }, 2000);
     } else {
-      // Se não for atualização recente, proceder com a atualização normal
+      // Se não for atualização recente, proceder com a atualização personalizada
       isManualRefetch.current = true;
-      refetch();
+      
+      // Armazenar temporariamente as notícias atuais
+      const currentNews = news || [];
+      
+      // Fazer a chamada para buscar novas notícias
+      fetchMarketNews().then(newNews => {
+        if (newNews && Array.isArray(newNews) && newNews.length > 0) {
+          // Filtrar notícias para manter apenas as mais recentes ou da mesma data
+          if (currentNews.length > 0) {
+            // Manter 30% das notícias anteriores que sejam mais relevantes
+            const numberOfNewsToKeep = Math.max(1, Math.floor(currentNews.length * 0.3));
+            const olderNewsToKeep = currentNews.slice(0, numberOfNewsToKeep);
+            
+            // Extrair datas das notícias em formato comparável
+            const getDate = (newsItem: ExtendedMarketNews) => {
+              const date = new Date(newsItem.publishedAt || newsItem.datetime || Date.now());
+              return date.toISOString().split('T')[0]; // YYYY-MM-DD
+            };
+            
+            // Remover duplicatas das novas notícias
+            const uniqueIdMap = new Map<string, ExtendedMarketNews>();
+            
+            // Primeiramente adicionar as novas notícias 
+            newNews.forEach(item => {
+              // Gerar um ID único baseado no título e URL
+              const uniqueId = `${item.url || ''}${item.headline || item.title || ''}`;
+              if (!uniqueIdMap.has(uniqueId)) {
+                uniqueIdMap.set(uniqueId, item);
+              }
+            });
+            
+            // Adicionar algumas notícias antigas mantidas, se não forem duplicatas
+            olderNewsToKeep.forEach(oldNews => {
+              const uniqueId = `${oldNews.url || ''}${oldNews.headline || oldNews.title || ''}`;
+              if (!uniqueIdMap.has(uniqueId)) {
+                uniqueIdMap.set(uniqueId, oldNews);
+              }
+            });
+            
+            // Converter o mapa de volta para array
+            const combinedNews: ExtendedMarketNews[] = Array.from(uniqueIdMap.values());
+            
+            // Ordenar por data (mais recentes primeiro)
+            combinedNews.sort((a, b) => {
+              const dateA = new Date(a.publishedAt || a.datetime || 0);
+              const dateB = new Date(b.publishedAt || b.datetime || 0);
+              return dateB.getTime() - dateA.getTime();
+            });
+            
+            // Atualizar cache em localStorage
+            localStorage.setItem('cached_market_news', JSON.stringify(combinedNews));
+            localStorage.setItem('cached_market_news_timestamp', now.toString());
+            
+            // Atualizar o estado de notícias com a nova combinação
+            queryClient.setQueryData(['dashboardMarketNews'], combinedNews);
+            
+            // Atualizar timestamp da última atualização
+            lastSuccessfulUpdate.current = now;
+            
+            // Mostrar animação de sucesso
+            setRefreshButtonState('success');
+            setTimeout(() => {
+              setRefreshButtonState('default');
+            }, 2000);
+            
+            // Mostrar toast de sucesso
+            toast.success("Notícias atualizadas com sucesso!");
+          } else {
+            // Se não há notícias anteriores, apenas usar as novas notícias
+            queryClient.setQueryData(['dashboardMarketNews'], newNews);
+            
+            // Mostrar animação de sucesso
+            setRefreshButtonState('success');
+            setTimeout(() => {
+              setRefreshButtonState('default');
+            }, 2000);
+            
+            // Mostrar toast de sucesso
+            toast.success("Notícias carregadas com sucesso!");
+          }
+        } else {
+          // Se não houver novas notícias, apenas fazer refetch
+          refetch();
+        }
+      }).catch(() => {
+        // Em caso de erro, fazer a refetch normal
+        refetch();
+      });
     }
-  }, [refetch, news]);
+  }, [refetch, news, queryClient]);
   
   // Função para gerar um fallback para avatar baseado no nome da fonte
   const getSourceInitials = useCallback((source: string): string => {
@@ -234,7 +344,7 @@ export function NewsCard() {
   }, [getCompanyFullName]);
 
   // Função para renderizar um item de notícia
-  const renderNewsItem = useCallback((item: any, index: number) => {
+  const renderNewsItem = useCallback((item: ExtendedMarketNews, index: number) => {
     // Verificar se a imagem é do Yahoo
     let imageUrl = item.imageUrl || item.image;
     
@@ -251,7 +361,7 @@ export function NewsCard() {
     
     return (
       <div key={item.id || index} className="py-4 first:pt-0 last:pb-0 border-b last:border-0 border-border/50">
-        <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-4">
           {/* Título da notícia com link */}
           <a 
             href={item.url} 
@@ -267,12 +377,12 @@ export function NewsCard() {
             href={item.url} 
             target="_blank"
             rel="noopener noreferrer"
-            className="block w-full h-28 overflow-hidden rounded-md bg-muted/30"
+            className="block w-full h-36 overflow-hidden rounded-lg bg-muted/30 transition-shadow duration-300 hover:shadow-md hover:shadow-black/50"
           >
             <img 
               src={imageUrl}
               alt={title} 
-              className="w-full h-full object-cover hover:scale-105 transition-transform duration-300"
+              className="w-full h-full object-cover hover:scale-105 transition-all duration-300"
               onError={(e) => {
                 // Se a imagem falhar, substituir por uma imagem alternativa
                 (e.target as HTMLImageElement).src = getImageFallback(index);
@@ -335,12 +445,12 @@ export function NewsCard() {
   const renderLoadingSkeleton = useCallback(() => {
     return Array(3).fill(0).map((_, index) => (
       <div key={`skeleton-${index}`} className="py-4 first:pt-0 last:pb-0 border-b last:border-0 border-border/50">
-        <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-4">
           {/* Título */}
           <Skeleton className="h-5 w-full" />
           
-          {/* Imagem - altura reduzida para h-28 */}
-          <Skeleton className="h-28 w-full rounded-md" />
+          {/* Imagem - altura reduzida para h-36 */}
+          <Skeleton className="h-36 w-full rounded-lg" />
           
           {/* Conteúdo */}
           <Skeleton className="h-4 w-full" />
@@ -453,7 +563,7 @@ export function NewsCard() {
         {!isLoading && !isError && news && news.length > 0 ? (
           <div className="divide-y">
             {/* Mostrar apenas as 3 primeiras notícias no Dashboard */}
-            {news.slice(0, 3).map(renderNewsItem)}
+            {news.slice(0, 3).map((item, index) => renderNewsItem(item as ExtendedMarketNews, index))}
           </div>
         ) : null}
         

@@ -3,7 +3,6 @@ import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Loader2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { LoadingScreen } from '@/components/ui/loading-screen';
 
 interface AuthGuardProps {
   children: ReactNode;
@@ -14,51 +13,31 @@ export function AuthGuard({ children, checkOnly = false }: AuthGuardProps) {
   const { user, loading } = useAuth();
   const location = useLocation();
   const [isVerifying, setIsVerifying] = useState(true);
-  const [showLoadingText, setShowLoadingText] = useState(false);
-  const [authCheckComplete, setAuthCheckComplete] = useState(false);
 
-  // Efeito para dar um tempo adequado para verificação de autenticação
+  // Efeito para dar um tempo reduzido para verificação de autenticação
   useEffect(() => {
     const timer = setTimeout(() => {
       setIsVerifying(false);
-    }, 2000); // Aumentado para garantir tempo suficiente
+    }, 500); // Reduzido para apenas 500ms
 
     return () => {
       clearTimeout(timer);
     };
   }, []);
 
-  // Quando o loading termina, marcamos que a checagem de autenticação foi concluída
-  useEffect(() => {
-    if (!loading && !isVerifying) {
-      // Damos um delay extra para garantir que o estado está atualizado
-      const completeTimer = setTimeout(() => {
-        setAuthCheckComplete(true);
-      }, 800); // Aumentado para evitar flash da tela principal
-      
-      return () => clearTimeout(completeTimer);
-    }
-  }, [loading, isVerifying]);
-
-  // Efeito para mostrar o texto de carregamento após um breve delay
-  useEffect(() => {
-    if (loading && !isVerifying) {
-      const timer = setTimeout(() => {
-        setShowLoadingText(true);
-      }, 300);
-
-      return () => clearTimeout(timer);
-    }
-  }, [loading, isVerifying]);
-
-  // Mostra um indicador de carregamento enquanto verifica a autenticação
-  if ((loading || isVerifying) || !authCheckComplete) {
-    // Se checkOnly for true, não mostrar a tela de carregamento
-    // porque ela já estará sendo mostrada pelo componente pai (App.tsx)
+  // Mostra um indicador de carregamento simples enquanto verifica a autenticação
+  if (loading || isVerifying) {
+    // Se checkOnly for true, não mostrar o loader porque o componente pai já pode estar lidando com isso
     if (checkOnly) {
       return null;
     }
-    return <LoadingScreen />;
+    
+    // Exibir um indicador de carregamento mais simples
+    return (
+      <div className="fixed inset-0 w-full h-full flex items-center justify-center bg-black">
+        <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+      </div>
+    );
   }
 
   // Redireciona para a página de login se não estiver autenticado

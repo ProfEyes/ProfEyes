@@ -8,13 +8,16 @@ import './index.css'
 import './global.css'
 import { NotificationProvider } from './contexts/NotificationContext.tsx'
 import { LanguageProvider } from './contexts/LanguageContext.tsx'
+import { TimeZoneProvider } from './contexts/TimeZoneContext.tsx'
 
-// Cria uma instância do QueryClient
+// Cria uma instância do QueryClient com configuração ajustada
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 5 * 60 * 1000,
-      cacheTime: 10 * 60 * 1000,
+      staleTime: 10 * 60 * 1000, // 10 minutos
+      gcTime: 20 * 60 * 1000, // 20 minutos (antigamente era cacheTime)
+      refetchOnWindowFocus: false,
+      retry: 1,
     },
   },
 })
@@ -22,23 +25,33 @@ const queryClient = new QueryClient({
 // Cria um persistidor para manter o estado do cache entre recarregamentos da página
 const persister = createSyncStoragePersister({
   storage: window.localStorage,
+  key: 'trending-react-query',
+  throttleTime: 1000,
 })
 
 // Restaura o estado do cache se disponível
-persistQueryClientRestore({ queryClient, persister })
+try {
+  persistQueryClientRestore({ queryClient, persister })
+} catch (error) {
+  console.error('Erro ao restaurar o estado do cache:', error)
+}
 
 createRoot(document.getElementById('root')!).render(
-  <PersistQueryClientProvider
-    client={queryClient}
-    persistOptions={{
-      persister,
-      maxAge: 24 * 60 * 60 * 1000, // 24 horas
-    }}
-  >
-    <NotificationProvider>
-      <LanguageProvider>
-        <App />
-      </LanguageProvider>
-    </NotificationProvider>
-  </PersistQueryClientProvider>
+  <React.StrictMode>
+    <LanguageProvider>
+      <TimeZoneProvider>
+        <PersistQueryClientProvider
+          client={queryClient}
+          persistOptions={{
+            persister,
+            maxAge: 24 * 60 * 60 * 1000, // 24 horas
+          }}
+        >
+          <NotificationProvider>
+            <App />
+          </NotificationProvider>
+        </PersistQueryClientProvider>
+      </TimeZoneProvider>
+    </LanguageProvider>
+  </React.StrictMode>
 )

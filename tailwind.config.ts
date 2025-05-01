@@ -134,7 +134,17 @@ export default {
             opacity: "0.8",
             boxShadow: "0 0 30px rgba(255, 255, 255, 0.2)"
           }
-        }
+        },
+        "shine": {
+          "0%": {
+            opacity: "0",
+            transform: "translateX(-100%)",
+          },
+          "100%": {
+            opacity: "1",
+            transform: "translateX(100%)",
+          },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
@@ -145,7 +155,8 @@ export default {
         "shimmer": "shimmer 2.5s linear infinite",
         "glow": "glow 3s ease-in-out infinite",
         "fade-up": "fade-up 0.3s ease-out",
-        "slide-in-from-bottom-full": "slide-in-from-bottom-full 0.3s cubic-bezier(0.4, 0, 0.2, 1)"
+        "slide-in-from-bottom-full": "slide-in-from-bottom-full 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
+        "shine": "shine 1.5s infinite",
       },
     },
   },

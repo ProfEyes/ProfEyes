@@ -9,7 +9,7 @@ export const API_KEYS = {
     API_KEY: 'R3BHKD32T0RNX19Q'
   },
   FINNHUB: {
-    API_KEY: 'ctkd1uhr01qntkqoqp70ctkd1uhr01qntkqoqp7g',
+    API_KEY: 'd09dep1r01qnv9ci80tgd09dep1r01qnv9ci80u0',
     WEBHOOK: 'cthjv69r01qq96majneg'
   },
   NEWS_API: {

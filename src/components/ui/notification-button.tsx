@@ -4,7 +4,11 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
-export function NotificationButton() {
+interface NotificationButtonProps {
+  className?: string;
+}
+
+export function NotificationButton({ className }: NotificationButtonProps) {
   const [isEnabled, setIsEnabled] = useState(false);
   const [isAnimating, setIsAnimating] = useState(false);
   const [isTransitioning, setIsTransitioning] = useState(false);
@@ -88,7 +92,8 @@ export function NotificationButton() {
         "border-white/10 bg-white/5 hover:bg-white/10 relative overflow-hidden transition-all duration-300",
         isEnabled && "border-blue-500/30 bg-blue-500/10 hover:bg-blue-500/20",
         !isEnabled && "border-gray-800 bg-gray-900/50 hover:bg-gray-800/70",
-        isTransitioning && "scale-105"
+        isTransitioning && "scale-105",
+        className
       )}
     >
       <BellRing 

@@ -1,15 +1,17 @@
-import { useQuery } from 'react-query'; // Importando o hook useQuery da biblioteca react-query
+import { useQuery } from '@tanstack/react-query'; // Importando o hook useQuery da biblioteca @tanstack/react-query
 import { format } from 'date-fns'; // Importando a função format da biblioteca date-fns
 import { ptBR } from 'date-fns/locale'; // Importando a localidade ptBR da biblioteca date-fns
 import { Newspaper } from 'lucide-react'; // Importando o ícone Newspaper da biblioteca lucide-react
 import { Badge } from '@/components/ui/badge'; // Importando o componente Badge do diretório de componentes
 import { fetchMarketNews } from '@/services/news';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 const NewsPage = () => {
+  const { t, language } = useLanguage();
   const { data: news, isLoading } = useQuery({
-    queryKey: ['allNews'],
+    queryKey: ['allNews', language],
     queryFn: async () => {
-      const allNews = await fetchMarketNews();
+      const allNews = await fetchMarketNews({ language });
       // Garantir que todas as notícias tenham imageUrl
       return allNews.filter(item => item.imageUrl && item.imageUrl.trim() !== '');
     },
@@ -18,7 +20,7 @@ const NewsPage = () => {
   return (
     <div className="container mx-auto p-4 space-y-8">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Notícias do Mercado</h1>
+        <h1 className="text-2xl font-bold">{t('nav.news.title')}</h1>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
@@ -34,7 +36,7 @@ const NewsPage = () => {
         ) : news && news.length > 0 ? (
           news.map((item, index) => (
             <a
-              key={item.id || index}
+              key={item.id ?? index}
               href={item.url}
               target="_blank"
               rel="noopener noreferrer"
@@ -70,7 +72,7 @@ const NewsPage = () => {
           ))
         ) : (
           <div className="col-span-full flex items-center justify-center p-8">
-            <span className="text-muted-foreground">Nenhuma notícia disponível</span>
+            <span className="text-muted-foreground">{t('nav.news.none')}</span>
           </div>
         )}
       </div>

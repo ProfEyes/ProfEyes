@@ -9,6 +9,35 @@
  */
 export async function extractImageFromUrl(url: string): Promise<string | null> {
   try {
+    // Em vez de usar allorigins.win, que está causando problemas de CORS,
+    // vamos usar imagens de fallback com base na URL da notícia
+    
+    // Usar domínio da URL para determinar a fonte e selecionar uma imagem adequada
+    const domain = new URL(url).hostname;
+    
+    // Mapear domínios conhecidos para imagens específicas
+    if (domain.includes('cnbc.com')) {
+      return '/images/news/cnbc-news.jpg';
+    } else if (domain.includes('reuters.com')) {
+      return '/images/news/reuters-news.jpg';
+    } else if (domain.includes('bloomberg.com')) {
+      return '/images/news/bloomberg-news.jpg';
+    } else if (domain.includes('marketwatch.com')) {
+      return '/images/news/marketwatch-news.jpg';
+    } else if (domain.includes('wsj.com')) {
+      return '/images/news/wsj-news.jpg';
+    } else if (domain.includes('ft.com')) {
+      return '/images/news/ft-news.jpg';
+    }
+    
+    // Para outros domínios, usar uma imagem genérica baseada em uma hash simples
+    const hashCode = url.split('').reduce((a, b) => (((a << 5) - a) + b.charCodeAt(0))|0, 0);
+    const imageIndex = Math.abs(hashCode) % 5; // 5 imagens genéricas
+    
+    return `/images/news/generic-news-${imageIndex + 1}.jpg`;
+    
+    // Código antigo comentado que estava causando problemas de CORS
+    /*
     // Usar um proxy CORS para acessar a página
     const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
     
@@ -54,6 +83,7 @@ export async function extractImageFromUrl(url: string): Promise<string | null> {
     if (images.length > 0 && images[0].src) {
       return images[0].src;
     }
+    */
     
     return null;
   } catch (error) {

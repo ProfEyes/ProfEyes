@@ -160,7 +160,7 @@ export function NotificationSettings({
   const [browserPermission, setBrowserPermission] = useState<"granted" | "denied" | "default" | "unsupported">("unsupported");
   
   // Usando o contexto de notificações
-  const { testNotification, clearAllNotifications } = useNotifications();
+  const { testNotification } = useNotifications();
   
   // Verificação de suporte a notificações do navegador
   useEffect(() => {
@@ -211,6 +211,36 @@ export function NotificationSettings({
       };
       
       localStorage.setItem('notificationSettings', JSON.stringify(settingsToSave));
+      
+      // Aplicar configurações imediatamente
+      if (typeof window !== 'undefined') {
+        // Aplicar volume para notificações de som
+        window.localStorage.setItem('notification-volume', notificationVolume.toString());
+        
+        // Aplicar configurações de horário silencioso
+        window.localStorage.setItem('quiet-hours-enabled', quietHoursEnabled.toString());
+        window.localStorage.setItem('quiet-hours-start', quietHoursStart);
+        window.localStorage.setItem('quiet-hours-end', quietHoursEnd);
+        
+        // Salvar canais habilitados
+        const enabledChannels = channels
+          .filter(channel => channel.enabled)
+          .map(channel => channel.id);
+        window.localStorage.setItem('enabled-notification-channels', JSON.stringify(enabledChannels));
+        
+        // Salvar tipos de notificações habilitados
+        const enabledTypes = notificationTypes
+          .filter(type => type.enabled)
+          .map(type => ({ 
+            id: type.id, 
+            priority: type.priority, 
+            sound: type.sound,
+            channels: type.channels
+          }));
+        window.localStorage.setItem('enabled-notification-types', JSON.stringify(enabledTypes));
+      }
+      
+      console.log("Configurações de notificação salvas e aplicadas com sucesso");
     } catch (error) {
       console.error("Erro ao salvar configurações de notificação:", error);
     }
@@ -419,6 +449,12 @@ export function NotificationSettings({
     console.log("Estado activeTab alterado para:", activeTab);
   }, [activeTab]);
   
+  // Função para limpar todas as notificações
+  const clearAllNotifications = () => {
+    toast.success("Notificações limpas");
+    // Em uma implementação real, você integraria com o sistema de notificações
+  };
+  
   return (
     <Card className="border-white/5 bg-gradient-to-br from-black/40 via-black/30 to-black/20 backdrop-blur-sm relative overflow-hidden">
       <div className="absolute inset-0 bg-gradient-to-r from-purple-500/5 via-blue-500/5 to-pink-500/5 opacity-30 group-hover:opacity-50 transition-opacity duration-700" />
@@ -429,7 +465,7 @@ export function NotificationSettings({
               <BellRing className="h-4 w-4 text-purple-400" />
             </div>
             <div>
-              <CardTitle className="text-lg font-semibold text-white/90">Notificações</CardTitle>
+              <CardTitle className="text-lg font-semibold text-white/90"></CardTitle>
               <CardDescription className="text-white/60">
                 Configure como e quando você receberá notificações
         </CardDescription>

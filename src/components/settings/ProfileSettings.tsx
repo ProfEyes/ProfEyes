@@ -3,14 +3,18 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/contexts/AuthContext";
+import { useLanguage } from "@/contexts/LanguageContext";
 import { motion, AnimatePresence } from "framer-motion";
-import { Camera, Lock, Mail, Save, User, Eye, EyeOff, KeyRound, AlertOctagon, CheckCircle2, XCircle } from "lucide-react";
+import { Camera, Lock, Mail, User as UserIcon, Eye, EyeOff, KeyRound, AlertOctagon, CheckCircle2, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/lib/supabase";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { User } from "@/types/auth";
+import { resizeImage, blobToFile } from "@/utils/imageUtils";
 
 export function ProfileSettings() {
   const { user, updateProfile } = useAuth();
+  const { t } = useLanguage();
   const [userName, setUserName] = useState<string | null>(null);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -64,24 +68,28 @@ export function ProfileSettings() {
 
   const uploadAvatar = async (file: File) => {
     if (!user) {
-      toast.error("Você precisa estar logado para fazer upload de imagens");
+      toast.error(t('profile.error.needLogin') || "Você precisa estar logado para fazer upload de imagens");
       return null;
     }
     
     try {
       setUploading(true);
       
-      // Cria um nome de arquivo único baseado no ID do usuário
+      // Cria um nome de arquivo único baseado no timestamp
       const fileExt = file.name.split('.').pop();
-      const fileName = `avatar-${user.id}-${Date.now()}.${fileExt}`;
+      const fileName = `avatar-${Date.now()}.${fileExt}`;
       
       console.log("Iniciando upload para:", fileName);
+      
+      // Redimensiona a imagem mantendo a proporção para 300x300 pixels
+      const resizedImageBlob = await resizeImage(file, 300, 300, 0.8);
+      const resizedFile = blobToFile(resizedImageBlob, fileName, file.type);
       
       // Faz upload para o bucket 'avatars' no Supabase Storage
       const { data, error } = await supabase
         .storage
         .from('avatars')
-        .upload(fileName, file, {
+        .upload(fileName, resizedFile, {
           cacheControl: '3600',
           upsert: true
         });
@@ -104,11 +112,11 @@ export function ProfileSettings() {
       // Atualiza o estado local com a nova URL
       setAvatarUrl(urlData.publicUrl);
       
-      toast.success("Foto de perfil atualizada com sucesso!");
+      toast.success(t('profile.success.updated') || "Foto de perfil atualizada com sucesso!");
       return urlData.publicUrl;
     } catch (error) {
       console.error("Erro ao fazer upload do avatar:", error);
-      toast.error("Falha ao atualizar a foto de perfil. Tente novamente.");
+      toast.error(t('profile.error.updateFailed') || "Falha ao atualizar a foto de perfil. Tente novamente.");
       return null;
     } finally {
       setUploading(false);
@@ -119,18 +127,19 @@ export function ProfileSettings() {
     const file = event.target.files?.[0];
     if (!file) return;
     
-    // Verifica o tipo e tamanho do arquivo
+    // Verifica o tipo do arquivo
     if (!file.type.startsWith('image/')) {
-      toast.error("Por favor, selecione uma imagem válida.");
+      toast.error(t('profile.error.invalidImage') || "Por favor, selecione uma imagem válida.");
       return;
     }
     
-    if (file.size > 5 * 1024 * 1024) { // 5MB
-      toast.error("A imagem deve ter menos de 5MB.");
+    // Verifica o tamanho do arquivo (10MB máximo para o upload inicial)
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error(t('profile.error.imageSize') || "A imagem deve ter menos de 10MB.");
       return;
     }
     
-    // Faz upload do avatar
+    // Faz upload do avatar (que já inclui o redimensionamento)
     const newAvatarUrl = await uploadAvatar(file);
     console.log("Nova URL do avatar:", newAvatarUrl);
     
@@ -146,13 +155,22 @@ export function ProfileSettings() {
 
   const handleSave = async () => {
     if (!user) {
-      toast.error("Você precisa estar logado para salvar alterações");
+      toast.error(t('profile.error.needLogin') || "Você precisa estar logado para salvar alterações");
       return;
     }
     
     try {
       setSaving(true);
       console.log("Salvando perfil com:", { name: userName, avatar_url: avatarUrl });
+      
+      // Salvar no localStorage para persistência local
+      if (userName) {
+        localStorage.setItem("user-name", userName);
+      }
+      
+      if (avatarUrl) {
+        localStorage.setItem("user-avatar", avatarUrl);
+      }
       
       // Atualiza o perfil do usuário com o nome e avatar
       const { error } = await supabase.auth.updateUser({
@@ -166,10 +184,15 @@ export function ProfileSettings() {
         throw error;
       }
       
-      toast.success("Perfil atualizado com sucesso!");
+      // Disparar evento para atualizar outros componentes
+      window.dispatchEvent(new CustomEvent('profile-updated', { 
+        detail: { name: userName, avatarUrl: avatarUrl }
+      }));
+      
+      toast.success(t('profile.success.updated') || "Perfil atualizado com sucesso!");
     } catch (error) {
       console.error("Erro ao atualizar perfil:", error);
-      toast.error("Falha ao atualizar o perfil. Tente novamente.");
+      toast.error(t('profile.error.updateFailed') || "Falha ao atualizar o perfil. Tente novamente.");
     } finally {
       setSaving(false);
     }
@@ -247,18 +270,19 @@ export function ProfileSettings() {
         throw error;
       }
       
-      // Atualiza a senha armazenada localmente para o demo
+      // Salvar a nova senha no localStorage para uso da função de verificação
+      // Em ambiente real, isto não seria feito desta forma por questões de segurança
       localStorage.setItem('demo_password', newPassword);
       setActualPassword(newPassword);
       
-      toast.success("Senha alterada com sucesso!");
+      toast.success("Senha atualizada com sucesso!");
       setPasswordUpdateMode(false);
+      setCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");
-      setCurrentPassword("");
-    } catch (error: any) {
+    } catch (error) {
       console.error("Erro ao atualizar senha:", error);
-      toast.error(error.message || "Falha ao atualizar senha. Tente novamente.");
+      toast.error("Falha ao atualizar senha. Tente novamente.");
     } finally {
       setSaving(false);
     }
@@ -276,7 +300,7 @@ export function ProfileSettings() {
     
     // Valida formato do email
     if (!validateEmail(emailToConfirm)) {
-      toast.error("Formato de email inválido", {
+      toast.error(t('profile.error.invalidEmailFormat') || "Formato de email inválido", {
         description: "Por favor, forneça um endereço de email válido",
       });
       return;
@@ -319,7 +343,7 @@ export function ProfileSettings() {
           </div>
           <div className="flex border-l border-white/10">
             <button
-              onClick={() => toast.dismiss(t.id)}
+              onClick={() => toast.dismiss(t)}
               className="w-full border border-transparent rounded-none rounded-r-lg flex items-center justify-center p-4 text-sm font-medium text-white/50 hover:text-white/80 focus:outline-none"
             >
               Fechar
@@ -329,7 +353,7 @@ export function ProfileSettings() {
       ), { duration: 5000 });
     } catch (error) {
       console.error("Erro ao solicitar redefinição de senha:", error);
-      toast.error("Falha ao enviar email de redefinição", {
+      toast.error(t('profile.error.resetPasswordFailed') || "Falha ao enviar email de redefinição", {
         description: "Ocorreu um erro. Tente novamente mais tarde.",
       });
     }
@@ -392,8 +416,8 @@ export function ProfileSettings() {
             htmlFor="name" 
             className="text-xs uppercase text-white/40 tracking-wider font-light flex items-center"
           >
-            <User className="h-3 w-3 mr-1.5 opacity-40" />
-            Nome de exibição
+            <UserIcon className="h-3 w-3 mr-1.5 opacity-40" />
+            {t('settings.account.displayName')}
           </label>
           
           <Input
@@ -411,7 +435,7 @@ export function ProfileSettings() {
             className="text-xs uppercase text-white/40 tracking-wider font-light flex items-center"
           >
             <Mail className="h-3 w-3 mr-1.5 opacity-40" />
-            Email
+            {t('settings.account.email')}
           </label>
           
           <Input
@@ -423,7 +447,7 @@ export function ProfileSettings() {
           />
           <p className="text-[10px] text-white/30 flex items-center tracking-wide">
             <Lock className="h-2.5 w-2.5 mr-1 opacity-50" />
-            Esta informação não pode ser alterada
+            {t('settings.account.emailFixed')}
           </p>
         </div>
 
@@ -433,7 +457,7 @@ export function ProfileSettings() {
             className="text-xs uppercase text-white/40 tracking-wider font-light flex items-center"
           >
             <KeyRound className="h-3 w-3 mr-1.5 opacity-40" />
-            Senha
+            {t('settings.account.password')}
           </label>
           
           <div className="relative">
@@ -499,7 +523,7 @@ export function ProfileSettings() {
                   newPassword.length < 8
                 )}
               >
-                <Lock className="h-3.5 w-3.5 mr-2 opacity-50 group-hover:opacity-70 transition-opacity" />
+                <KeyRound className="h-3.5 w-3.5 mr-2 opacity-50 group-hover:opacity-70 transition-opacity" />
                 <span className="text-xs tracking-wide">
                   {passwordUpdateMode ? "Salvar senha" : "Alterar senha"}
                 </span>
@@ -556,30 +580,24 @@ export function ProfileSettings() {
             {!passwordUpdateMode && (
               <p className="text-[10px] text-white/30 flex items-center tracking-wide mt-1">
                 <Lock className="h-2.5 w-2.5 mr-1 opacity-50" />
-                Sua senha está protegida e criptografada
+                {t('settings.account.passwordProtected')}
               </p>
             )}
           </div>
         </div>
       </div>
 
-      <div className="pt-2 flex justify-end">
-        <Button 
-          onClick={handleSave}
+      {/* Botões finais da seção */}
+      <div className="flex justify-between pt-4 pb-2">
+        <Button
+          onClick={() => handleSave()}
           disabled={saving}
-          className="bg-black/20 hover:bg-black/30 text-white/70 hover:text-white/90 border-[0.5px] border-white/[0.03] h-9 px-5 rounded-lg transition-all duration-300 group"
+          className="bg-black/20 hover:bg-black/40 hover:text-white text-white/90 border border-white/5 shadow-lg shadow-black/5 h-10 px-5 rounded-lg transition-all duration-300 flex items-center space-x-2"
         >
           {saving ? (
-            <>
-              <div className="h-3.5 w-3.5 mr-2 border-2 border-white/30 border-t-white/80 rounded-full animate-spin" />
-              <span className="text-xs tracking-wide">Salvando...</span>
-            </>
-          ) : (
-            <>
-              <Save className="h-3.5 w-3.5 mr-2 opacity-50 group-hover:opacity-70 transition-opacity" />
-              <span className="text-xs tracking-wide">Salvar alterações</span>
-            </>
-          )}
+            <div className="h-4 w-4 border-2 border-white/30 border-t-white/80 rounded-full animate-spin mr-2" />
+          ) : null}
+          <span>{saving ? t('profile.submit.saving') || "Salvando..." : t('profile.submit.save') || "Salvar alterações"}</span>
         </Button>
       </div>
 
@@ -684,7 +702,7 @@ export function ProfileSettings() {
               }}
               className="h-10 bg-transparent hover:bg-white/5 text-white/70 border border-white/10 rounded-lg transition-all duration-200 w-full sm:w-auto order-3 sm:order-2"
             >
-              Esqueci minha senha
+              {t('settings.account.forgotPassword')}
             </Button>
             
             <Button

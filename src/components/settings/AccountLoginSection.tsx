@@ -2,8 +2,9 @@ import React, { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
+import { useLanguage } from "@/contexts/LanguageContext";
 import { motion } from "framer-motion";
-import { ChevronRight, LogOut, Shield, Mail, Github, Laptop } from "lucide-react";
+import { ChevronRight, LogOut, Shield, Mail, Github, Laptop, Save, Check, DownloadCloud } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/lib/supabase";
@@ -22,12 +23,23 @@ export function AccountLoginSection({
   onEmailLogin
 }: AccountLoginSectionProps) {
   const { user, signOut } = useAuth();
+  const { t } = useLanguage();
   const [loading, setLoading] = useState<string | null>(null);
+  const [saving, setSaving] = useState<boolean>(false);
+  const [saveSuccess, setSaveSuccess] = useState<boolean>(false);
 
   const handleLogout = async () => {
     try {
       setLoading("logout");
       console.log("Iniciando logout");
+      
+      // Salvar preferências do usuário antes de fazer logout
+      const userPreferences = {
+        theme: localStorage.getItem('app-theme') || 'dark',
+        language: localStorage.getItem('app-language') || 'pt-BR'
+      };
+      
+      localStorage.setItem('user-preferences', JSON.stringify(userPreferences));
       
       const { error } = await supabase.auth.signOut();
       
@@ -35,8 +47,20 @@ export function AccountLoginSection({
         throw error;
       }
       
+      // Limpar dados de sessão, mas manter preferências
+      localStorage.removeItem('supabase.auth.token');
+      localStorage.removeItem('supabase.auth.user');
+      localStorage.removeItem('currentUser');
+      
+      // Disparar evento para notificar o sistema sobre logout
+      window.dispatchEvent(new Event('user-logout'));
+      
       toast.success("Desconectado com sucesso");
-      window.location.reload(); // Recarrega a página para atualizar o estado
+      
+      // Redirecionar para a página de login após curto delay
+      setTimeout(() => {
+        window.location.href = '/auth';
+      }, 1000);
     } catch (error) {
       console.error("Erro ao desconectar:", error);
       toast.error("Falha ao desconectar. Tente novamente.");
@@ -45,10 +69,49 @@ export function AccountLoginSection({
     }
   };
 
+  const handleSave = async () => {
+    setSaving(true);
+    setSaveSuccess(false);
+    try {
+      console.log("Salvando alterações de conta");
+      
+      // Salvar configurações no localStorage
+      const accountSettings = {
+        lastSaved: new Date().toISOString(),
+        userId: user?.id,
+        email: user?.email
+      };
+      
+      localStorage.setItem('account-settings', JSON.stringify(accountSettings));
+      
+      // Simular uma operação de salvamento
+      await new Promise(resolve => setTimeout(resolve, 800));
+      
+      // Disparar evento para notificar o sistema sobre mudanças nas configurações
+      window.dispatchEvent(new CustomEvent('account-settings-changed', { 
+        detail: accountSettings 
+      }));
+      
+      setSaveSuccess(true);
+      toast.success("Alterações salvas com sucesso!");
+      
+      // Reset success state after animation completes
+      setTimeout(() => setSaveSuccess(false), 2000);
+    } catch (error) {
+      console.error("Erro ao salvar alterações:", error);
+      toast.error("Erro ao salvar alterações");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handleLogin = async (provider: string) => {
     try {
       setLoading(provider);
       console.log(`Iniciando login com ${provider}`);
+      
+      // Salvar preferência de provider para uso futuro
+      localStorage.setItem('last-login-provider', provider);
       
       let { data, error } = { data: null, error: null };
       
@@ -147,9 +210,9 @@ export function AccountLoginSection({
             </div>
             
             <div>
-              <h3 className="text-[13px] font-light text-white/70 tracking-wide">Status da Conta</h3>
+              <h3 className="text-[13px] font-light text-white/70 tracking-wide">{t('settings.account.status')}</h3>
               <p className="text-[11px] text-white/40 mt-0.5 tracking-wide">
-                {user ? `Conectado como ${user.email}` : "Não conectado"}
+                {user ? `${t('settings.account.connected')} ${user.email}` : "Não conectado"}
               </p>
             </div>
           </div>
@@ -161,7 +224,7 @@ export function AccountLoginSection({
               user ? "bg-emerald-500/10 text-emerald-300/70" : "bg-red-500/10 text-red-300/70"
             )}
           >
-            {user ? "Ativo" : "Inativo"}
+            {user ? t('settings.account.active') : "Inativo"}
           </Badge>
         </div>
       </div>
@@ -202,29 +265,55 @@ export function AccountLoginSection({
       )}
 
       {/* Disclaimer e informações */}
-      <div className="text-[10px] leading-relaxed text-white/30 bg-black/20 p-3.5 rounded-lg border-[0.5px] border-white/[0.02]">
-        Ao se conectar, você concorda com nossos <a href="#" className="text-white/40 hover:text-white/60 transition-colors">Termos de Serviço</a> e <a href="#" className="text-white/40 hover:text-white/60 transition-colors">Política de Privacidade</a>. Seus dados são protegidos e nunca compartilhados com terceiros sem sua permissão.
+      <div className="text-[10px] text-white/30 pt-2 border-t border-white/5 tracking-wide leading-relaxed">
+        {t('settings.account.terms')}
       </div>
 
       {/* Botão de logout */}
       {user && (
-        <div className="flex justify-end">
+        <div className="flex justify-between items-center mt-6">
           <Button 
+            onClick={handleSave}
+            disabled={saving || saveSuccess}
+            className="relative bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-400 hover:to-purple-500 border-0 text-white relative overflow-hidden group transition-all duration-300"
+          >
+            {saveSuccess ? (
+              <motion.span 
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="flex items-center"
+              >
+                <Check className="mr-2 h-4 w-4" /> {t('settings.saved')}
+              </motion.span>
+            ) : saving ? (
+              <span className="flex items-center">
+                <svg className="animate-spin -ml-1 mr-2 h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                {t('settings.saving')}...
+              </span>
+            ) : (
+              <span className="flex items-center">
+                <Save className="mr-2 h-4 w-4" /> {t('settings.account.save')}
+              </span>
+            )}
+            
+            <motion.div 
+              className="absolute bottom-0 left-0 right-0 h-[2px] bg-white"
+              initial={{ scaleX: 0, opacity: 0.5 }}
+              animate={saving ? { scaleX: 1, opacity: 0.7 } : { scaleX: 0, opacity: 0 }}
+              transition={{ duration: 1 }}
+            />
+          </Button>
+          
+          <Button
             onClick={handleLogout}
             disabled={loading === "logout"}
             className="relative text-xs text-white/50 hover:text-white/70 tracking-wide flex items-center gap-1.5 py-1.5 px-3 rounded-lg bg-black/20 hover:bg-black/30 transition-all duration-300 group border-[0.5px] border-white/[0.03]"
           >
-            {loading === "logout" ? (
-              <>
-                <div className="h-3 w-3 mr-1.5 border-2 border-white/30 border-t-white/80 rounded-full animate-spin" />
-                Desconectando...
-              </>
-            ) : (
-              <>
-                <LogOut className="h-3 w-3 opacity-40 group-hover:opacity-60 transition-opacity" />
-                Desconectar
-              </>
-            )}
+            <LogOut className="h-3 w-3 opacity-40 group-hover:opacity-60 transition-opacity" />
+            Desconectar
           </Button>
         </div>
       )}

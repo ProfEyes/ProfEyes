@@ -25,38 +25,85 @@ interface AuthProviderProps {
 export function AuthProvider({ children }: AuthProviderProps) {
   const [state, setState] = useState<AuthState>(initialAuthState);
   
-  // Efeito para carregar a sessão no carregamento inicial
+  // Inicializar autenticação quando o componente monta
   useEffect(() => {
+    let isMounted = true;
+    
+    // Usar ID de instância único para os logs
+    const authId = Math.random().toString(36).substring(2, 9);
+    console.log(`Inicializando autenticação [${authId}]...`);
+    
     const fetchSession = async () => {
       try {
-        // Obtém a sessão atual
+        console.log(`Buscando sessão [${authId}]...`);
+        
+        // Obter a sessão do usuário
         const session = await userService.getCurrentSession();
+        
+        // Se o componente foi desmontado durante a busca, não atualizar o estado
+        if (!isMounted) return;
         
         if (session) {
           // Se houver sessão, obtém o usuário e o perfil
           const user = session.user;
-          const { data: profile } = await userService.getUserProfile();
-          const isAdmin = await userService.isAdmin();
           
-          setState({
-            ...initialAuthState,
+          // Atualizar o estado imediatamente com informações básicas do usuário
+          // para permitir navegação enquanto dados adicionais carregam
+          setState(prevState => ({
+            ...prevState,
             user,
-            session,
-            profile,
-            isAdmin,
-            loading: false,
-          });
+            session: session as unknown as Session,
+            loading: false, // Permitir navegação básica sem esperar pelo perfil
+          }));
+          
+          // Após liberar a navegação, carregar dados do perfil em background
+          setTimeout(async () => {
+            if (!isMounted) return;
+            
+            try {
+              console.log(`Carregando dados de perfil [${authId}]...`);
+              
+              // Carregar dados do perfil e admin em paralelo
+              const [profileResult, isAdmin] = await Promise.all([
+                userService.getUserProfile(),
+                userService.isAdmin()
+              ]);
+              
+              // Se o componente foi desmontado, não atualizar o estado
+              if (!isMounted) return;
+              
+              const profile = profileResult.data;
+              
+              // Atualizar o estado com informações completas
+              setState(prevState => ({
+                ...prevState,
+                profile,
+                isAdmin,
+              }));
+              
+              console.log(`Autenticação concluída com sucesso [${authId}]`);
+            } catch (error) {
+              console.warn(`Erro ao carregar perfil completo [${authId}]:`, error);
+              // Não alteramos o estado loading, usuário já pode navegar com os dados básicos
+            }
+          }, 100); // Delay mínimo para garantir que a UI atualize primeiro
         } else {
           // Se não houver sessão, restaura o estado inicial
-          setState({ ...initialAuthState, loading: false });
+          if (isMounted) {
+            setState({ ...initialAuthState, loading: false });
+            console.log(`Autenticação concluída - sem sessão [${authId}]`);
+          }
         }
       } catch (error) {
-        console.error('Erro ao carregar sessão:', error);
-        setState({
-          ...initialAuthState,
-          error: error as Error,
-          loading: false,
-        });
+        console.error(`Erro ao carregar sessão [${authId}]:`, error);
+        // Se o componente ainda estiver montado, atualizar o estado
+        if (isMounted) {
+          setState({
+            ...initialAuthState,
+            error: error as Error,
+            loading: false,
+          });
+        }
       }
     };
 
@@ -93,6 +140,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
     // Limpar subscription ao desmontar
     return () => {
+      isMounted = false;
       subscription.unsubscribe();
     };
   }, []);
@@ -121,23 +169,47 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }
   };
 
+  // Função para verificar estado do token e sessão
+  const checkTokenState = async () => {
+    try {
+      // Verificar se há um token no localStorage
+      const session = localStorage.getItem('supabase.auth.token');
+      if (session) {
+        console.log('Token encontrado no localStorage');
+      } else {
+        console.log('Nenhum token encontrado no localStorage');
+      }
+    } catch (error) {
+      console.error('Erro ao verificar token:', error);
+    }
+  };
+
   // Fazer login com email
-  const signInWithEmail = async (email: string, password: string, remember = false) => {
+  const signInWithEmail = async (email: string, password: string) => {
     try {
       setState({ ...state, loading: true });
       
-      const { data, error } = await userService.signInWithEmail(email, password);
+      console.time('totalLoginTime');
+      console.log('Iniciando processo de login...');
+      
+      // Verificar estado atual do token antes do login
+      await checkTokenState();
+      
+      const { data, error } = await userService.signInWithEmail(email, password, true);
       
       if (error) {
+        console.error('Erro retornado pelo userService:', error);
         setState({
           ...state,
           error: error as Error,
           loading: false,
         });
+        console.timeEnd('totalLoginTime');
         return { error };
       }
       
       // Obter perfil do usuário
+      console.log('Login bem-sucedido, obtendo perfil...');
       const { data: profile } = await userService.getUserProfile();
       const isAdmin = await userService.isAdmin();
       
@@ -151,14 +223,18 @@ export function AuthProvider({ children }: AuthProviderProps) {
         error: null,
       });
       
+      console.log('Processo de login completo com sucesso');
+      console.timeEnd('totalLoginTime');
+      
       return { error: null };
     } catch (error) {
-      console.error('Erro ao fazer login:', error);
+      console.error('Erro não tratado no processo de login:', error);
       setState({
         ...state,
         error: error as Error,
         loading: false,
       });
+      console.timeEnd('totalLoginTime');
       return { error: error as Error };
     }
   };
@@ -238,12 +314,27 @@ export function AuthProvider({ children }: AuthProviderProps) {
     try {
       setState({ ...state, loading: true });
       
-      await userService.signOut();
+      // Salvar o idioma atual antes de fazer logout
+      const appLanguage = localStorage.getItem('app-language');
       
-      setState({
-        ...initialAuthState,
-        loading: false,
-      });
+      // Executar o logout
+      const { error } = await userService.signOut();
+      
+      if (error) {
+        setState({
+          ...state,
+          error,
+          loading: false,
+        });
+        return;
+      }
+      
+      // Restaurar o idioma no localStorage após o logout
+      if (appLanguage) {
+        localStorage.setItem('app-language', appLanguage);
+      }
+      
+      setState({ ...initialAuthState, loading: false });
     } catch (error) {
       console.error('Erro ao fazer logout:', error);
       setState({
@@ -379,7 +470,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 }
 
 // Hook para usar o contexto de autenticação
-export const useAuth = () => {
+export function useAuth() {
   const context = useContext(AuthContext);
   
   if (context === undefined) {

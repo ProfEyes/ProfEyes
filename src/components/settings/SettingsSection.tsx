@@ -10,55 +10,70 @@ interface SettingsSectionProps {
   icon: ReactNode;
   children: ReactNode;
   className?: string;
+  accentColor?: string;
+  minimal?: boolean;
 }
 
-export function SettingsSection({ title, description, icon, children, className }: SettingsSectionProps) {
+export function SettingsSection({ 
+  title, 
+  description, 
+  icon, 
+  children, 
+  className,
+  accentColor = "indigo",
+  minimal = false
+}: SettingsSectionProps) {
+  // Se for o modo minimal, usar um estilo mais simples
+  if (minimal) {
+    return (
+      <div className={cn("w-full", className)}>
+        <div className="flex items-center gap-2.5 mb-3 pb-2 border-b border-white/5">
+          <div className="p-1.5 rounded-md bg-black/60 border border-white/5 shadow-sm">
+            {icon}
+          </div>
+          <div>
+            <span className="text-white/90 text-sm font-medium">{title}</span>
+            <p className="text-white/50 text-xs">{description}</p>
+          </div>
+        </div>
+        <div className="pl-1">
+          {children}
+        </div>
+      </div>
+    );
+  }
+
+  // Design padrão com menos efeitos
   return (
     <motion.div
-      initial={{ opacity: 0, y: 10 }}
+      initial={{ opacity: 0, y: 5 }}
       animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -10 }}
-      transition={{ duration: 0.4 }}
-      whileHover={{ 
-        scale: 1.01,
-        boxShadow: "0 8px 30px rgba(0, 0, 0, 0.07)"
-      }}
+      exit={{ opacity: 0, y: -5 }}
+      transition={{ duration: 0.3 }}
       className={cn(
-        "rounded-xl overflow-hidden group",
+        "rounded-lg overflow-hidden relative",
         className
       )}
     >
-      <Card className="border border-white/5 bg-gradient-to-b from-white/[0.04] to-white/[0.01] backdrop-blur-2xl shadow-[0_0_25px_rgba(0,0,0,0.05)] h-full">
-        <div className="relative">
-          {/* Decorative gradient blur */}
-          <div className="absolute -top-10 -left-10 w-40 h-40 bg-rose-400/5 rounded-full blur-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-700"></div>
-          <div className="absolute -bottom-20 -right-10 w-60 h-60 bg-amber-400/5 rounded-full blur-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-700"></div>
-          
-          <CardHeader className="pb-2 relative z-10">
-            <div className="flex items-center gap-4">
-              <motion.div 
-                whileHover={{ rotate: [0, -10, 0, 10, 0], scale: 1.05 }}
-                transition={{ duration: 0.5 }}
-                className="p-3 rounded-xl bg-gradient-to-br from-white/8 to-transparent backdrop-blur-md border border-white/10 shadow-sm group-hover:from-white/12 group-hover:border-white/15 transition-all duration-300"
-              >
+      <Card className="border border-white/5 bg-black shadow-sm relative z-10 overflow-hidden">
+        <div className="relative z-10">
+          <CardHeader className="pb-2">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-md bg-black border border-white/5 shadow-sm">
                 {icon}
-              </motion.div>
+              </div>
               <div>
-                <CardTitle className="text-[17px] font-light tracking-wide text-white/80 group-hover:text-white/95 transition-all duration-300">
+                <CardTitle className="text-base font-medium text-white/90">
                   {title}
                 </CardTitle>
-                <CardDescription className="text-white/40 text-xs mt-1 group-hover:text-white/50 transition-all duration-300">
+                <CardDescription className="text-white/60 text-xs mt-1">
                   {description}
                 </CardDescription>
               </div>
             </div>
           </CardHeader>
-          <Separator className="bg-white/[0.03]" />
-          <CardContent className="pt-5 relative z-10">
-            {/* Efeito de brilho sutil em hover */}
-            <div className="absolute inset-0 bg-gradient-to-r from-rose-500/0 via-amber-500/0 to-rose-500/0 group-hover:from-rose-500/3 group-hover:via-amber-500/3 group-hover:to-rose-500/3 opacity-0 group-hover:opacity-100 transition-all duration-700 rounded-xl">
-            </div>
-            
+          <Separator className="bg-white/5" />
+          <CardContent className="pt-4 relative z-10">
             <div className="relative z-10">
               {children}
             </div>

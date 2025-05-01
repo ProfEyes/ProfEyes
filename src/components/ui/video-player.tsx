@@ -142,6 +142,10 @@ export function VideoPlayer({
   const volumeBarRef = useRef<HTMLDivElement>(null);
   const volumeTimerRef = useRef<NodeJS.Timeout | null>(null); // Timer para ocultar barra de volume
   const volumeButtonRef = useRef<HTMLButtonElement>(null);
+  const userPausedRef = useRef<boolean>(false); // Nova ref para controlar se o usuário pausou manualmente
+  const preventLoadRef = useRef<boolean>(false); // Nova ref para prevenir carregamento automático
+  const [currentFrameUrl, setCurrentFrameUrl] = useState<string | null>(null); // Estado para armazenar o frame atual como URL
+  const [showingAfterHidden, setShowingAfterHidden] = useState(false);
 
   // Obtém o caminho do vídeo e do poster baseado no idioma atual
   const src = t(videoKey);
@@ -153,6 +157,12 @@ export function VideoPlayer({
 
   // Função para tentar reproduzir o vídeo com várias tentativas
   const attemptPlayVideo = async (video: HTMLVideoElement, maxAttempts = 5) => {
+    // Verificar se o vídeo foi pausado pelo usuário
+    if (video.hasAttribute("data-user-paused")) {
+      console.log(`Vídeo ${videoKey} foi pausado manualmente pelo usuário, não tentando reproduzir`);
+      return false;
+    }
+    
     let attempts = 0;
     
     const tryPlay = async () => {
@@ -189,14 +199,321 @@ export function VideoPlayer({
     const video = videoRef.current;
     if (!video) return;
 
+    // Quando o componente é montado, verificar se havia um estado de pausa salvo anteriormente
+    const wasPreviouslyPaused = localStorage.getItem(`video-paused-${videoKey}`);
+    if (wasPreviouslyPaused === 'true') {
+      userPausedRef.current = true;
+      preventLoadRef.current = true;
+      video.setAttribute("data-user-paused", "true");
+      
+      // Restaurar a posição do vídeo se houver uma salva
+      const savedPosition = localStorage.getItem(`video-position-${videoKey}`);
+      if (savedPosition) {
+        const position = parseFloat(savedPosition);
+        console.log(`Restaurando vídeo para posição salva: ${position}`);
+        video.currentTime = position;
+        video.setAttribute("data-pause-position", position.toString());
+      }
+      
+      // Não iniciar reprodução automática se o vídeo estava pausado anteriormente
+      setIsPlaying(false);
+    }
+
+    const updateTime = () => setCurrentTime(video.currentTime);
+    
+    const updateDuration = () => {
+      // Não atualizar a duração se o vídeo estiver pausado pelo usuário
+      if (userPausedRef.current || preventLoadRef.current) {
+        console.log(`Evento de atualização de duração bloqueado porque o vídeo ${videoKey} foi pausado pelo usuário`);
+        return;
+      }
+      
+      setDuration(video.duration);
+      console.log(`Duração do vídeo ${videoKey} carregada:`, video.duration);
+    };
+    
+    const handlePlay = () => {
+      setIsPlaying(true);
+      // Se o vídeo está sendo reproduzido, remover o estado de pausa
+      userPausedRef.current = false;
+      preventLoadRef.current = false;
+      video.removeAttribute("data-user-paused");
+      localStorage.removeItem(`video-paused-${videoKey}`);
+    };
+    
+    const handlePause = () => {
+      setIsPlaying(false);
+      // Quando o vídeo é pausado programaticamente, não consideramos como pausa de usuário
+      // O atributo data-user-paused é definido apenas pelo método togglePlay
+    };
+    
+    const handleLoadStart = () => {
+      // Verificar se o vídeo foi pausado pelo usuário ou está sendo mostrado após estar oculto
+      if (userPausedRef.current || preventLoadRef.current || showingAfterHidden) {
+        console.log(`Evento loadstart ignorado porque o vídeo ${videoKey} foi pausado pelo usuário ou está sendo exibido após estar oculto`);
+        return;
+      }
+      
+      console.log(`Iniciando carregamento do vídeo ${videoKey}`);
+      setIsLoading(true);
+    };
+    
+    // Adicionar manipulador para eventos de carregamento específicos do vídeo
+    const handleLoadedMetadata = () => {
+      if (userPausedRef.current || preventLoadRef.current) {
+        console.log(`Evento loadedmetadata bloqueado porque o vídeo ${videoKey} foi pausado pelo usuário`);
+        return;
+      }
+    };
+    
+    const handleLoadedData = () => {
+      if (userPausedRef.current || preventLoadRef.current) {
+        console.log(`Evento loadeddata bloqueado porque o vídeo ${videoKey} foi pausado pelo usuário`);
+        return;
+      }
+      console.log(`Vídeo ${videoKey} carregado completamente`);
+    };
+    
+    const handleCanPlay = () => {
+      if (userPausedRef.current || preventLoadRef.current) {
+        console.log(`Evento canplay ignorado porque o vídeo ${videoKey} foi pausado pelo usuário`);
+        setIsLoading(false);
+        return;
+      }
+      
+      console.log(`Vídeo ${videoKey} pode ser reproduzido agora`);
+      setIsLoading(false);
+      
+      // Verificar várias condições antes de iniciar a reprodução automática
+      if (autoPlay && 
+          videoKey === "video.main" && 
+          !video.hasAttribute("data-autoplay-handled") && 
+          !userPausedRef.current && 
+          !preventLoadRef.current && 
+          !video.hasAttribute("data-user-paused")) {
+        
+        video.setAttribute("data-autoplay-handled", "true");
+        attemptPlayVideo(video);
+      }
+    };
+    
+    const handleError = (e: Event) => {
+      console.error(`Erro ao carregar o vídeo ${videoKey}:`, video.error);
+      setHasError(true);
+      setIsLoading(false);
+    };
+    
+    const handleFullscreenChange = () => {
+      const isNowFullScreen = document.fullscreenElement === playerRef.current;
+      setIsFullScreen(isNowFullScreen);
+      
+      // Se saiu da tela cheia (detecta quando o usuário pressiona ESC)
+      if (!isNowFullScreen && videoRef.current) {
+        console.log('Saindo da tela cheia via evento (possivelmente tecla ESC)');
+        
+        // Restaurar para o formato original
+        if (videoRef.current) {
+          // Limpar todos os estilos inline
+          videoRef.current.style.objectFit = '';
+          videoRef.current.style.width = '';
+          videoRef.current.style.height = '';
+          
+          // Remover classes adicionadas
+          videoRef.current.classList.remove('absolute', 'inset-0');
+          
+          // Para vídeos do dashboard, garantir as classes corretas
+          if (isDashboardVideo) {
+            videoRef.current.className = 'w-full h-96 object-cover';
+          } else {
+            videoRef.current.className = 'w-full h-full object-contain';
+          }
+          
+          console.log('Restaurando para o formato original do aplicativo');
+        }
+        
+        // Restaurar o estilo do container
+        if (playerRef.current) {
+          playerRef.current.style.backgroundColor = '';
+        }
+      }
+    };
+    
+    video.addEventListener('timeupdate', updateTime);
+    video.addEventListener('loadedmetadata', updateDuration);
+    video.addEventListener('loadedmetadata', handleLoadedMetadata);
+    video.addEventListener('loadeddata', handleLoadedData);
+    video.addEventListener('loadstart', handleLoadStart);
+    video.addEventListener('canplay', handleCanPlay);
+    video.addEventListener('error', handleError);
+    video.addEventListener('play', handlePlay);
+    video.addEventListener('pause', handlePause);
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    
+    return () => {
+      // Salvar o estado de pausa do usuário quando o componente é desmontado
+      if (userPausedRef.current) {
+        localStorage.setItem(`video-paused-${videoKey}`, 'true');
+      } else {
+        localStorage.removeItem(`video-paused-${videoKey}`);
+      }
+      
+      video.removeEventListener('timeupdate', updateTime);
+      video.removeEventListener('loadedmetadata', updateDuration);
+      video.removeEventListener('loadedmetadata', handleLoadedMetadata);
+      video.removeEventListener('loadeddata', handleLoadedData);
+      video.removeEventListener('loadstart', handleLoadStart);
+      video.removeEventListener('canplay', handleCanPlay);
+      video.removeEventListener('error', handleError);
+      video.removeEventListener('play', handlePlay);
+      video.removeEventListener('pause', handlePause);
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+    };
+  }, [videoKey, autoPlay]);
+
+  // Reset do vídeo quando o src muda (idioma mudou)
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+    
+    // Se o vídeo estava pausado pelo usuário, não redefina o tempo
+    if (userPausedRef.current || video.hasAttribute("data-user-paused")) {
+      setIsLoading(true);
+      setHasError(false);
+      return;
+    }
+    
+    // Redefine o tempo atual
+    setCurrentTime(0);
+    video.currentTime = 0;
+    setIsLoading(true);
+    setHasError(false);
+    
+    // Quando src muda, queremos ter certeza que o vídeo será carregado novamente
+    video.load();
+    
+    // Se estava reproduzindo, continua reproduzindo após a mudança de src
+    if (isPlaying) {
+      attemptPlayVideo(video);
+    }
+  }, [src, isPlaying]);
+
+  // Efeito para controlar o comportamento de reprodução e volume do vídeo
+  useEffect(() => {
+    // Define o volume inicial e aplica ao vídeo
+    const video = videoRef.current;
+    if (!video) return;
+    
+    // Aplicar volume sem alterar o estado de reprodução
+    video.volume = volume / 100;
+    
+    // Inicia o vídeo automaticamente em loop silencioso se for o vídeo principal
+    // Apenas na primeira vez (montagem do componente)
+    if (videoKey === "video.main" && autoPlay && !video.hasAttribute("data-initialized") && isPlaying) {
+      video.loop = true;
+      video.muted = true;
+      video.setAttribute("data-initialized", "true");
+      
+      // Tentar reproduzir imediatamente e garantir que comece a reproduzir
+      if (video.readyState >= 3) { // HAVE_FUTURE_DATA or HAVE_ENOUGH_DATA
+        attemptPlayVideo(video);
+      }
+    }
+  }, [videoKey, autoPlay, isPlaying]);
+
+  // Efeito separado para controlar apenas o volume
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+    
+    // Aplicar apenas o volume sem alterar reprodução
+    video.volume = volume / 100;
+  }, [volume]);
+
+  // Sobrescrever o método load do elemento de vídeo para evitar recarregamento quando pausado pelo usuário
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video || videoKey !== "video.main") return;
+    
+    // Salvar a referência original do método load
+    const originalLoad = video.load;
+    
+    // Sobrescrever o método load
+    video.load = function() {
+      if (preventLoadRef.current || userPausedRef.current) {
+        console.log('Carregamento do vídeo bloqueado porque o usuário pausou manualmente');
+        
+        // Restaurar a posição do vídeo se houver uma salva
+        const savedPosition = video.getAttribute("data-pause-position");
+        if (savedPosition) {
+          const position = parseFloat(savedPosition);
+          video.currentTime = position;
+        }
+        
+        return;
+      }
+      
+      // Se não estiver pausado pelo usuário, proceder com carregamento normal
+      return originalLoad.apply(this);
+    };
+    
+    return () => {
+      // Restaurar o método original ao desmontar
+      if (video) {
+        video.load = originalLoad;
+      }
+    };
+  }, [videoKey]);
+
+  // Adicionar manipulador para eventos de carregamento específicos do vídeo
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    // Quando o componente é montado, verificar se havia um estado de pausa salvo anteriormente
+    const wasPreviouslyPaused = localStorage.getItem(`video-paused-${videoKey}`);
+    if (wasPreviouslyPaused === 'true') {
+      userPausedRef.current = true;
+      preventLoadRef.current = true;
+      video.setAttribute("data-user-paused", "true");
+      
+      // Restaurar a posição do vídeo se houver uma salva
+      const savedPosition = localStorage.getItem(`video-position-${videoKey}`);
+      if (savedPosition) {
+        const position = parseFloat(savedPosition);
+        console.log(`Restaurando vídeo para posição salva: ${position}`);
+        video.currentTime = position;
+        video.setAttribute("data-pause-position", position.toString());
+      }
+      
+      // Não iniciar reprodução automática se o vídeo estava pausado anteriormente
+      setIsPlaying(false);
+    }
+
     const updateTime = () => setCurrentTime(video.currentTime);
     const updateDuration = () => {
       setDuration(video.duration);
       console.log(`Duração do vídeo ${videoKey} carregada:`, video.duration);
     };
-    const handlePlay = () => setIsPlaying(true);
-    const handlePause = () => setIsPlaying(false);
+    const handlePlay = () => {
+      setIsPlaying(true);
+      // Se o vídeo está sendo reproduzido, remover o estado de pausa
+      userPausedRef.current = false;
+      preventLoadRef.current = false;
+      video.removeAttribute("data-user-paused");
+      localStorage.removeItem(`video-paused-${videoKey}`);
+    };
+    const handlePause = () => {
+      setIsPlaying(false);
+      // Quando o vídeo é pausado programaticamente, não consideramos como pausa de usuário
+      // O atributo data-user-paused é definido apenas pelo método togglePlay
+    };
     const handleLoadStart = () => {
+      // Verificar se o vídeo foi pausado pelo usuário ou está sendo mostrado após estar oculto
+      if (userPausedRef.current || preventLoadRef.current || showingAfterHidden) {
+        console.log(`Evento loadstart ignorado porque o vídeo ${videoKey} foi pausado pelo usuário ou está sendo exibido após estar oculto`);
+        return;
+      }
+      
       console.log(`Iniciando carregamento do vídeo ${videoKey}`);
       setIsLoading(true);
     };
@@ -204,9 +521,14 @@ export function VideoPlayer({
       console.log(`Vídeo ${videoKey} pode ser reproduzido agora`);
       setIsLoading(false);
       
-      // Iniciar a reprodução automática apenas na montagem inicial
-      // e não quando o volume é alterado
-      if (autoPlay && videoKey === "video.main" && !video.hasAttribute("data-autoplay-handled")) {
+      // Verificar várias condições antes de iniciar a reprodução automática
+      if (autoPlay && 
+          videoKey === "video.main" && 
+          !video.hasAttribute("data-autoplay-handled") && 
+          !userPausedRef.current && 
+          !preventLoadRef.current && 
+          !video.hasAttribute("data-user-paused")) {
+        
         video.setAttribute("data-autoplay-handled", "true");
         attemptPlayVideo(video);
       }
@@ -261,6 +583,13 @@ export function VideoPlayer({
     document.addEventListener('fullscreenchange', handleFullscreenChange);
 
     return () => {
+      // Salvar o estado de pausa do usuário quando o componente é desmontado
+      if (userPausedRef.current) {
+        localStorage.setItem(`video-paused-${videoKey}`, 'true');
+      } else {
+        localStorage.removeItem(`video-paused-${videoKey}`);
+      }
+      
       video.removeEventListener('timeupdate', updateTime);
       video.removeEventListener('loadedmetadata', updateDuration);
       video.removeEventListener('loadstart', handleLoadStart);
@@ -271,81 +600,6 @@ export function VideoPlayer({
       document.removeEventListener('fullscreenchange', handleFullscreenChange);
     };
   }, [videoKey, autoPlay]);
-
-  // Reset do vídeo quando o src muda (idioma mudou)
-  useEffect(() => {
-    const video = videoRef.current;
-    if (!video) return;
-    
-    // Redefine o tempo atual
-    setCurrentTime(0);
-    video.currentTime = 0;
-    setIsLoading(true);
-    setHasError(false);
-    
-    // Quando src muda, queremos ter certeza que o vídeo será carregado novamente
-    video.load();
-    
-    // Se estava reproduzindo, continua reproduzindo após a mudança de src
-    if (isPlaying) {
-      attemptPlayVideo(video);
-    }
-  }, [src, isPlaying]);
-
-  // Efeito para controlar o comportamento de reprodução e volume do vídeo
-  useEffect(() => {
-    // Define o volume inicial e aplica ao vídeo
-    const video = videoRef.current;
-    if (!video) return;
-    
-    // Aplicar volume sem alterar o estado de reprodução
-    video.volume = volume / 100;
-    
-    // Inicia o vídeo automaticamente em loop silencioso se for o vídeo principal
-    // Apenas na primeira vez (montagem do componente)
-    if (videoKey === "video.main" && autoPlay && !video.hasAttribute("data-initialized")) {
-      video.loop = true;
-      video.muted = true;
-      video.setAttribute("data-initialized", "true");
-      
-      // Tentar reproduzir imediatamente e garantir que comece a reproduzir
-      if (video.readyState >= 3) { // HAVE_FUTURE_DATA or HAVE_ENOUGH_DATA
-        attemptPlayVideo(video);
-      }
-    }
-  }, [videoKey, autoPlay]); // Removido volume da dependência para evitar reprodução ao alterar volume
-
-  // Efeito separado para controlar apenas o volume
-  useEffect(() => {
-    const video = videoRef.current;
-    if (!video) return;
-    
-    // Aplicar apenas o volume sem alterar reprodução
-    video.volume = volume / 100;
-  }, [volume]);
-
-  // Adicionar manipulador para carregar o vídeo
-  useEffect(() => {
-    const video = videoRef.current;
-    if (!video || videoKey !== "video.main") return;
-    
-    const handleLoadedData = () => {
-      setIsLoading(false);
-      console.log(`Vídeo ${videoKey} carregado completamente`);
-      
-      // Só inicia a reprodução automática se não estiver pausado e for a primeira vez
-      if (autoPlay && !video.paused && !video.hasAttribute("data-autoplay-handled")) {
-        video.setAttribute("data-autoplay-handled", "true");
-        attemptPlayVideo(video);
-      }
-    };
-    
-    video.addEventListener('loadeddata', handleLoadedData);
-    
-    return () => {
-      video.removeEventListener('loadeddata', handleLoadedData);
-    };
-  }, [autoPlay, videoKey]);
 
   // Controle de volume inspirado no YouTube/Spotify
   const handleVolumeChange = (e: React.MouseEvent | MouseEvent) => {
@@ -378,7 +632,10 @@ export function VideoPlayer({
       if (newVolume === 0) {
         videoRef.current.muted = true;
         setIsMuted(true);
-      } else if (isMuted && newVolume > 0) {
+        // Manter a barra de volume visível mesmo quando mudo
+        setShowVolumeBar(true);
+      } else {
+        // Sempre desmutar quando o volume for > 0, mesmo durante o arrasto
         videoRef.current.muted = false;
         setIsMuted(false);
       }
@@ -469,18 +726,87 @@ export function VideoPlayer({
       // Pausar o vídeo e garantir que o estado seja atualizado
       video.pause();
       video.loop = false; // Desativa o loop quando pausado
+      // Guardar atributo para saber que o usuário pausou manualmente
+      video.setAttribute("data-user-paused", "true");
+      userPausedRef.current = true; // Armazenar o estado de pausa do usuário na ref
+      preventLoadRef.current = true; // Prevenir carregamento quando pausado
+      
+      // Armazenar a posição atual do vídeo para despausar do mesmo ponto
+      const currentPosition = video.currentTime;
+      video.setAttribute("data-pause-position", currentPosition.toString());
+      
+      // Capturar o frame atual do vídeo e salvar como uma imagem
+      captureVideoFrame(video);
+      
       setIsPlaying(false);
-      console.log('Vídeo pausado manualmente');
+      // Não mostrar o indicador de carregamento quando pausado
+      setIsLoading(false);
+      
+      // Salvar o estado de pausa imediatamente no localStorage
+      localStorage.setItem(`video-paused-${videoKey}`, 'true');
+      localStorage.setItem(`video-position-${videoKey}`, currentPosition.toString());
+      
+      console.log(`Vídeo pausado manualmente na posição ${currentPosition}`);
     } else {
-      // Reproduzir o vídeo a partir do ponto atual
-      video.loop = true; // Reativa o loop quando reproduzindo
+      // Reproduzir o vídeo a partir do ponto pausado
+      video.loop = isDashboardVideo; // Reativa o loop somente quando é dashboard
+      
+      // Verificar se há uma posição salva para restaurar
+      const savedPosition = video.getAttribute("data-pause-position");
+      if (savedPosition) {
+        const position = parseFloat(savedPosition);
+        console.log(`Restaurando vídeo para posição salva: ${position}`);
+        video.currentTime = position;
+      }
+      
+      // Nunca mostrar animação de carregamento quando despausando manualmente
+      setIsLoading(false);
+      
+      // Primeiro reproduzir o vídeo e depois remover os atributos para garantir que não haja reload
       video.play().then(() => {
         setIsPlaying(true);
-        console.log('Vídeo reproduzido com sucesso');
+        
+        // Só remover atributos após o vídeo ter começado a tocar
+        // Remover atributo de pausa manual
+        video.removeAttribute("data-user-paused");
+        userPausedRef.current = false; // Limpar o estado de pausa do usuário na ref
+        preventLoadRef.current = false; // Permitir carregamento novamente
+        
+        // Limpar o frame capturado quando retorna a reprodução
+        setCurrentFrameUrl(null);
+        
+        // Remover o estado de pausa do localStorage por último
+        localStorage.removeItem(`video-paused-${videoKey}`);
+        
+        console.log('Vídeo reproduzido com sucesso a partir do ponto pausado');
       }).catch(err => {
         console.error("Erro ao reproduzir o vídeo:", err);
         attemptPlayVideo(video);
       });
+    }
+  };
+
+  // Função para capturar o frame atual do vídeo
+  const captureVideoFrame = (video: HTMLVideoElement) => {
+    try {
+      // Criar um canvas com as dimensões do vídeo
+      const canvas = document.createElement('canvas');
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      
+      // Desenhar o frame atual do vídeo no canvas
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        // Converter o canvas para uma URL de dados
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.95);
+        // Armazenar a URL para uso posterior
+        setCurrentFrameUrl(dataUrl);
+        console.log('Frame do vídeo capturado com sucesso');
+      }
+    } catch (err) {
+      console.error('Erro ao capturar frame do vídeo:', err);
+      setCurrentFrameUrl(null);
     }
   };
 
@@ -524,12 +850,12 @@ export function VideoPlayer({
     video.volume = newVolume / 100;
     
     // Se o volume estiver em 0, mute o vídeo
-    if (newVolume === 0 && !isMuted) {
+    if (newVolume === 0) {
       setIsMuted(true);
       video.muted = true;
     } 
-    // Se o volume estiver acima de 0 e estiver mutado, desmute
-    else if (newVolume > 0 && isMuted) {
+    // Se o volume estiver acima de 0, sempre desmute
+    else if (newVolume > 0) {
       setIsMuted(false);
       video.muted = false;
     }
@@ -563,7 +889,8 @@ export function VideoPlayer({
       }
       video.muted = true;
       setIsMuted(true);
-      setShowVolumeBar(false); // Esconder a barra de volume ao mutar
+      // Manter a barra de volume visível mesmo quando mutado
+      setShowVolumeBar(true);
     }
     
     // Restaurar o estado de reprodução se necessário
@@ -719,19 +1046,49 @@ export function VideoPlayer({
   };
   
   const toggleHideVideo = () => {
+    // Se está mostrando o vídeo depois dele estar oculto
+    if (isHidden) {
+      setShowingAfterHidden(true);
+      
+      // Resetar o estado após um curto período para não afetar futuros carregamentos
+      setTimeout(() => {
+        setShowingAfterHidden(false);
+      }, 1000);
+    }
+    
     setIsHidden(!isHidden);
     
     // Quando mostrar o vídeo novamente, não deve mostrar o indicador de carregamento
     if (isHidden) {
+      // Garantir que o indicador de carregamento não apareça
       setIsLoading(false);
       
       // Se o vídeo já estava carregado anteriormente, manter seu estado
       const video = videoRef.current;
-      if (video && isPlaying && video.paused) {
-        // Tentar reproduzir o vídeo se estava reproduzindo antes
-        video.play().catch(() => {
-          console.log("Não foi possível reproduzir o vídeo ao mostrar novamente");
-        });
+      if (video) {
+        // Remover atributos que possam impedir o carregamento/reprodução normal
+        video.removeAttribute("data-prevent-load");
+        userPausedRef.current = false;
+        preventLoadRef.current = false;
+        video.removeAttribute("data-user-paused");
+        video.removeAttribute("data-reloading");
+        
+        // Garantir que o som esteja ativo conforme as configurações
+        if (!muted && !isMuted) {
+          video.muted = false;
+          video.volume = volume / 100;
+        }
+        
+        // Tentar reproduzir o vídeo, ignorando o estado anterior
+        if (isPlaying || autoPlay) {
+          setTimeout(() => {
+            if (video) {
+              video.play().catch(() => {
+                console.log("Não foi possível reproduzir o vídeo ao mostrar novamente");
+              });
+            }
+          }, 50);
+        }
       }
     }
   };
@@ -755,14 +1112,83 @@ export function VideoPlayer({
     setIsLoading(false);
     setHasError(false);
     
+    // Se o usuário pausou o vídeo e quer recarregá-lo, precisamos permitir temporariamente o carregamento
+    if (userPausedRef.current || preventLoadRef.current) {
+      // Permitir o carregamento apenas temporariamente
+      const tempPaused = userPausedRef.current;
+      const savedPosition = video.getAttribute("data-pause-position");
+      let position = 0;
+      
+      if (savedPosition) {
+        position = parseFloat(savedPosition);
+      }
+      
+      userPausedRef.current = false;
+      preventLoadRef.current = false;
+      
+      // Recarregar o vídeo
+      video.load();
+      
+      // Restaurar a posição salva
+      if (savedPosition) {
+        video.currentTime = position;
+      }
+      
+      // Restaurar o estado de pausa após o carregamento
+      userPausedRef.current = tempPaused;
+      preventLoadRef.current = tempPaused;
+      
+      console.log('Vídeo recarregado mas mantendo estado de pausa');
+      return;
+    }
+    
     // Recarregar o vídeo
     video.load();
     
     // Tentar reproduzir novamente
-    if (autoPlay || isPlaying) {
+    // Verificar se o usuário pausou manualmente o vídeo
+    if ((autoPlay || isPlaying) && !video.hasAttribute("data-user-paused")) {
       attemptPlayVideo(video);
     }
   };
+
+  // Effect para recarregar o vídeo quando o src mudar (por exemplo, quando o idioma é alterado)
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+    
+    console.log(`Fonte de vídeo alterada para: ${src}`);
+    
+    // Definir diretamente o src
+    if (video.src !== src) {
+      // Salvar o estado de reprodução atual
+      const wasPlaying = !video.paused && !video.ended && video.readyState > 2;
+      const currentVolume = video.volume;
+      const currentMuted = video.muted;
+      
+      // Atualizar o src
+      video.src = src;
+      
+      // Configurar volume e mudo
+      video.volume = currentVolume;
+      video.muted = currentMuted;
+      
+      // Se o indicador de carregamento não deve ser mostrado
+      if (showingAfterHidden) {
+        setIsLoading(false);
+      }
+      
+      // Garantir que o video seja carregado
+      video.load();
+      
+      // Se estava reproduzindo, continuar a reprodução
+      if (wasPlaying || autoPlay) {
+        video.play().catch(err => {
+          console.log("Não foi possível reproduzir vídeo após mudança de idioma:", err);
+        });
+      }
+    }
+  }, [src, autoPlay, showingAfterHidden]);
 
   // Se o vídeo estiver oculto, mostrar apenas um botão para revelar
   if (isHidden && canHide) {
@@ -821,8 +1247,8 @@ export function VideoPlayer({
                 <Volume2 className="w-5 h-5 text-white" />
               )}
               
-              {/* A barra de volume aparece abaixo do botão apenas quando não está mudo */}
-              {showVolumeBar && !isMuted && (
+              {/* A barra de volume aparece abaixo do botão apenas quando showVolumeBar está ativo */}
+              {showVolumeBar && (
                 <div 
                   className="absolute inset-x-0 top-full mt-2 flex flex-col items-center bg-black/60 backdrop-blur-md p-3 rounded-xl animate-slideIn z-50 shadow-[0_0_15px_rgba(255,255,255,0.05)] border border-white/5"
                   onClick={(e) => e.stopPropagation()}
@@ -884,7 +1310,7 @@ export function VideoPlayer({
               className="relative w-full h-full cursor-pointer" 
               onClick={handleVideoClick}
             >
-              {isLoading && !videoRef.current?.hasAttribute("data-reloading") && (
+              {isLoading && !videoRef.current?.hasAttribute("data-reloading") && !userPausedRef.current && !preventLoadRef.current && !isHidden && !showingAfterHidden && (
                 <div className="absolute inset-0 flex items-center justify-center bg-black/50 z-10">
                   <div className="flex flex-col items-center">
                     <RefreshCw className="h-8 w-8 text-white animate-spin mb-2" />
@@ -907,6 +1333,17 @@ export function VideoPlayer({
                       Não foi possível carregar o vídeo. Verifique se o arquivo existe no caminho correto.
                     </span>
                   </div>
+                </div>
+              )}
+              
+              {/* Mostrar o frame capturado quando o vídeo estiver pausado */}
+              {!isPlaying && currentFrameUrl && (
+                <div className="absolute inset-0 z-5">
+                  <img 
+                    src={currentFrameUrl} 
+                    alt="Frame pausado" 
+                    className="w-full h-96 object-cover"
+                  />
                 </div>
               )}
               
@@ -994,7 +1431,7 @@ export function VideoPlayer({
           className="relative w-full h-full cursor-pointer" 
           onClick={handleVideoClick}
         >
-          {isLoading && !videoRef.current?.hasAttribute("data-reloading") && (
+          {isLoading && !videoRef.current?.hasAttribute("data-reloading") && !userPausedRef.current && !preventLoadRef.current && !isHidden && !showingAfterHidden && (
             <div className="absolute inset-0 flex items-center justify-center bg-black/50 z-10">
               <div className="flex flex-col items-center">
                 <RefreshCw className="h-8 w-8 text-white animate-spin mb-2" />

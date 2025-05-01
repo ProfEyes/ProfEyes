@@ -1,110 +1,339 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { useLanguage } from "@/contexts/LanguageContext";
-import { ChevronDown, Check, Globe } from "lucide-react";
-import { motion } from "framer-motion";
+import { 
+  Dialog,
+  DialogContent,
+  DialogTrigger
+} from "@/components/ui/dialog";
+import { useLanguage, Language } from "@/contexts/LanguageContext";
+import { useTimeZone } from "@/contexts/TimeZoneContext";
+import { useAuth } from "@/contexts/AuthContext";
+import { Globe, Check, ArrowRight } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 
 interface LanguageOption {
-  code: string;
+  code: Language;
   name: string;
+  nativeName: string;
   icon: string;
   flag: string;
+  landmark: string;
+  greeting: string;
+  countryCode: string;
+  colors: {
+    primary: string;
+    secondary: string;
+  };
 }
 
 const languages: LanguageOption[] = [
   { 
     code: "pt", 
     name: "Português",
+    nativeName: "Português",
     icon: "🇧🇷",
-    flag: "https://flagcdn.com/br.svg"
+    flag: "https://flagcdn.com/br.svg",
+    landmark: "https://images.unsplash.com/photo-1516306580123-e6e52b1b7b5f?q=80&w=800&auto=format&fit=crop",
+    greeting: "Olá, bem-vindo!",
+    countryCode: "BR",
+    colors: {
+      primary: "from-green-600/20 to-yellow-500/20",
+      secondary: "group-hover:from-green-600/30 group-hover:to-yellow-500/30"
+    }
   },
   { 
     code: "en", 
     name: "English",
+    nativeName: "English",
     icon: "🇺🇸",
-    flag: "https://flagcdn.com/us.svg"
+    flag: "https://flagcdn.com/us.svg",
+    landmark: "https://images.unsplash.com/photo-1492666673288-3c4b4576ad9a?q=80&w=800&auto=format&fit=crop",
+    greeting: "Hello, welcome!",
+    countryCode: "US",
+    colors: {
+      primary: "from-blue-600/20 to-red-500/20",
+      secondary: "group-hover:from-blue-600/30 group-hover:to-red-500/30"
+    }
   },
   { 
     code: "es", 
     name: "Español",
+    nativeName: "Español",
     icon: "🇪🇸",
-    flag: "https://flagcdn.com/es.svg"
+    flag: "https://flagcdn.com/es.svg",
+    landmark: "https://images.unsplash.com/photo-1543783207-ec64e4d95325?q=80&w=800&auto=format&fit=crop",
+    greeting: "¡Hola, bienvenido!",
+    countryCode: "ES",
+    colors: {
+      primary: "from-red-600/20 to-yellow-500/20",
+      secondary: "group-hover:from-red-600/30 group-hover:to-yellow-500/30"
+    }
   }
 ];
 
 export function LanguageSelector() {
-  const { language, changeLanguage } = useLanguage();
+  const { language, changeLanguage, updateUserLanguage } = useLanguage();
+  const { setAvailableTimeZones, getTimeZonesForLanguage, setTimeZone, getDefaultTimeZone } = useTimeZone();
+  const { user } = useAuth();
   const [open, setOpen] = useState(false);
+  const [hoveredLanguage, setHoveredLanguage] = useState<Language | null>(null);
+  const [selectedPreview, setSelectedPreview] = useState<Language>(language);
+  
+  // Atualizar a pré-visualização quando o idioma mudar
+  useEffect(() => {
+    setSelectedPreview(language);
+  }, [language]);
   
   // Encontrar o idioma atual
   const currentLanguage = languages.find(lang => lang.code === language) || languages[0];
   
+  // Função para alterar o idioma e atualizar fusos horários
+  const handleLanguageChange = (lang: Language) => {
+    // Alterar o idioma usando a função do contexto
+    changeLanguage(lang);
+    
+    // Atualizar os fusos horários disponíveis com base no novo idioma
+    const updatedTimeZones = getTimeZonesForLanguage(lang);
+    setAvailableTimeZones(updatedTimeZones);
+    
+    // Verificar se o fuso atual está disponível no novo idioma, caso não esteja, mudar para o padrão
+    const defaultTimeZone = getDefaultTimeZone(lang);
+    setTimeZone(defaultTimeZone);
+    
+    // Se o usuário estiver logado, atualizar suas preferências
+    if (user && user.id) {
+      // Salvar no localStorage para persistir mesmo após logout
+      localStorage.setItem('app-language', lang);
+      localStorage.setItem(`user-language-${user.id}`, lang);
+      
+      // Atualizar no contexto
+      updateUserLanguage(user.id, lang);
+      
+      // Também salvar no sessionStorage para garantir persistência durante navegação
+      sessionStorage.setItem('user-selected-language', lang);
+      sessionStorage.setItem('language-selection-completed', 'true');
+    } else {
+      // Se não estiver logado, salvar apenas no localStorage
+      localStorage.setItem('app-language', lang);
+    }
+    
+    // Fechar diálogo e mostrar toast de confirmação
+    setOpen(false);
+    
+    const langName = {
+      'pt': 'Português',
+      'en': 'English',
+      'es': 'Español'
+    }[lang];
+    
+    const successMessage = {
+      'pt': 'Idioma alterado para',
+      'en': 'Language changed to',
+      'es': 'Idioma cambiado a'
+    }[lang];
+    
+    toast.success(`${successMessage} ${langName}`);
+  };
+  
   return (
-    <DropdownMenu open={open} onOpenChange={setOpen}>
-      <DropdownMenuTrigger asChild>
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
         <Button 
           variant="outline" 
-          role="combobox" 
-          aria-expanded={open}
-          className="w-full justify-between bg-gradient-to-br from-white/10 to-white/5 backdrop-blur-sm border-white/10 hover:bg-white/15 hover:border-white/20 transition-all duration-300 group"
+          className="w-full p-0 h-auto bg-black border border-white/5 hover:bg-black/90 hover:border-white/10 transition-all duration-300 group shadow-sm rounded-md overflow-hidden"
         >
-          <div className="flex items-center gap-2">
-            <span className="relative flex h-8 w-8 shrink-0 overflow-hidden rounded-md shadow-md">
-              <span className="flex h-full w-full items-center justify-center rounded-md bg-black/20 border border-white/10 p-0.5">
+          <div className="w-full relative rounded-md">
+            <div className="flex items-center p-2.5 gap-3 relative z-10">
+              {/* Ícone minimalista */}
+              <div className="relative flex h-8 w-8 shrink-0 items-center justify-center">
+                <div className="absolute inset-0 rounded-full bg-black shadow-inner"></div>
                 <span className="text-lg">{currentLanguage.icon}</span>
-              </span>
-            </span>
-            <div className="flex flex-col items-start text-left">
-              <span className="text-sm font-medium text-white/90">{currentLanguage.name}</span>
-              <span className="text-xs text-white/60">Idioma Atual</span>
+              </div>
+              
+              {/* Informações do idioma simplificadas */}
+              <div className="flex flex-col items-start text-left flex-1">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-sm font-medium text-white">{currentLanguage.name}</span>
+                  <span className="bg-black/50 text-white/70 text-xs px-1.5 py-0.5 rounded-full border border-white/5">
+                    {currentLanguage.countryCode}
+                  </span>
+                </div>
+              </div>
+              
+              {/* Seta à direita */}
+              <div className="h-6 w-6 rounded-full flex items-center justify-center">
+                <ArrowRight className="h-3.5 w-3.5 text-white/60 group-hover:text-white transition-all duration-300" />
+              </div>
             </div>
           </div>
-          <ChevronDown className="h-4 w-4 shrink-0 opacity-50 group-hover:opacity-100 transition-all duration-200" />
         </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent 
-        className="w-full min-w-[18rem] overflow-hidden p-1 bg-gradient-to-br from-black/80 to-black/90 backdrop-blur-lg border border-white/10 shadow-xl"
-      >
-        <div className="py-2 px-3 text-xs font-medium text-white/50 border-b border-white/10 mb-1 flex items-center gap-1.5">
-          <Globe className="h-3 w-3" />
-          Escolha seu idioma
-        </div>
-        {languages.map((lang) => (
-          <motion.div
-            key={lang.code}
-            whileHover={{ y: -1 }}
-            transition={{ duration: 0.2 }}
-          >
-            <DropdownMenuItem
-              className={`p-2.5 rounded-lg focus:bg-white/10 hover:bg-white/10 cursor-pointer my-1 group ${language === lang.code ? 'bg-white/5' : ''}`}
-              onClick={() => {
-                changeLanguage(lang.code);
-                setOpen(false);
-              }}
-            >
-              <div className="flex items-center gap-3 w-full">
-                <div className="relative w-10 h-10 overflow-hidden rounded-md shadow-md">
-                  <img 
-                    src={lang.flag} 
-                    alt={lang.name} 
-                    className="w-full h-full object-cover border border-white/10 group-hover:border-white/20 transition-all duration-200"
-                  />
-                </div>
-                <div className="flex-1">
-                  <p className="font-medium text-white/90">{lang.name}</p>
-                  <p className="text-xs text-white/50">{lang.code.toUpperCase()}</p>
-                </div>
-                {language === lang.code && (
-                  <div className="h-5 w-5 rounded-full bg-indigo-600/80 flex items-center justify-center">
-                    <Check className="h-3 w-3 text-white" />
+      </DialogTrigger>
+      
+      <DialogContent className="max-w-3xl p-0 bg-black/80 backdrop-blur-xl border border-white/5 shadow-2xl rounded-xl overflow-hidden">
+        <div className="grid grid-cols-5 h-[500px]">
+          {/* Área de pré-visualização à esquerda */}
+          <div className="col-span-2 relative overflow-hidden">
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={selectedPreview}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.5 }}
+                className="absolute inset-0"
+              >
+                {/* Imagem do marco do país */}
+                <div className="absolute inset-0 bg-gradient-to-b from-black/50 via-black/70 to-black/95 z-10" />
+                <motion.img 
+                  initial={{ scale: 1.05 }}
+                  animate={{ scale: 1 }}
+                  transition={{ duration: 1.5 }}
+                  src={languages.find(l => l.code === selectedPreview)?.landmark}
+                  alt={languages.find(l => l.code === selectedPreview)?.name}
+                  className="w-full h-full object-cover object-center filter brightness-75"
+                />
+                
+                {/* Informações do idioma destacado */}
+                <div className="absolute bottom-0 left-0 right-0 p-6 z-20">
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="relative overflow-hidden rounded-md shadow-lg border border-white/10 h-10">
+                      <img 
+                        src={languages.find(l => l.code === selectedPreview)?.flag} 
+                        alt={languages.find(l => l.code === selectedPreview)?.name}
+                        className="h-full w-auto object-cover"
+                      />
+                    </div>
+                    <h3 className="text-xl font-semibold text-white/90">
+                      {languages.find(l => l.code === selectedPreview)?.name}
+                    </h3>
                   </div>
-                )}
-              </div>
-            </DropdownMenuItem>
-          </motion.div>
-        ))}
-      </DropdownMenuContent>
-    </DropdownMenu>
+                  <p className="text-white/70 text-sm mb-4">
+                    {languages.find(l => l.code === selectedPreview)?.greeting}
+                  </p>
+                  
+                  {/* Botão para selecionar idioma */}
+                  {selectedPreview !== language && (
+                    <motion.div 
+                      initial={{ y: 20, opacity: 0 }}
+                      animate={{ y: 0, opacity: 1 }}
+                      transition={{ delay: 0.2 }}
+                    >
+                      <Button 
+                        className="bg-black/50 hover:bg-black/70 text-white/90 border border-white/10 backdrop-blur-sm"
+                        onClick={() => handleLanguageChange(selectedPreview)}
+                      >
+                        {selectedPreview === 'pt' ? 'Selecionar' : 
+                         selectedPreview === 'en' ? 'Select' : 
+                         selectedPreview === 'es' ? 'Seleccionar' : 'Select'} {languages.find(l => l.code === selectedPreview)?.name}
+                      </Button>
+                    </motion.div>
+                  )}
+                  
+                  {/* Indicador de selecionado */}
+                  {selectedPreview === language && (
+                    <div className="flex items-center gap-2 bg-black/50 text-green-400/90 py-2 px-3 rounded-lg border border-green-500/20 backdrop-blur-sm">
+                      <Check className="h-4 w-4" />
+                      <span className="text-sm">
+                        {language === 'pt' ? 'Idioma atual' : 
+                         language === 'en' ? 'Current language' : 
+                         language === 'es' ? 'Idioma actual' : 'Current language'}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </motion.div>
+            </AnimatePresence>
+          </div>
+          
+          {/* Lista de idiomas à direita */}
+          <div className="col-span-3 p-6 overflow-auto bg-black/30 backdrop-blur-sm">
+            <h2 className="text-base font-medium text-white/90 mb-6 flex items-center gap-2 border-b border-white/10 pb-3">
+              <span>Idioma</span>
+            </h2>
+            
+            <div className="grid grid-cols-1 gap-3">
+              {languages.map((lang) => (
+                <motion.div
+                  key={lang.code}
+                  whileHover={{ borderColor: "rgba(255,255,255,0.2)" }}
+                  transition={{ duration: 0.2 }}
+                  className={cn(
+                    "group cursor-pointer rounded-lg overflow-hidden border border-transparent",
+                    language === lang.code ? "ring-1 ring-white/10" : ""
+                  )}
+                  onClick={() => handleLanguageChange(lang.code)}
+                  onMouseEnter={() => {
+                    setHoveredLanguage(lang.code);
+                    setSelectedPreview(lang.code);
+                  }}
+                  onMouseLeave={() => {
+                    setHoveredLanguage(null);
+                  }}
+                >
+                  <div className={cn(
+                    "relative p-4 transition-all duration-300",
+                    "bg-black/60 hover:bg-black/80"
+                  )}>
+                    <div className="flex items-center gap-4 relative z-10">
+                      {/* Flag com sombra sutil */}
+                      <div className="relative w-16 h-12 overflow-hidden rounded shadow-md transition-shadow duration-300 group-hover:shadow-lg flex-shrink-0">
+                        <img 
+                          src={lang.flag} 
+                          alt={lang.name} 
+                          className="w-full h-full object-cover"
+                        />
+                        <div className="absolute inset-0 border border-white/5 group-hover:border-white/10 transition-all duration-300"></div>
+                      </div>
+                      
+                      {/* Informações do idioma */}
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-1">
+                          <h3 className="font-medium text-white/90 group-hover:text-white transition-colors duration-300">
+                            {lang.name}
+                          </h3>
+                          {language === lang.code && (
+                            <div className="flex items-center gap-1 bg-black/50 text-green-400/90 px-2 py-0.5 rounded-full text-xs">
+                              <Check className="h-3 w-3" />
+                              <span>
+                                {language === 'pt' ? 'Atual' : 
+                                 language === 'en' ? 'Current' : 
+                                 language === 'es' ? 'Actual' : 'Current'}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm text-white/60 group-hover:text-white/80 transition-colors duration-300">
+                            {lang.nativeName}
+                          </span>
+                        </div>
+                      </div>
+                      
+                      {/* Indicador de seleção */}
+                      <div className={cn(
+                        "h-8 w-8 rounded-full flex items-center justify-center transition-all duration-300 flex-shrink-0",
+                        hoveredLanguage === lang.code || language === lang.code
+                          ? "bg-black/70" : "bg-black/50"
+                      )}>
+                        {language === lang.code ? (
+                          <Check className="h-4 w-4 text-white/90" />
+                        ) : (
+                          <ArrowRight className={cn(
+                            "h-4 w-4 transition-transform duration-300",
+                            hoveredLanguage === lang.code ? "translate-x-0.5 text-white/90" : "text-white/50"
+                          )} />
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </motion.div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 } 

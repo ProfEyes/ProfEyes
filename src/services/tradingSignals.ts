@@ -1,4 +1,4 @@
-﻿import { supabase } from "@/integrations/supabase/client";
+import { supabase } from "@/integrations/supabase/client";
 import { SignalStrength, MarketNews } from './types';
 import { getBinancePrice, getBinanceHistoricalData } from "./binanceApi";
 import { fetchStockQuote, fetchTechnicalIndicator, fetchCompanyOverview } from "./getSimulatedStockData";
@@ -27,85 +27,49 @@ const MAX_CONSECUTIVE_ERRORS = 5;
 
 // Lista de ativos disponíveis com suas categorias
 export const ATIVOS_CATEGORIAS = {
-  "USD/BRL (OTC)": "Blitz",
-  "USOUSD (OTC)": "Blitz",
-  "BTC/USD (OTC)": "Blitz",
-  "Google (OTC)": "Blitz",
-  "EUR/JPY (OTC)": "Blitz",
-  "ETH/USD (OTC)": "Blitz",
-  "MELANIA Coin (OTC)": "Binary",
-  "EUR/GBP (OTC)": "Blitz",
-  "Apple (OTC)": "Blitz",
-  "Amazon (OTC)": "Blitz",
-  "TRUMP Coin (OTC)": "Binary",
-  "Nike, Inc. (OTC)": "Blitz",
-  "DOGECOIN (OTC)": "Blitz",
-  "Tesla (OTC)": "Blitz",
-  "SOL/USD (OTC)": "Blitz",
-  "1000Sats (OTC)": "Binary",
-  "XAUUSD (OTC)": "Digital",
-  "McDonald´s Corporation (OTC)": "Blitz",
-  "Meta (OTC)": "Blitz",
-  "Coca-Cola Company (OTC)": "Blitz",
-  "CARDANO (OTC)": "Blitz",
-  "EUR/USD (OTC)": "Blitz",
-  "PEN/USD (OTC)": "Blitz",
-  "Bitcoin Cash (OTC)": "Binary",
-  "AUD/CAD (OTC)": "Blitz",
-  "Tesla/Ford (OTC)": "Blitz",
-  "US 100 (OTC)": "Binary",
-  "TRON/USD (OTC)": "Blitz",
-  "USD/CAD (OTC)": "Blitz",
-  "AUD/USD (OTC)": "Blitz",
-  "AIG (OTC)": "Binary",
-  "Alibaba Group Holding (OTC)": "Blitz",
-  "Snap Inc. (OTC)": "Blitz",
-  "US 500 (OTC)": "Digital",
-  "AUD/CHF (OTC)": "Blitz",
-  "Amazon/Alibaba (OTC)": "Blitz",
-  "Pepe (OTC)": "Binary",
-  "Chainlink (OTC)": "Binary",
-  "USD/ZAR (OTC)": "Blitz",
-  "Worldcoin (OTC)": "Binary",
-  "Litecoin (OTC)": "Binary",
-  "Injective (OTC)": "Binary",
-  "ORDI (OTC)": "Binary",
-  "ICP (OTC)": "Binary",
-  "Cosmos (OTC)": "Binary",
-  "Polkadot (OTC)": "Binary",
-  "TON (OTC)": "Binary",
-  "Celestia (OTC)": "Binary",
-  "NEAR (OTC)": "Binary",
-  "Ripple (OTC)": "Binary",
-  "Ronin (OTC)": "Binary",
-  "Stacks (OTC)": "Binary",
-  "Immutable (OTC)": "Binary",
-  "EOS (OTC)": "Binary",
-  "Jupiter (OTC)": "Binary",
-  "Polygon (OTC)": "Binary",
-  "Arbitrum (OTC)": "Binary",
-  "Sandbox (OTC)": "Binary",
-  "Decentraland (OTC)": "Binary",
-  "Sei (OTC)": "Binary",
-  "IOTA (OTC)": "Binary",
-  "Pyth (OTC)": "Binary",
-  "Graph (OTC)": "Binary",
-  "Floki (OTC)": "Binary",
-  "Gala (OTC)": "Binary",
-  "Bonk (OTC)": "Binary",
-  "Beam (OTC)": "Binary",
-  "Hamster Kombat (OTC)": "Binary",
-  "NOT (OTC)": "Binary",
-  "US 30 (OTC)": "Binary",
-  "JP 225 (OTC)": "Binary",
-  "HK 33 (OTC)": "Binary",
-  "GER 30 (OTC)": "Binary",
-  "SP 35 (OTC)": "Binary",
-  "UK 100 (OTC)": "Binary",
-  "EUR/THB (OTC)": "Digital",
-  "JPY Currency Index": "Digital",
-  "USD Currency Index": "Digital",
-  "AUS 200 (OTC)": "Digital"
+  // Ativos Digital
+  "Gold/Silver (OTC)": "Digital",
+  "Worldcoin (OTC)": "Digital",
+  "USD/THB (OTC)": "Digital",
+  "ETH/USD (OTC)": "Digital",
+  "CHF/JPY (OTC)": "Digital",
+  "Pepe (OTC)": "Digital",
+  "GBP/AUD (OTC)": "Digital",
+  "GBP/CHF": "Digital",
+  "GBP/CAD (OTC)": "Digital",
+  "EUR/JPY (OTC)": "Digital",
+  "AUD/CHF": "Digital",
+  "GER 30 (OTC)": "Digital",
+  "AUD/CHF (OTC)": "Digital",
+  "EUR/AUD": "Digital", 
+  "USD/CAD (OTC)": "Digital",
+  "BTC/USD": "Digital",
+  "Amazon/Ebay (OTC)": "Digital",
+  "Coca-Cola Company (OTC)": "Digital",
+  "AIG (OTC)": "Digital",
+  "Amazon/Alibaba (OTC)": "Digital",
+  "Bitcoin Cash (OTC)": "Digital",
+  "AUD/USD": "Digital",
+  "DASH (OTC)": "Digital",
+  "BTC/USD (OTC)": "Digital",
+  "SP 35 (OTC)": "Digital",
+  "TRUMP Coin (OTC)": "Digital",
+  "US 100 (OTC)": "Digital",
+  "EUR/CAD (OTC)": "Digital",
+  "HK 33 (OTC)": "Digital",
+  "Alphabet/Microsoft (OTC)": "Digital",
+  "1000Sats (OTC)": "Digital",
+  "USD/ZAR (OTC)": "Digital",
+  "Litecoin (OTC)": "Digital",
+  "Hamster Kombat (OTC)": "Digital",
+  "USD Currency Index (OTC)": "Digital",
+  "AUS 200 (OTC)": "Digital",
+  "USD/CAD": "Digital",
+  "MELANIA Coin (OTC)": "Digital",
+  "JP 225 (OTC)": "Digital",
+  "AUD/CAD (OTC)": "Digital",
+  "AUD/JPY (OTC)": "Digital",
+  "US 500 (OTC)": "Digital"
 };
 
 // Configurações de horários específicos para cada ativo
@@ -499,7 +463,7 @@ function parseTime(timeStr) {
 const CACHE_DURATION = 10 * 60 * 1000;
 
 // Definir localStorage key como constante para evitar erros de digitação
-const SIGNALS_CACHE_KEY = 'profeyes_signals_cache';
+const SIGNALS_CACHE_KEY = 'trending_signals_cache';
 
 // Cache para sinais (evita recálculos frequentes)
 const signalsCache = { 
@@ -1198,7 +1162,7 @@ async function geradorSignaisSequenciais(signaisCompletados) {
     
     // Gerar o sinal usando o horário de entrada calculado
     const sinal = gerar_sinal_trading_com_horario_entrada(asset, tipo_atual, categoria, proximo_horario_entrada);
-    sinais.push(sinal);
+    sinais.push(sinal as TradingSignal);
     
     // Adicionar à lista de ativos usados
     ativos_usados.push(asset);
@@ -1492,8 +1456,11 @@ export const tradingSignalService = {
   updateSignalCurrentPrice
 };
 
-// Chave para armazenar sinais do dia no localStorage
-const DAILY_SIGNALS_CACHE_KEY = 'profeyes_daily_signals_cache';
+// Cache duration for daily signals (24 hours - in milliseconds)
+const DAILY_SIGNALS_CACHE_DURATION = 24 * 60 * 60 * 1000;
+
+// Definir localStorage key para daily signals como constante
+const DAILY_SIGNALS_CACHE_KEY = 'trending_daily_signals_cache';
 
 // Cache para todos os sinais do dia, organizado por slots de 10 minutos
 const dailySignalsCache = {
@@ -1630,7 +1597,7 @@ async function generateSignalsForTimeSlot(slotDate: Date): Promise<TradingSignal
     
     // Gerar sinal com hora de entrada correspondente ao slot
     const sinal = gerar_sinal_trading_com_horario_entrada(asset, tipo, categoria, slotDate);
-    signals.push(sinal);
+    signals.push(sinal as TradingSignal);
   }
   
   return signals;
@@ -1712,3 +1679,41 @@ generateAllDailySignals().then(() => {
 }).catch(error => {
   console.error('Erro na inicialização de sinais do dia:', error);
 });
+
+// Função para converter string de tempo para objeto Date
+function convertTimeStringToDate(timeString: string): Date {
+  if (!timeString) return new Date();
+  try {
+    const [hours, minutes] = timeString.split(':').map(Number);
+    const now = new Date();
+    now.setHours(hours, minutes, 0, 0);
+    return now;
+  } catch (error) {
+    console.error('Erro ao converter string de tempo para Date:', error);
+    return new Date();
+  }
+}
+
+// Filtrar os sinais mais relevantes para o horário atual
+function filterRelevantSignals(allSignals: any[]): TradingSignal[] {
+  const now = new Date();
+  
+  // Ordenar sinais por proximidade ao horário atual
+  allSignals.sort((a, b) => {
+    const timeA = convertTimeStringToDate(a.entry_time);
+    const timeB = convertTimeStringToDate(b.entry_time);
+    
+    // Priorizar sinais que ainda não aconteceram
+    const aInFuture = timeA.getTime() > now.getTime();
+    const bInFuture = timeB.getTime() > now.getTime();
+    
+    if (aInFuture && !bInFuture) return -1;
+    if (!aInFuture && bInFuture) return 1;
+    
+    // Se ambos são futuros ou ambos já passaram, pegar o mais próximo
+    return Math.abs(timeA.getTime() - now.getTime()) - Math.abs(timeB.getTime() - now.getTime());
+  });
+  
+  // Pegar os 7 primeiros sinais (ou menos se não houver 7)
+  return allSignals.slice(0, Math.min(allSignals.length, 7)) as TradingSignal[];
+}

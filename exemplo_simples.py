@@ -9,7 +9,17 @@ import datetime
 CATEGORIAS = ["Blitz", "Digital", "Binary", "Outro"]
 ATIVOS = {
     "Blitz": ["USD/BRL (OTC)", "ETH/USD (OTC)", "Google (OTC)", "CARDANO (OTC)", "Tesla (OTC)"],
-    "Digital": ["XAUUSD (OTC)", "US 500 (OTC)", "EUR/THB (OTC)", "JPY Currency Index", "AUS 200 (OTC)"],
+    "Digital": [
+        "Gold/Silver (OTC)", "Worldcoin (OTC)", "USD/THB (OTC)", "ETH/USD (OTC)", "CHF/JPY (OTC)",
+        "Pepe (OTC)", "GBP/AUD (OTC)", "GBP/CHF", "GBP/CAD (OTC)", "EUR/JPY (OTC)",
+        "AUD/CHF", "GER 30 (OTC)", "AUD/CHF (OTC)", "EUR/AUD", "USD/CAD (OTC)",
+        "BTC/USD", "Amazon/Ebay (OTC)", "Coca-Cola Company (OTC)", "AIG (OTC)", "Amazon/Alibaba (OTC)",
+        "Bitcoin Cash (OTC)", "AUD/USD", "DASH (OTC)", "BTC/USD (OTC)", "SP 35 (OTC)",
+        "TRUMP Coin (OTC)", "US 100 (OTC)", "EUR/CAD (OTC)", "HK 33 (OTC)", "Alphabet/Microsoft (OTC)",
+        "1000Sats (OTC)", "USD/ZAR (OTC)", "Litecoin (OTC)", "Hamster Kombat (OTC)", "USD Currency Index (OTC)",
+        "AUS 200 (OTC)", "USD/CAD", "MELANIA Coin (OTC)", "JP 225 (OTC)", "AUD/CAD (OTC)",
+        "AUD/JPY (OTC)", "US 500 (OTC)"
+    ],
     "Binary": ["MELANIA Coin (OTC)", "TRUMP Coin (OTC)", "1000Sats (OTC)", "Litecoin (OTC)", "Celestia (OTC)"],
     "Outro": ["Ativo Genérico"]
 }

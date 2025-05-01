@@ -3,6 +3,8 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useUserStore } from "@/stores/userStore";
 import { Camera, Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { resizeImage } from "@/utils/imageUtils";
+import { supabase } from "@/lib/supabase";
 
 export function UserAvatar() {
   const { user, updateUser } = useUserStore();
@@ -23,18 +25,58 @@ export function UserAvatar() {
       return;
     }
 
-    // Validar tamanho (max 5MB)
-    if (file.size > 5 * 1024 * 1024) {
-      toast.error('A imagem deve ter no máximo 5MB');
+    // Validar tamanho (max 10MB para arquivo original)
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error('A imagem deve ter no máximo 10MB');
       return;
     }
 
     try {
       setIsUploading(true);
-      // Implementar a função de upload de avatar
-      // Como a função uploadUserAvatar não está definida, precisamos criar uma solução alternativa
-      // Por exemplo, podemos usar uma URL temporária ou simular o upload
-      const avatarUrl = URL.createObjectURL(file); // Cria uma URL temporária para a imagem
+      
+      // Redimensionar a imagem antes de salvar (300x300 pixels)
+      const resizedImageBlob = await resizeImage(file, 300, 300, 0.8);
+      
+      // Gerar nome de arquivo único
+      const fileExt = file.name.split('.').pop();
+      const fileName = `avatar-${Date.now()}.${fileExt}`;
+      
+      // Verificar se o usuário está usando Supabase Storage ou armazenamento local
+      let avatarUrl;
+      
+      if (supabase) {
+        // Criar um objeto File a partir do Blob redimensionado
+        const resizedFile = new File([resizedImageBlob], fileName, { 
+          type: 'image/jpeg',
+          lastModified: Date.now()
+        });
+        
+        // Upload para o Supabase Storage
+        const { data, error } = await supabase
+          .storage
+          .from('avatars')
+          .upload(fileName, resizedFile, {
+            cacheControl: '3600',
+            upsert: true
+          });
+          
+        if (error) {
+          throw error;
+        }
+        
+        // Obter URL pública
+        const { data: urlData } = supabase
+          .storage
+          .from('avatars')
+          .getPublicUrl(data.path);
+          
+        avatarUrl = urlData.publicUrl;
+      } else {
+        // Fallback: usar URL de objeto local (temporário)
+        avatarUrl = URL.createObjectURL(resizedImageBlob);
+      }
+      
+      // Atualizar o estado do usuário com a nova URL
       updateUser({ ...user, avatar_url: avatarUrl });
       toast.success('Foto de perfil atualizada com sucesso!');
     } catch (error) {

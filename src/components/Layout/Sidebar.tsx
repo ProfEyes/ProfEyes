@@ -10,10 +10,12 @@ import {
 } from '@/components/ui/icons';
 import { useAuth } from '@/contexts/AuthContext';
 import { checkAdminPermission } from '@/lib/admin-api';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 export default function Sidebar() {
   const location = useLocation();
   const { user } = useAuth();
+  const { t } = useLanguage();
   const [isAdmin, setIsAdmin] = useState(false);
   
   // Verificar se o usuário é administrador
@@ -33,32 +35,32 @@ export default function Sidebar() {
   // Links da barra lateral
   const links = [
     { 
-      name: 'Home', 
+      name: t('nav.home'), 
       to: '/', 
       icon: <HomeIcon className="w-5 h-5" />,
       exact: true
     },
     { 
-      name: 'Dashboard', 
+      name: t('nav.dashboard'), 
       to: '/dashboard', 
       icon: <ChartIcon className="w-5 h-5" />,
       exact: false
     },
     { 
-      name: 'Notificações', 
+      name: t('nav.notifications'), 
       to: '/notifications', 
       icon: <NotificationsIcon className="w-5 h-5" />,
       exact: false
     },
     { 
-      name: 'Configurações', 
+      name: t('nav.settings'), 
       to: '/settings', 
       icon: <SettingsIcon className="w-5 h-5" />,
       exact: false
     },
     // Link para administração, mostrado apenas para administradores
     ...(isAdmin ? [{
-      name: 'Administração',
+      name: t('nav.admin') || 'Administração',
       to: '/admin',
       icon: <ShieldIcon className="w-5 h-5" />,
       exact: false,

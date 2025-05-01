@@ -55,8 +55,8 @@ export async function fetchNewsDataHeadlines(
       source: article.source_id || 'NewsData.io',
       url: article.link || '',
       imageUrl: article.image_url || '',
-      publishedAt: article.pubDate || new Date().toISOString(),
-      relatedSymbols: extractSymbolsFromKeywords(article.keywords || []),
+      published_at: article.pubDate || new Date().toISOString(),
+      symbols: extractSymbolsFromKeywords(article.keywords || []),
       sentiment: 0 // Será calculado posteriormente se necessário
     }));
   } catch (error) {
@@ -94,8 +94,8 @@ export async function fetchCryptoNews(
       source: article.source_id || 'NewsData.io',
       url: article.link || '',
       imageUrl: article.image_url || '',
-      publishedAt: article.pubDate || new Date().toISOString(),
-      relatedSymbols: extractCryptoSymbols(article.title + ' ' + article.description),
+      published_at: article.pubDate || new Date().toISOString(),
+      symbols: extractCryptoSymbols(article.title + ' ' + article.description),
       sentiment: 0 // Será calculado posteriormente se necessário
     }));
   } catch (error) {
@@ -157,8 +157,8 @@ export async function fetchSymbolNews(
       source: article.source_id || 'NewsData.io',
       url: article.link || '',
       imageUrl: article.image_url || '',
-      publishedAt: article.pubDate || new Date().toISOString(),
-      relatedSymbols: [symbol, ...extractSymbolsFromText(article.title + ' ' + article.description)],
+      published_at: article.pubDate || new Date().toISOString(),
+      symbols: [symbol, ...extractSymbolsFromText(article.title + ' ' + article.description)],
       sentiment: 0 // Será calculado posteriormente se necessário
     }));
   } catch (error) {

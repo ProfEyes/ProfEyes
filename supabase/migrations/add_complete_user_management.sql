@@ -190,6 +190,10 @@ CREATE POLICY "Usuários podem atualizar seu próprio perfil"
     ON public.user_profiles FOR UPDATE
     USING (auth.uid() = user_id);
 
+CREATE POLICY "Usuários podem inserir seu próprio perfil" 
+    ON public.user_profiles FOR INSERT
+    WITH CHECK (auth.uid() = user_id);
+
 CREATE POLICY "Administradores podem ver todos os perfis" 
     ON public.user_profiles FOR SELECT
     USING (

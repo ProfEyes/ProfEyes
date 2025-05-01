@@ -117,7 +117,10 @@ export async function getLatestPrices(symbols?: string[]): Promise<{ symbol: str
   const symbolsToUse = symbols || Object.keys(SIMULATED_PRICES);
   
   // Filtrar símbolos válidos que existem em nossa lista simulada
-  const validSymbols = symbolsToUse.filter(symbol => SIMULATED_PRICES[symbol]);
+  // Verifica se os símbolos são strings e não vazios antes de filtrá-los
+  const validSymbols = symbolsToUse
+    .filter(symbol => typeof symbol === 'string' && symbol.trim() !== '')
+    .filter(symbol => SIMULATED_PRICES[symbol]);
   
   if (validSymbols.length === 0) {
     // Verificar se essa é a primeira vez que estamos exibindo o aviso (usando um sinalizador)
@@ -127,19 +130,23 @@ export async function getLatestPrices(symbols?: string[]): Promise<{ symbol: str
       window.hasShownLatestPricesWarning = true;
     }
     
-    // Usar alguns símbolos padrão em vez de retornar array vazio
-    const defaultSymbols = ['PETR4', 'VALE3', 'ITUB4', 'BBDC4', 'ABEV3'];
+    // Usar símbolos mais comuns de trading como padrão
+    const defaultSymbols = [
+      'BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'BNBUSDT', 'ADAUSDT', 
+      'PETR4', 'VALE3', 'IBOVESPA', 'S&P500', 'NASDAQ'
+    ];
     
     // Verificar se estes símbolos existem em nossa lista simulada
     // Se não existirem, criar dados simulados para eles
-    defaultSymbols.forEach(symbol => {
+    const availableDefaultSymbols = defaultSymbols.filter(symbol => {
       if (!SIMULATED_PRICES[symbol]) {
         SIMULATED_PRICES[symbol] = (50 + Math.random() * 50).toFixed(2);
       }
+      return true;
     });
     
     // Retornar preços para os símbolos padrão
-    return defaultSymbols.map(symbol => {
+    return availableDefaultSymbols.map(symbol => {
       const basePrice = parseFloat(SIMULATED_PRICES[symbol]);
       const updatedPrice = getRandomPriceVariation(basePrice);
       

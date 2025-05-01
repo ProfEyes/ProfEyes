@@ -26,7 +26,10 @@ const sentimentCache: Record<string, {
 }> = {};
 
 // Função para buscar notícias relacionadas a um ativo
-async function fetchNewsForAsset(symbol: string): Promise<Array<{title: string; content: string; source: string; date: Date}>> {
+async function fetchNewsForAsset(symbol: string): Promise<{
+  sentiment: number;
+  articles: any[];
+}> {
   try {
     // Adaptar símbolo para Finnhub
     const finnhubSymbol = symbol.replace('.SA', '').replace('USDT', '');
@@ -39,12 +42,24 @@ async function fetchNewsForAsset(symbol: string): Promise<Array<{title: string; 
       const finnhubResults = await fetchCompanyNews(finnhubSymbol);
       
       if (finnhubResults && finnhubResults.length > 0) {
-        return finnhubResults.slice(0, 20).map(item => ({
+        const articles = finnhubResults.slice(0, 20).map(item => ({
           title: item.headline,
           content: item.summary,
           source: item.source,
-          date: new Date(item.datetime * 1000)
+          date: new Date(item.datetime * 1000),
+          description: item.summary,
+          url: item.url,
+          publishedAt: new Date(item.datetime * 1000).toISOString(),
+          sentiment: 0 // Valor padrão
         }));
+        
+        // Calcular sentimento médio
+        const avgSentiment = 0; // Valor padrão, pode ser calculado baseado nos artigos
+        
+        return {
+          sentiment: avgSentiment,
+          articles: articles
+        };
       }
     } catch (finnhubError) {
       console.error(`Erro ao buscar notícias para ${symbol} do Finnhub:`, finnhubError);
@@ -52,37 +67,104 @@ async function fetchNewsForAsset(symbol: string): Promise<Array<{title: string; 
     */
     
     // Se não encontrar em nenhuma fonte, retornar array vazio
-    return [];
+    return {
+      sentiment: 0,
+      articles: []
+    };
   } catch (error) {
     console.error('Erro ao buscar notícias do ativo:', error);
-    return [];
+    return {
+      sentiment: 0,
+      articles: []
+    };
   }
 }
 
+// Função simples para calcular sentimento de um texto
+function calculateSentiment(text: string): number {
+  // Esta é uma versão simplificada para calcular o sentimento
+  // Valores entre -1 (muito negativo) e 1 (muito positivo)
+  
+  const positiveWords = [
+    'alta', 'subir', 'crescer', 'lucro', 'ganho', 'positivo', 'bom', 'excelente', 
+    'forte', 'recomendo', 'comprar', 'oportunidade', 'promissor', 'otimista',
+    'bull', 'bullish', 'up', 'support', 'green', 'buy', 'long'
+  ];
+  
+  const negativeWords = [
+    'queda', 'cair', 'perda', 'prejuízo', 'negativo', 'ruim', 'fraco', 'vender', 
+    'risco', 'preocupante', 'pessimista', 'problema', 'dificuldade', 'desvalorização',
+    'bear', 'bearish', 'down', 'resistance', 'red', 'sell', 'short'
+  ];
+  
+  const words = text.toLowerCase().split(/\s+/);
+  
+  let positiveCount = 0;
+  let negativeCount = 0;
+  
+  words.forEach(word => {
+    if (positiveWords.some(pw => word.includes(pw))) {
+      positiveCount++;
+    }
+    if (negativeWords.some(nw => word.includes(nw))) {
+      negativeCount++;
+    }
+  });
+  
+  const totalWords = words.length;
+  if (totalWords === 0) return 0;
+  
+  // Calcular score normalizado entre -1 e 1
+  return (positiveCount - negativeCount) / Math.min(totalWords, 20);
+}
+
 // Função para fornecer notícias simuladas
-function getFallbackNewsForAsset(symbol: string): Array<{title: string; content: string; source: string; date: Date}> {
+function getFallbackNewsForAsset(symbol: string): {
+  sentiment: number;
+  articles: any[];
+} {
   const now = new Date();
   
-  return [
+  const articles = [
     {
       title: `Análise técnica: tendências recentes para ${symbol}`,
       content: `Análise detalhada sobre ${symbol} com foco em tendências recentes e projeções futuras. Os indicadores técnicos mostram um potencial movimento de alta no curto prazo.`,
       source: "Market Analysis",
-      date: new Date(now.getTime() - 1000 * 60 * 60 * 2) // 2 horas atrás
+      date: new Date(now.getTime() - 1000 * 60 * 60 * 2), // 2 horas atrás
+      description: `Análise detalhada sobre ${symbol} com foco em tendências recentes e projeções futuras.`,
+      url: '#',
+      publishedAt: new Date(now.getTime() - 1000 * 60 * 60 * 2).toISOString(),
+      sentiment: 0.3
     },
     {
       title: `Perspectivas de mercado para ${symbol} no próximo trimestre`,
       content: `Especialistas apontam que ${symbol} pode apresentar valorização consistente no próximo trimestre, impulsionado por fatores macroeconômicos favoráveis.`,
       source: "ProfEyes Research",
-      date: new Date(now.getTime() - 1000 * 60 * 60 * 24) // 1 dia atrás
+      date: new Date(now.getTime() - 1000 * 60 * 60 * 24), // 1 dia atrás
+      description: `Especialistas apontam que ${symbol} pode apresentar valorização consistente no próximo trimestre.`,
+      url: '#',
+      publishedAt: new Date(now.getTime() - 1000 * 60 * 60 * 24).toISOString(),
+      sentiment: 0.5
     },
     {
       title: `${symbol}: oportunidades e riscos no cenário atual`,
       content: `Análise dos principais fatores que podem influenciar o preço de ${symbol} nas próximas semanas, incluindo dados fundamentalistas e eventos relevantes.`,
       source: "Investment Journal",
-      date: new Date(now.getTime() - 1000 * 60 * 60 * 24 * 3) // 3 dias atrás
+      date: new Date(now.getTime() - 1000 * 60 * 60 * 24 * 3), // 3 dias atrás
+      description: `Análise dos principais fatores que podem influenciar o preço de ${symbol} nas próximas semanas.`,
+      url: '#',
+      publishedAt: new Date(now.getTime() - 1000 * 60 * 60 * 24 * 3).toISOString(),
+      sentiment: 0.1
     }
   ];
+  
+  // Calcular sentimento médio
+  const avgSentiment = articles.reduce((sum, article) => sum + article.sentiment, 0) / articles.length;
+  
+  return {
+    sentiment: avgSentiment,
+    articles: articles
+  };
 }
 
 // Função para buscar dados de redes sociais
@@ -303,7 +385,7 @@ export async function analyzeAssetSentiment(symbol: string): Promise<SentimentRe
     };
     
     // Analisar sentimento de notícias
-    const newsSentiments = news.map(item => 
+    const newsSentiments = news.articles.map(item => 
       analyzeSentimentText(item.title + ' ' + item.content)
     );
     const newsAvg = calculateAverage(newsSentiments);
@@ -324,13 +406,13 @@ export async function analyzeAssetSentiment(symbol: string): Promise<SentimentRe
     
     // Extrair palavras-chave
     const allTexts = [
-      ...news.map(item => item.title + ' ' + item.content),
+      ...news.articles.map(item => item.title + ' ' + item.content),
       ...socialMentions.map(item => item.text)
     ];
     const keywords = extractKeywords(allTexts);
     
     // Calcular média ponderada do sentimento geral
-    const newsWeight = news.length > 0 ? 0.6 : 0;
+    const newsWeight = news.articles.length > 0 ? 0.6 : 0;
     const twitterWeight = twitterMentions.length > 0 ? 0.25 : 0;
     const redditWeight = redditMentions.length > 0 ? 0.15 : 0;
     
@@ -630,14 +712,21 @@ export async function analyzeNewsForAsset(symbol: string): Promise<{
       
       if (finnhubResults && finnhubResults.length > 0) {
         // Limitar a 20 notícias para processamento
-        const articles = finnhubResults.slice(0, 20).map(item => ({
-          title: item.headline,
-          description: item.summary,
-          url: item.url,
-          publishedAt: new Date(item.datetime * 1000).toISOString(),
-          source: { name: item.source },
-          sentiment: item.sentiment || calculateSentiment(item.headline + ' ' + item.summary)
-        }));
+        const articles = finnhubResults.slice(0, 20).map(item => {
+          // Verificamos se o item possui a propriedade sentiment, se não, calculamos
+          const itemSentiment = 'sentiment' in item ? 
+            (item as any).sentiment : 
+            calculateSentiment(item.headline + ' ' + item.summary);
+            
+          return {
+            title: item.headline,
+            description: item.summary,
+            url: item.url,
+            publishedAt: new Date(item.datetime * 1000).toISOString(),
+            source: { name: item.source },
+            sentiment: itemSentiment
+          };
+        });
         
         // Calcular sentimento médio
         const totalSentiment = articles.reduce((sum, article) => {

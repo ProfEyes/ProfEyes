@@ -6,6 +6,20 @@ import { LanguageSelector } from "@/components/ui/language-selector";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { Link } from "@/components/ui/link";
 import { cn } from "@/lib/utils";
+import { 
+  ChevronDown, 
+  ChevronRight, 
+  Home, 
+  LayoutDashboard, 
+  Settings, 
+  BookOpen, 
+  Radio, 
+  Newspaper,
+  LogOut,
+  User,
+  UserCircle,
+  MessageSquare
+} from "lucide-react";
 
 const Navbar = () => {
   const { notifications, unreadCount, toggleNotifications } = useNotifications();
@@ -64,10 +78,26 @@ const Navbar = () => {
             )}
             <Bell className="h-5 w-5 text-white/80" />
           </Button>
-          <Link href="/settings">
-            <Button variant="default" size="sm" className="ml-4">
-              {t('nav.settings')}
-            </Button>
+          <Link
+            href="/settings"
+            className={cn(
+              "flex items-center gap-2 rounded-lg px-3 py-2 text-white/70 transition-all hover:text-white",
+              pathname === "/settings" && "bg-white/10 text-white"
+            )}
+          >
+            <Settings className="h-4 w-4" />
+            <span>{t('nav.settings')}</span>
+          </Link>
+          
+          <Link
+            href="/support"
+            className={cn(
+              "flex items-center gap-2 rounded-lg px-3 py-2 text-white/70 transition-all hover:text-white",
+              pathname === "/support" && "bg-white/10 text-white"
+            )}
+          >
+            <MessageSquare className="h-4 w-4" />
+            <span>{t('nav.support') || "Suporte"}</span>
           </Link>
         </div>
       </div>

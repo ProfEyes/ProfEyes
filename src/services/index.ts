@@ -48,7 +48,7 @@ export {
 export { getLatestPrices } from './getLatestPrices';
 
 // Exportar funções de notícias
-export { fetchMarketNews } from './newsService';
+export { fetchMarketNews } from './news';
 
 // Exportar funções de análise de sentimento
 export { analyzeSentiment } from './sentimentAnalysis';

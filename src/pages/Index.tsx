@@ -425,12 +425,17 @@ const Index = () => {
         
         <div className="flex items-center justify-between relative z-10">
           <div className="space-y-1">
-            <h1 className="text-3xl font-bold tracking-tight bg-gradient-to-r from-white to-white/60 bg-clip-text text-transparent 
-                          drop-shadow-[0_0px_10px_rgba(255,255,255,0.1)]">
-              Dashboard
+            <h1 className="text-3xl font-bold tracking-tight relative pb-1
+                          text-white
+                          drop-shadow-[0_0px_6px_rgba(255,255,255,0.2)]">
+              <span className="relative">
+                <span className="relative z-10">Dashboard</span>
+                <span className="absolute -bottom-1 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-white/50 to-transparent"></span>
+                <span className="absolute -bottom-2 left-1/4 w-1/2 h-[1px] bg-gradient-to-r from-transparent via-white/30 to-transparent"></span>
+              </span>
             </h1>
-            <p className="text-muted-foreground opacity-80 text-sm">
-              Acompanhe o mercado em tempo real
+            <p className="text-sm text-white/60 tracking-wide pl-0">
+              {t('signals.advanced.monitoring')}
             </p>
           </div>
           <div className="flex gap-2">
@@ -446,11 +451,11 @@ const Index = () => {
               {isLoading || isRefreshing ? (
                 <>
                   <RefreshCw className="h-3.5 w-3.5 opacity-80 animate-spin" />
-                  <span className="animate-pulse">Atualizando...</span>
+                  <span className="animate-pulse">{t('dashboard.signals.loading')}</span>
                 </>
               ) : (
                 <>
-                  <RefreshCw className="h-3.5 w-3.5 opacity-80" /> Atualizar Todos
+                  <RefreshCw className="h-3.5 w-3.5 opacity-80" /> {t('dashboard.refresh.all')}
                 </>
               )}
             </Button>

@@ -2,56 +2,31 @@ import { supabase } from "@/integrations/supabase/client";
 import { MarketNews } from "./types";
 import { API_KEYS } from "./apiKeys";
 
-// Array de URLs de imagens de bancos de fotos gratuitos para notícias financeiras
-const STOCK_IMAGES = [
-  "https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?w=600&auto=format&fit=crop&q=80",
-  "https://images.unsplash.com/photo-1535320903710-d993d3d77d29?w=600&auto=format&fit=crop&q=80",
-  "https://images.unsplash.com/photo-1560221328-12fe60f83ab8?w=600&auto=format&fit=crop&q=80",
-  "https://images.unsplash.com/photo-1559526324-593bc073d938?w=600&auto=format&fit=crop&q=80",
-  "https://images.unsplash.com/photo-1569025690938-a00729c9e1f9?w=600&auto=format&fit=crop&q=80",
-  "https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=600&auto=format&fit=crop&q=80",
-  "https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=600&auto=format&fit=crop&q=80",
-  "https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f?w=600&auto=format&fit=crop&q=80",
-  "https://images.unsplash.com/photo-1526304640581-d334cdbbf45e?w=600&auto=format&fit=crop&q=80",
-  "https://images.unsplash.com/photo-1607082350899-7e105aa886ae?w=600&auto=format&fit=crop&q=80",
-  "https://images.unsplash.com/photo-1612178537253-bccd437b730e?w=600&auto=format&fit=crop&q=80",
-  "https://images.unsplash.com/photo-1604594849809-dfedbc827105?w=600&auto=format&fit=crop&q=80",
-  "https://images.unsplash.com/photo-1560520653-9e0e4c89eb11?w=600&auto=format&fit=crop&q=80"
-];
+// Adicionar controle de taxa para Finnhub
+const FINNHUB_RATE_LIMIT = 60; // 60 requisições por minuto
+let finnhubRequestCount = 0;
+let finnhubRateLimitReset = Date.now();
 
-// Mapa para rastrear quais imagens já foram usadas
-let usedImages: Record<string, boolean> = {};
-
-// Função para obter uma imagem aleatória não utilizada do banco de imagens
-function getRandomStockImage(): string {
-  // Se todas as imagens já foram usadas, reiniciar o controle
-  if (Object.keys(usedImages).length >= STOCK_IMAGES.length) {
-    usedImages = {};
+// Função para verificar e atualizar o controle de taxa
+function checkFinnhubRateLimit(): boolean {
+  const now = Date.now();
+  
+  // Reiniciar contador após 1 minuto
+  if (now - finnhubRateLimitReset >= 60000) {
+    finnhubRequestCount = 0;
+    finnhubRateLimitReset = now;
+    return true;
   }
   
-  // Tentar encontrar uma imagem não utilizada
-  let attempts = 0;
-  let imageUrl = '';
-  
-  while (attempts < STOCK_IMAGES.length) {
-    const randomIndex = Math.floor(Math.random() * STOCK_IMAGES.length);
-    imageUrl = STOCK_IMAGES[randomIndex];
-    
-    if (!usedImages[imageUrl]) {
-      usedImages[imageUrl] = true;
-      break;
-    }
-    
-    attempts++;
+  // Verificar se ainda temos requisições disponíveis
+  if (finnhubRequestCount < FINNHUB_RATE_LIMIT) {
+    finnhubRequestCount++;
+    return true;
   }
   
-  // Se não conseguir encontrar uma imagem não utilizada, usar qualquer uma
-  if (!imageUrl) {
-    const randomIndex = Math.floor(Math.random() * STOCK_IMAGES.length);
-    imageUrl = STOCK_IMAGES[randomIndex];
-  }
-  
-  return imageUrl;
+  // Limite excedido
+  console.warn(`Limite de requisições Finnhub excedido (${FINNHUB_RATE_LIMIT}/min). Aguarde ${Math.ceil((finnhubRateLimitReset + 60000 - now)/1000)} segundos.`);
+  return false;
 }
 
 // Mapeamento de empresas para seus símbolos
@@ -178,29 +153,64 @@ Object.entries(additionalFullNames).forEach(([symbol, fullName]) => {
 export { symbolToCompanyName };
 
 // Função para buscar notícias de mercado
-export async function fetchMarketNews(options: { limit?: number; symbols?: string[] } = {}): Promise<MarketNews[]> {
+export async function fetchMarketNews(options: { 
+  limit?: number; 
+  symbols?: string[]; 
+  category?: 'general' | 'forex' | 'crypto' | 'merger';
+  minId?: number;
+  language?: string;
+} = {}): Promise<MarketNews[]> {
   try {
-    console.log('Buscando notícias de mercado via Finnhub...');
+    console.log('Buscando notícias de mercado via Finnhub (prioridade CNBC)...');
     const limit = options.limit || 10;
     const symbols = options.symbols || [];
+    const category = options.category || 'general';
+    const minId = options.minId || 0;
+    const language = options.language || 'en';
     
     // Verificar se há dados em localStorage antes de fazer chamada API
     try {
-      const cachedNews = localStorage.getItem('cached_market_news');
-      const cachedTimestamp = localStorage.getItem('cached_market_news_timestamp');
+      // Criar uma chave de cache baseada nos parâmetros para diferenciar diferentes tipos de consultas
+      const cacheKey = `cached_market_news_${category}_${minId}_${symbols.join('_')}`;
+      const cachedNews = localStorage.getItem(cacheKey);
+      const cachedTimestamp = localStorage.getItem(`${cacheKey}_timestamp`);
       
       if (cachedNews && cachedTimestamp) {
         const parsedNews = JSON.parse(cachedNews);
         const timestamp = parseInt(cachedTimestamp, 10);
         const now = Date.now();
         
-        // Se o cache tiver menos de 30 minutos, usar os dados em cache
-        if (now - timestamp < 30 * 60 * 1000 && parsedNews.length > 0) {
-          console.log('Usando notícias em cache do localStorage');
+        // Reduzir o tempo de cache para 15 minutos para manter as notícias mais frescas
+        if (now - timestamp < 15 * 60 * 1000 && parsedNews.length > 0) {
+          console.log(`Usando notícias em cache do localStorage para ${category}`);
+          
+          // Filtrar para remover notícias da SeekingAlpha do cache
+          const filteredNews = parsedNews.filter(item => 
+            item.source !== 'SeekingAlpha' && 
+            item.source !== 'Yahoo' && 
+            !item.source.includes('Yahoo')
+          );
+          
+          // Priorizar notícias da CNBC com imagens
+          const cnbcNews = filteredNews.filter(item => 
+            item.source === 'CNBC' && item.imageUrl && item.imageUrl.trim() !== ''
+          );
+          const otherNews = filteredNews.filter(item => 
+            item.source !== 'CNBC' && item.imageUrl && item.imageUrl.trim() !== ''
+          );
+          
+          // Combinar com CNBC primeiro
+          const sortedNews = [...cnbcNews, ...otherNews];
+          
           // Otimização: retornar apenas a quantidade solicitada sem processar todos os dados
-          const limitedNews = parsedNews.slice(0, limit);
-          // Atualize a página em segundo plano após retornar dados do cache
-          setTimeout(() => refreshNewsInBackground(options), 10);
+          const limitedNews = sortedNews.slice(0, limit);
+          
+          // Atualizar em segundo plano apenas se o cache tiver mais de 5 minutos
+          if (now - timestamp > 5 * 60 * 1000) {
+            // Atualize a página em segundo plano após retornar dados do cache
+            setTimeout(() => refreshNewsInBackground(options), 10);
+          }
+          
           return limitedNews;
         }
       }
@@ -211,7 +221,12 @@ export async function fetchMarketNews(options: { limit?: number; symbols?: strin
     
     // Tentar buscar notícias do Finnhub
     try {
-      // Se temos símbolos específicos, buscar notícias para cada um
+      // Primeiro verificar se estamos dentro do limite de taxa
+      if (!checkFinnhubRateLimit()) {
+        throw new Error('Limite de requisições Finnhub excedido. Tente novamente mais tarde.');
+      }
+
+      // 1. Se temos símbolos específicos, buscar notícias para cada símbolo
       if (symbols.length > 0) {
         let allNews: MarketNews[] = [];
         const today = new Date();
@@ -221,14 +236,23 @@ export async function fetchMarketNews(options: { limit?: number; symbols?: strin
         const from = sevenDaysAgo.toISOString().split('T')[0];
         const to = today.toISOString().split('T')[0];
         
-        // Limitar a quantidade de símbolos para evitar muitas chamadas
-        const limitedSymbols = symbols.slice(0, 3);
+        // Limitar a quantidade de símbolos para evitar exceder o limite
+        const limitedSymbols = symbols.slice(0, Math.min(2, symbols.length));
         
         for (const symbol of limitedSymbols) {
+          // Verificar o limite de taxa antes de cada chamada
+          if (!checkFinnhubRateLimit()) {
+            console.warn(`Limite de requisições atingido após processamento de alguns símbolos. Retornando dados parciais.`);
+            break;
+          }
+
+          // Buscar notícias relacionadas à empresa/símbolo
           const url = `https://finnhub.io/api/v1/company-news?symbol=${symbol}&from=${from}&to=${to}&token=${API_KEYS.FINNHUB.API_KEY}`;
           console.log(`Buscando notícias para ${symbol} via Finnhub (${from} até ${to})`);
           
-          const response = await fetch(url);
+          const response = await fetch(url, {
+            cache: 'no-store' // Forçar atualização para dados recentes
+          });
           
           if (!response.ok) {
             console.warn(`Erro ao buscar notícias para ${symbol}: ${response.status}`);
@@ -238,44 +262,108 @@ export async function fetchMarketNews(options: { limit?: number; symbols?: strin
           const data = await response.json();
           
           if (Array.isArray(data) && data.length > 0) {
-            const mappedNews = data.slice(0, Math.ceil(limit / limitedSymbols.length)).map(item => ({
-              id: `finnhub-${item.id || Date.now()}`,
-              headline: item.headline,
-              summary: item.summary,
-              url: item.url,
-              image: item.image || getRandomStockImage(),
-              source: item.source,
-              datetime: item.datetime * 1000, // Finnhub usa segundos, convertemos para ms
-              publishedAt: item.datetime * 1000, // Adicionar campo publishedAt para compatibilidade
-              related: [symbol],
-              sentiment: item.sentiment || (Math.random() * 2 - 1)
-            }));
+            // Filtrar para excluir SeekingAlpha
+            const filteredData = data.filter(item => 
+              item.source !== 'SeekingAlpha' && 
+              item.source !== 'Yahoo' && 
+              !item.source.includes('Yahoo')
+            );
             
-            allNews = [...allNews, ...mappedNews];
+            // Primeiro buscar notícias da CNBC com imagens
+            const cnbcNewsWithImages = filteredData.filter(item => 
+              item.source === 'CNBC' && 
+              item.image && 
+              item.image.trim() !== '' && 
+              (item.image.includes('cnbcfm.com') || item.image.includes('cnbc.com'))
+            );
+            
+            if (cnbcNewsWithImages.length > 0) {
+              // Se temos notícias CNBC, mapear e adicionar
+              const mappedNews = cnbcNewsWithImages.map(item => ({
+                id: `finnhub-${item.id || Date.now()}`,
+                title: item.headline || '',
+                summary: item.summary || '',
+                url: item.url || '',
+                imageUrl: item.image || '',
+                source: item.source,
+                datetime: item.datetime * 1000, // Finnhub usa segundos, convertemos para ms
+                published_at: new Date(item.datetime * 1000).toISOString(),
+                symbols: [symbol],
+                sentiment: 0,
+                category: item.category || 'business'
+              }));
+              
+              allNews = [...allNews, ...mappedNews];
+              continue; // Vá para o próximo símbolo se já encontramos CNBC
+            }
+            
+            // Se não encontramos CNBC, buscar outras fontes com imagens
+            const otherNewsWithImages = filteredData.filter(item => 
+              item.source !== 'CNBC' && 
+              item.source !== 'SeekingAlpha' && 
+              item.source !== 'Yahoo' && 
+              !item.source.includes('Yahoo') && 
+              item.image && 
+              item.image.trim() !== ''
+            );
+            
+            if (otherNewsWithImages.length > 0) {
+              const mappedNews = otherNewsWithImages.slice(0, Math.ceil(limit / limitedSymbols.length)).map(item => ({
+                id: `finnhub-${item.id || Date.now()}`,
+                title: item.headline || '',
+                summary: item.summary || '',
+                url: item.url || '',
+                imageUrl: item.image || '',
+                source: item.source,
+                datetime: item.datetime * 1000,
+                published_at: new Date(item.datetime * 1000).toISOString(),
+                symbols: [symbol],
+                sentiment: 0,
+                category: item.category || 'general'
+              }));
+              
+              allNews = [...allNews, ...mappedNews];
+            }
           }
         }
         
         if (allNews.length > 0) {
           // Ordenar por data (mais recentes primeiro)
-          allNews.sort((a, b) => b.datetime - a.datetime);
+          allNews.sort((a, b) => {
+            return (b.datetime || 0) - (a.datetime || 0);
+          });
+          
+          // Priorizar notícias da CNBC
+          const cnbcNews = allNews.filter(item => item.source === 'CNBC');
+          const otherNews = allNews.filter(item => item.source !== 'CNBC');
+          allNews = [...cnbcNews, ...otherNews];
       
-      // Salvar no localStorage para acesso mais rápido depois
-      try {
-            localStorage.setItem('cached_market_news', JSON.stringify(allNews));
-        localStorage.setItem('cached_market_news_timestamp', Date.now().toString());
-      } catch (saveError) {
-        console.warn('Erro ao salvar notícias no localStorage:', saveError);
-      }
+          // Salvar no localStorage para acesso mais rápido depois
+          try {
+            const cacheKey = `cached_market_news_company_${symbols.join('_')}`;
+            localStorage.setItem(cacheKey, JSON.stringify(allNews));
+            localStorage.setItem(`${cacheKey}_timestamp`, Date.now().toString());
+          } catch (saveError) {
+            console.warn('Erro ao salvar notícias no localStorage:', saveError);
+          }
       
           return allNews.slice(0, limit);
         }
       }
       
-      // Se não temos símbolos específicos ou não encontramos notícias, buscar notícias gerais
-      const url = `https://finnhub.io/api/v1/news?category=business&token=${API_KEYS.FINNHUB.API_KEY}`;
-      console.log('Buscando notícias gerais via Finnhub');
+      // 2. Se não temos símbolos específicos ou não encontramos notícias, buscar notícias gerais
+      // Verificar o limite de taxa novamente
+      if (!checkFinnhubRateLimit()) {
+        throw new Error('Limite de requisições Finnhub excedido. Tente novamente mais tarde.');
+      }
       
-      const response = await fetch(url);
+      // Buscar todas as notícias com a categoria especificada
+      const url = `https://finnhub.io/api/v1/news?category=${category}${minId > 0 ? `&minId=${minId}` : ''}&token=${API_KEYS.FINNHUB.API_KEY}`;
+      console.log(`Buscando notícias da categoria ${category} via Finnhub${minId > 0 ? ` com minId=${minId}` : ''}`);
+      
+      const response = await fetch(url, {
+        cache: 'no-store' // Forçar atualização para dados recentes
+      });
       
       if (!response.ok) {
         throw new Error(`Erro HTTP: ${response.status}`);
@@ -284,200 +372,325 @@ export async function fetchMarketNews(options: { limit?: number; symbols?: strin
       const data = await response.json();
       
       if (Array.isArray(data) && data.length > 0) {
-        // Filtrar notícias relacionadas a investimentos, dinheiro, criptomoedas
-        const financeKeywords = ['invest', 'financ', 'money', 'dinheiro', 'crypto', 'cripto', 'bitcoin', 'stock', 'market', 'mercado', 'bolsa', 'economia', 'economic'];
+        // Filtrar para excluir SeekingAlpha
+        const filteredData = data.filter(item => 
+          item.source !== 'SeekingAlpha' && 
+          item.source !== 'Yahoo' && 
+          !item.source.includes('Yahoo')
+        );
         
-        const filteredNews = data.filter(item => {
-          const headline = (item.headline || '').toLowerCase();
-          const summary = (item.summary || '').toLowerCase();
+        // Primeiro buscar notícias da CNBC com imagens
+        const cnbcNewsWithImages = filteredData.filter(item => 
+          item.source === 'CNBC' && 
+          item.image && 
+          item.image.trim() !== '' && 
+          (item.image.includes('cnbcfm.com') || item.image.includes('cnbc.com'))
+        );
+        
+        if (cnbcNewsWithImages.length > 0) {
+          // Mapear notícias da CNBC
+          const cnbcMappedNews = cnbcNewsWithImages.slice(0, limit).map(item => ({
+            id: `finnhub-${item.id || Date.now()}`,
+            title: item.headline || '',
+            summary: item.summary || '',
+            url: item.url || '',
+            imageUrl: item.image || '',
+            source: item.source,
+            datetime: item.datetime * 1000,
+            published_at: new Date(item.datetime * 1000).toISOString(),
+            symbols: item.related ? item.related.split(',').filter(Boolean) : [],
+            sentiment: 0,
+            category: item.category || 'business'
+          }));
           
-          // Verificar se alguma das palavras-chave está presente no título ou resumo
-          return financeKeywords.some(keyword => 
-            headline.includes(keyword) || summary.includes(keyword)
-          );
-        });
-        
-        // Se após a filtragem tivermos resultados suficientes, usá-los
-        // Caso contrário, usar os dados originais
-        const newsToMap = filteredNews.length >= limit/2 ? filteredNews : data;
-        
-        const mappedNews = newsToMap.slice(0, limit).map(item => ({
-          id: `finnhub-${item.id || Date.now()}`,
-          headline: item.headline,
-          summary: item.summary,
-          url: item.url,
-          image: item.image || getRandomStockImage(),
-          source: item.source,
-          datetime: item.datetime * 1000, // Finnhub usa segundos, convertemos para ms
-          publishedAt: item.datetime * 1000, // Adicionar campo publishedAt para compatibilidade
-          related: item.related ? item.related.split(',') : [],
-          sentiment: item.sentiment || (Math.random() * 2 - 1)
-        }));
-        
-        // Salvar no localStorage para acesso mais rápido depois
-        try {
-          localStorage.setItem('cached_market_news', JSON.stringify(mappedNews));
-          localStorage.setItem('cached_market_news_timestamp', Date.now().toString());
-        } catch (saveError) {
-          console.warn('Erro ao salvar notícias no localStorage:', saveError);
+          // Salvar no localStorage para acesso mais rápido depois
+          try {
+            const cacheKey = `cached_market_news_${category}_${minId}`;
+            localStorage.setItem(cacheKey, JSON.stringify(cnbcMappedNews));
+            localStorage.setItem(`${cacheKey}_timestamp`, Date.now().toString());
+          } catch (saveError) {
+            console.warn('Erro ao salvar notícias no localStorage:', saveError);
+          }
+          
+          return cnbcMappedNews.slice(0, limit);
         }
         
-        return mappedNews;
+        // Se não encontramos CNBC, buscar outras fontes com imagens (exceto SeekingAlpha)
+        const otherNewsWithImages = filteredData.filter(item => 
+          item.source !== 'CNBC' && 
+          item.source !== 'SeekingAlpha' && 
+          item.source !== 'Yahoo' && 
+          !item.source.includes('Yahoo') && 
+          item.image && 
+          item.image.trim() !== ''
+        );
+        
+        if (otherNewsWithImages.length > 0) {
+          const mappedNews = otherNewsWithImages.slice(0, limit).map(item => ({
+            id: `finnhub-${item.id || Date.now()}`,
+            title: item.headline || '',
+            summary: item.summary || '',
+            url: item.url || '',
+            imageUrl: item.image || '',
+            source: item.source,
+            datetime: item.datetime * 1000,
+            published_at: new Date(item.datetime * 1000).toISOString(),
+            symbols: item.related ? item.related.split(',').filter(Boolean) : [],
+            sentiment: 0,
+            category: item.category || 'general'
+          }));
+          
+          // Salvar no localStorage para acesso mais rápido depois
+          try {
+            const cacheKey = `cached_market_news_${category}_${minId}`;
+            localStorage.setItem(cacheKey, JSON.stringify(mappedNews));
+            localStorage.setItem(`${cacheKey}_timestamp`, Date.now().toString());
+          } catch (saveError) {
+            console.warn('Erro ao salvar notícias no localStorage:', saveError);
+          }
+          
+          return mappedNews.slice(0, limit);
+        }
       }
       
-      // Se não conseguimos obter notícias do Finnhub, gerar simuladas
-      throw new Error('Dados de notícias não encontrados na API Finnhub');
+      // Se não encontrou notícias
+      throw new Error(`Não foi possível encontrar notícias para a categoria ${category}`);
     } catch (finnhubError) {
       console.error('Erro ao buscar notícias via Finnhub:', finnhubError);
-      // Em caso de erro, continuar para a geração de notícias simuladas
+      throw finnhubError; // Propagate o erro para que o chamador possa tratá-lo
     }
-    
-    // Gerar notícias simuladas como fallback
-    console.log('Gerando notícias simuladas (fallback)...');
-    
-    // Lista de títulos de notícias simuladas
-    const simulatedTitles = [
-      "Análise de mercado: melhores investimentos para o próximo trimestre",
-      "Bitcoin e outras criptomoedas: tendências e perspectivas para investidores",
-      "Oportunidades de investimento em setores emergentes da economia digital",
-      "Relatório setorial: tecnologia financeira continua liderando inovação",
-      "Indicadores econômicos apontam novas oportunidades para investidores",
-      "Bancos centrais e criptomoedas: impactos nas estratégias de investimento",
-      "Análise técnica dos principais ativos financeiros do mercado",
-      "Investidores institucionais aumentam posições em criptomoedas",
-      "Resultados financeiros superam expectativas do mercado de capitais",
-      "Commodities e criptomoedas: diversificação para carteiras de investimento",
-      "Gestores de fundos revelam estratégias para investir em blockchain",
-      "Novas regulamentações para fintechs e impactos nos investimentos",
-      "Mercados emergentes apresentam oportunidades para investidores",
-      "Tecnologias blockchain transformando o setor financeiro global",
-      "Análise de fluxos globais de investimentos em ativos digitais"
-    ];
-
-    // Gerar notícias simuladas
-    const simulatedNews: MarketNews[] = simulatedTitles.map((title, index) => {
-      // Selecionar símbolos relacionados aleatoriamente
-      const relatedSymbols = symbols.length > 0 
-        ? [symbols[Math.floor(Math.random() * symbols.length)]] 
-        : ["BTC", "ETH", "AAPL", "MSFT", "GOOGL"].slice(0, 1 + Math.floor(Math.random() * 2));
-            
-      // Gerar data de publicação aleatória (até 48 horas atrás)
-      const publishedTime = Date.now() - (Math.floor(Math.random() * 48) * 3600000);
-            
-            return {
-        id: `news-${Date.now()}-${index}`,
-        headline: title,
-        summary: `Análise detalhada sobre ${title.toLowerCase()} com foco nos principais aspectos do mercado financeiro atual.`,
-        url: "#",
-        image: getRandomStockImage(),
-        source: ["ProfEyes Analytics", "Market Insights", "Financial Times", "Bloomberg", "Reuters"][Math.floor(Math.random() * 5)],
-        datetime: publishedTime, // Garante que é um timestamp em ms
-        publishedAt: publishedTime, // Campo adicional para compatibilidade
-        related: relatedSymbols,
-        sentiment: Math.random() * 2 - 1 // Valor entre -1 e 1
-            };
-          });
-          
-    // Salvar no localStorage para acesso mais rápido depois
-    try {
-      localStorage.setItem('cached_market_news', JSON.stringify(simulatedNews));
-      localStorage.setItem('cached_market_news_timestamp', Date.now().toString());
-    } catch (saveError) {
-      console.warn('Erro ao salvar notícias no localStorage:', saveError);
-    }
-    
-    return simulatedNews.slice(0, limit);
-    
   } catch (error) {
-    console.error('Erro ao gerar notícias de mercado simuladas:', error);
-    
-    // Retornar dados mínimos simulados em caso de erro
-    const timestamp = Date.now();
-    return [
-      {
-        id: `fallback-news-1-${timestamp}`,
-        headline: "Mercado de criptomoedas: análise das principais tendências",
-        summary: "Acompanhamento dos movimentos do Bitcoin e outras criptomoedas com análises para investidores.",
-        url: "#",
-        image: getRandomStockImage(),
-        source: "ProfEyes Analytics",
-        datetime: timestamp, // Garante que é um timestamp em ms
-        publishedAt: timestamp, // Campo adicional para compatibilidade
-        related: ["BTC", "ETH", "CRYPTO"],
-        sentiment: 0.2
-      },
-      {
-        id: `fallback-news-2-${timestamp+1000}`,
-        headline: "Guia de investimentos: estratégias para o cenário atual",
-        summary: "Análise completa das melhores oportunidades de investimento no mercado financeiro atual.",
-        url: "#",
-        image: getRandomStockImage(),
-        source: "ProfEyes Investimentos",
-        datetime: timestamp-3600000, // 1 hora atrás
-        publishedAt: timestamp-3600000,
-        related: ["INVEST", "MARKET"],
-        sentiment: 0.5
-      },
-      {
-        id: `fallback-news-3-${timestamp+2000}`,
-        headline: "Tecnologias financeiras revolucionando o mercado de pagamentos",
-        summary: "Como blockchain e outras tecnologias estão transformando o setor financeiro global.",
-        url: "#",
-        image: getRandomStockImage(),
-        source: "ProfEyes Tecnologia",
-        datetime: timestamp-7200000, // 2 horas atrás
-        publishedAt: timestamp-7200000,
-        related: ["FINTECH", "TECH"],
-        sentiment: 0.3
-      }
-    ];
+    console.error('Erro ao buscar notícias de mercado:', error);
+    throw error; // Propagate o erro para que o chamador possa tratá-lo
   }
 }
 
 // Função para atualizar as notícias em segundo plano sem bloqueio de UI
-async function refreshNewsInBackground(options: { limit?: number; symbols?: string[] } = {}) {
+async function refreshNewsInBackground(options: { 
+  limit?: number; 
+  symbols?: string[];
+  category?: 'general' | 'forex' | 'crypto' | 'merger';
+  minId?: number;
+  language?: string;
+} = {}) {
   try {
     const limit = options.limit || 10;
     const symbols = options.symbols || [];
-    const cacheTime = localStorage.getItem('cached_market_news_timestamp');
+    const category = options.category || 'general';
+    const minId = options.minId || 0;
+    const language = options.language || 'en';
+    
+    // Criar uma chave de cache baseada nos parâmetros
+    const cacheKey = symbols.length > 0 
+      ? `cached_market_news_company_${symbols.join('_')}`
+      : `cached_market_news_${category}_${minId}`;
+      
+    const cacheTime = localStorage.getItem(`${cacheKey}_timestamp`);
     const now = Date.now();
     
-    // Só atualizar se o cache for mais antigo que 5 minutos
-    if (!cacheTime || (now - parseInt(cacheTime, 10)) > 5 * 60 * 1000) {
-      console.log('Atualizando cache de notícias em segundo plano...');
+    // Rastrear a última tentativa de atualização em segundo plano
+    const lastBackgroundUpdate = localStorage.getItem('last_background_update_timestamp');
+    
+    // Só permitir atualizações em segundo plano a cada 5 minutos no máximo
+    if (lastBackgroundUpdate && (now - parseInt(lastBackgroundUpdate, 10)) < 5 * 60 * 1000) {
+      console.log('Atualização em segundo plano ignorada - última atualização muito recente');
+      return;
+    }
+    
+    // Registrar tentativa de atualização
+    localStorage.setItem('last_background_update_timestamp', now.toString());
+    
+    // Só atualizar se o cache for mais antigo que 15 minutos
+    if (!cacheTime || (now - parseInt(cacheTime, 10)) > 15 * 60 * 1000) {
+      console.log(`Atualizando cache de notícias em segundo plano para ${category}...`);
       
-      // Tente buscar notícias do Finnhub
+      // Verificar se estamos dentro do limite de taxa antes de continuar
+      if (!checkFinnhubRateLimit()) {
+        console.warn('Limite de requisições Finnhub excedido. Atualizando o cache mais tarde.');
+        return;
+      }
+      
+      // Tentar buscar notícias do Finnhub em segundo plano
       try {
-        // Se temos símbolos específicos, buscar notícias para cada um
-        // ... restante do código permanece igual
+        if (symbols.length > 0) {
+          // Lógica para atualizar notícias de empresas específicas
+          console.log(`Atualização em segundo plano para símbolos: ${symbols.join(', ')}`);
+          // Esta parte seria implementada se necessário
+        } else {
+          // Buscar notícias gerais da categoria especificada
+          const url = `https://finnhub.io/api/v1/news?category=${category}${minId > 0 ? `&minId=${minId}` : ''}&token=${API_KEYS.FINNHUB.API_KEY}`;
+          console.log(`Buscando notícias de ${category} em segundo plano${minId > 0 ? ` com minId=${minId}` : ''}`);
+          
+          const response = await fetch(url, {
+            cache: 'no-store' // Forçar atualização para dados recentes
+          });
+          
+          if (!response.ok) {
+            throw new Error(`Erro HTTP: ${response.status}`);
+          }
+          
+          const data = await response.json();
+          
+          if (Array.isArray(data) && data.length > 0) {
+            // Filtrar notícias com imagens
+            const newsWithImages = data.filter(item => item.image && item.image.trim() !== '');
+            
+            // Preferir notícias com imagens
+            let newsData = newsWithImages.length > 0 ? newsWithImages : data;
+            
+            // Preferir notícias da CNBC se disponíveis
+            const cnbcNews = newsData.filter(item => item.source === 'CNBC');
+            
+            if (cnbcNews.length > 0) {
+              newsData = cnbcNews;
+              console.log(`Encontradas ${cnbcNews.length} notícias da CNBC em segundo plano`);
+            }
+            
+            const mappedNews = newsData.slice(0, limit).map(item => ({
+              id: `finnhub-${item.id || Date.now()}`,
+              title: item.headline,
+              summary: item.summary,
+              url: item.url,
+              imageUrl: item.image || '', // Usar apenas imagens da API 
+              source: item.source,
+              datetime: item.datetime * 1000, // Finnhub usa segundos, convertemos para ms
+              published_at: new Date(item.datetime * 1000).toISOString(),
+              symbols: item.related ? item.related.split(',').filter(Boolean) : [],
+              sentiment: item.sentiment || 0,
+              category: item.category
+            }));
+            
+            // Salvar no localStorage para acesso mais rápido depois
+            try {
+              localStorage.setItem(cacheKey, JSON.stringify(mappedNews));
+              localStorage.setItem(`${cacheKey}_timestamp`, Date.now().toString());
+              console.log('Cache de notícias atualizado com sucesso em segundo plano');
+            } catch (saveError) {
+              console.warn('Erro ao salvar notícias no localStorage:', saveError);
+            }
+          }
+        }
       } catch (finnhubError) {
         console.error('Erro ao buscar notícias via Finnhub em segundo plano:', finnhubError);
       }
+    } else {
+      console.log('Cache ainda recente, atualização em segundo plano ignorada');
     }
   } catch (error) {
     console.warn('Erro na atualização de notícias em segundo plano:', error);
   }
 }
 
-// Substituir a função fetchFinnhubNews por uma versão simulada
-async function fetchFinnhubNews(): Promise<MarketNews[]> {
-  // Gerar notícias simuladas
-  const newsCount = 10;
-  const simulatedNews: MarketNews[] = [];
-  
-  for (let i = 0; i < newsCount; i++) {
-    simulatedNews.push({
-      id: `finnhub-news-${Date.now()}-${i}`,
-      headline: `Notícia ${i+1}: Análise de mercado e perspectivas financeiras`,
-      summary: `Conteúdo simulado para notícia ${i+1} com informações relevantes sobre o mercado financeiro.`,
-      url: "#",
-      image: getRandomStockImage(),
-      source: "ProfEyes Simulated News",
-      datetime: Date.now() - (i * 3600000), // Cada notícia é 1 hora mais antiga
-      related: ["MARKET"],
-      sentiment: Math.random() * 2 - 1
+// Função específica para buscar notícias de empresas
+export async function fetchCompanyNews(options: {
+  symbol: string; // Símbolo da empresa (obrigatório)
+  from?: string; // Data de início YYYY-MM-DD (padrão: 7 dias atrás)
+  to?: string;   // Data final YYYY-MM-DD (padrão: hoje)
+  limit?: number; // Limite de notícias a retornar
+}): Promise<MarketNews[]> {
+  try {
+    if (!options.symbol) {
+      throw new Error('Symbol é obrigatório para buscar notícias de empresas');
+    }
+
+    const symbol = options.symbol;
+    const limit = options.limit || 10;
+    
+    // Definir datas padrão se não fornecidas
+    const today = new Date();
+    const sevenDaysAgo = new Date(today);
+    sevenDaysAgo.setDate(today.getDate() - 7);
+    
+    const from = options.from || sevenDaysAgo.toISOString().split('T')[0];
+    const to = options.to || today.toISOString().split('T')[0];
+    
+    // Verificar cache primeiro
+    const cacheKey = `cached_company_news_${symbol}_${from}_${to}`;
+    try {
+      const cachedNews = localStorage.getItem(cacheKey);
+      const cachedTimestamp = localStorage.getItem(`${cacheKey}_timestamp`);
+      
+      if (cachedNews && cachedTimestamp) {
+        const parsedNews = JSON.parse(cachedNews);
+        const timestamp = parseInt(cachedTimestamp, 10);
+        const now = Date.now();
+        
+        // Cache válido por 30 minutos
+        if (now - timestamp < 30 * 60 * 1000 && parsedNews.length > 0) {
+          console.log(`Usando notícias em cache para ${symbol}`);
+          return parsedNews.slice(0, limit);
+        }
+      }
+    } catch (localStorageError) {
+      console.warn('Erro ao acessar localStorage:', localStorageError);
+    }
+    
+    // Verificar limite de taxa
+    if (!checkFinnhubRateLimit()) {
+      throw new Error('Limite de requisições Finnhub excedido. Tente novamente mais tarde.');
+    }
+    
+    // Buscar notícias da empresa
+    console.log(`Buscando notícias para ${symbol} (${from} até ${to})`);
+    const url = `https://finnhub.io/api/v1/company-news?symbol=${symbol}&from=${from}&to=${to}&token=${API_KEYS.FINNHUB.API_KEY}`;
+    
+    const response = await fetch(url, {
+      cache: 'no-store' // Forçar atualização para dados recentes
     });
+    
+    if (!response.ok) {
+      throw new Error(`Erro HTTP: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    
+    if (!Array.isArray(data) || data.length === 0) {
+      console.warn(`Nenhuma notícia encontrada para ${symbol}`);
+      return [];
+    }
+    
+    // Filtrar notícias com imagens
+    const newsWithImages = data.filter(item => item.image && item.image.trim() !== '');
+    
+    // Priorizar notícias com imagens, mas incluir todas se necessário
+    let filteredNews = newsWithImages.length > 0 ? newsWithImages : data;
+    
+    // Dar preferência a notícias da CNBC, mas não limitar apenas a elas
+    const cnbcNews = filteredNews.filter(item => item.source === 'CNBC');
+    
+    // Se temos notícias da CNBC, colocá-las no início da lista
+    let prioritizedNews = [...filteredNews];
+    if (cnbcNews.length > 0) {
+      const otherNews = filteredNews.filter(item => item.source !== 'CNBC');
+      prioritizedNews = [...cnbcNews, ...otherNews];
+    }
+    
+    // Mapear os dados para o formato MarketNews
+    const mappedNews = prioritizedNews.slice(0, limit).map(item => ({
+      id: `finnhub-${item.id || Date.now()}`,
+      title: item.headline,
+      summary: item.summary,
+      url: item.url,
+      imageUrl: item.image || '', // Usar apenas imagens da API
+      source: item.source,
+      datetime: item.datetime * 1000,
+      published_at: new Date(item.datetime * 1000).toISOString(),
+      symbols: [symbol],
+      sentiment: item.sentiment || 0,
+      category: item.category
+    }));
+    
+    // Salvar no cache
+    try {
+      localStorage.setItem(cacheKey, JSON.stringify(mappedNews));
+      localStorage.setItem(`${cacheKey}_timestamp`, Date.now().toString());
+    } catch (saveError) {
+      console.warn('Erro ao salvar notícias no localStorage:', saveError);
+    }
+    
+    return mappedNews;
+  } catch (error) {
+    console.error(`Erro ao buscar notícias para ${options.symbol}:`, error);
+    throw error;
   }
-  
-  return simulatedNews;
 } 

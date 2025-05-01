@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -22,8 +22,29 @@ export function TradingPreferences({
   const [riskLevel, setRiskLevel] = useState(defaultRiskLevel);
   const [currency, setCurrency] = useState(defaultCurrency);
 
+  // Carregar preferências salvas ao inicializar o componente
+  useEffect(() => {
+    const savedRiskLevel = localStorage.getItem("trading-risk-level");
+    if (savedRiskLevel) {
+      setRiskLevel(savedRiskLevel);
+    }
+    
+    const savedCurrency = localStorage.getItem("trading-currency");
+    if (savedCurrency) {
+      setCurrency(savedCurrency);
+    }
+  }, []);
+
   const handleRiskLevelChange = (value: string) => {
     setRiskLevel(value);
+    localStorage.setItem("trading-risk-level", value);
+    
+    // Aplicar configuração ao sistema
+    document.documentElement.setAttribute('data-risk-level', value);
+    
+    // Disparar evento para atualizar outras partes do sistema
+    window.dispatchEvent(new CustomEvent('risk-level-change', { detail: value }));
+    
     if (onRiskLevelChange) {
       onRiskLevelChange(value);
     }
@@ -31,8 +52,31 @@ export function TradingPreferences({
 
   const handleCurrencyChange = (value: string) => {
     setCurrency(value);
+    localStorage.setItem("trading-currency", value);
+    
+    // Aplicar configuração ao sistema
+    document.documentElement.setAttribute('data-currency', value);
+    
+    // Atualizar configuração para todos os elementos que usam moeda
+    const currencySymbol = getCurrencySymbol(value);
+    document.documentElement.style.setProperty('--currency-symbol', `"${currencySymbol}"`);
+    
+    // Disparar evento para atualizar outras partes do sistema
+    window.dispatchEvent(new CustomEvent('currency-change', { detail: { currency: value, symbol: currencySymbol } }));
+    
     if (onCurrencyChange) {
       onCurrencyChange(value);
+    }
+  };
+  
+  // Função auxiliar para obter o símbolo da moeda
+  const getCurrencySymbol = (currencyCode: string): string => {
+    switch (currencyCode) {
+      case 'usd': return '$';
+      case 'brl': return 'R$';
+      case 'eur': return '€';
+      case 'btc': return '₿';
+      default: return '$';
     }
   };
 

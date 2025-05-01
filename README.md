@@ -209,3 +209,137 @@ O sistema utiliza a API de autenticação e banco de dados do Supabase:
 - Nova tabela `user_management_logs` para rastreamento de atividades
 - Políticas RLS configuradas para controle de acesso
 - Triggers para atribuição automática de permissões de administrador
+
+## Melhorias no Sistema de Suporte
+
+O sistema de suporte do ProfEyes foi aprimorado com as seguintes funcionalidades:
+
+### Análise Contextual em Tempo Real
+- Sistema inteligente que analisa as mensagens do usuário em tempo real
+- Identificação automática de intenções e entidades nas perguntas
+- Adaptação da complexidade das respostas com base no nível do usuário (iniciante, intermediário, avançado)
+- Personalização das respostas com base no histórico de conversas e tópicos de interesse
+
+### Respostas Personalizadas
+- Geração de respostas dinâmicas e contextuais, nunca pré-prontas
+- Análise de sentimento para adaptar o tom da resposta (positivo, negativo, neutro)
+- Adaptação da resposta com base na complexidade da pergunta
+- Filtragem inteligente de informações relevantes baseada em sub-tópicos identificados
+
+### Experiência do Usuário Aprimorada
+- Indicador visual de digitação em tempo real
+- Interface de chat responsiva e animações suaves
+- Rolagem automática para novas mensagens
+- Adaptação das respostas ao idioma do usuário (Português, Inglês, Espanhol)
+
+### Sistema de Aprendizado Contínuo
+- Armazenamento do histórico de perguntas e respostas para aprendizado
+- Busca por conhecimento prévio para perguntas similares
+- Adaptação sutil de respostas anteriores para parecerem novas quando relevantes
+- Contextualização baseada nos tópicos de interesse do usuário
+
+Estas melhorias tornam o suporte mais eficiente, personalizado e capaz de responder com precisão às necessidades dos usuários em tempo real.
+
+# Sistema de Transmissões Ao Vivo
+
+O ProfEyes agora conta com um sistema completo de transmissões ao vivo que permite que especialistas compartilhem análises, instruções e insights em tempo real com a comunidade.
+
+## Funcionalidades Principais
+
+- **Transmissões em Tempo Real**: Especialistas autorizados podem iniciar transmissões ao vivo diretamente do aplicativo
+- **Comentários em Tempo Real**: Usuários podem interagir com o apresentador através de comentários durante a transmissão
+- **Sistema de Likes**: Os usuários podem curtir comentários (limitado a um like por usuário por comentário)
+- **Interface Moderna**: Design responsivo para uma experiência de visualização de alta qualidade
+
+## Como Configurar o Sistema de Transmissões
+
+1. **Executar a Migração do Banco de Dados**:
+   ```bash
+   npx supabase migration up
+   ```
+
+2. **Conceder Permissões para Transmitir**:
+   Para conceder permissão de transmissão a um usuário específico, use o seguinte comando SQL no Supabase:
+
+   ```sql
+   INSERT INTO public.stream_permissions (user_id, can_create, can_moderate)
+   VALUES ('ID_DO_USUÁRIO', true, false);
+   ```
+
+   Substitua `ID_DO_USUÁRIO` pelo ID do usuário no Supabase Auth.
+
+## Como Usar
+
+1. **Assistir Transmissões**:
+   - Acesse a aba "Ao Vivo" na navegação principal
+   - Selecione uma transmissão ativa na lista lateral
+   - Interaja através de comentários em tempo real
+   - Curta comentários que você achar relevantes
+
+2. **Iniciar uma Transmissão** (requer permissão):
+   - Clique no botão "Iniciar Transmissão" no topo da página
+   - Preencha o título, descrição e tags para sua transmissão
+   - Clique em "Iniciar Transmissão" para começar imediatamente
+
+## Tecnologias Utilizadas
+
+- **Supabase**: Armazenamento de dados e sistema de autenticação
+- **Transmissão em Tempo Real**: Websockets para comentários e notificações
+- **Video Streaming**: Sistema integrado de streaming de vídeo
+
+## Solução de Problemas
+
+- **Permissão Negada ao Iniciar Transmissão**: Verifique se o usuário tem a permissão `can_create` na tabela `stream_permissions`
+- **Comentários Não Aparecem**: Certifique-se de que as políticas RLS estão configuradas corretamente
+- **Problemas de Conexão**: Verifique a conexão com a internet e se o Supabase está acessível
+
+Para mais informações sobre configurações avançadas, consulte a documentação do Supabase.
+
+## Transmissões ao Vivo (Live Streaming)
+
+O sistema agora suporta transmissões ao vivo reais utilizando PeerJS, uma biblioteca que facilita a comunicação WebRTC (Web Real-Time Communication) peer-to-peer diretamente no navegador sem necessidade de servidores dedicados.
+
+### Recursos implementados:
+
+1. **Transmissão ao vivo em tempo real** - Os usuários podem iniciar transmissões usando sua câmera e microfone diretamente pelo navegador.
+2. **Visualização em tempo real** - Os espectadores podem assistir às transmissões com baixa latência.
+3. **Chat ao vivo** - Comentários e interações em tempo real durante as transmissões.
+4. **Controle de permissões** - Apenas usuários autorizados podem iniciar transmissões.
+5. **Comunicação peer-to-peer** - As transmissões são estabelecidas diretamente entre o transmissor e os espectadores.
+
+### Componentes do sistema:
+
+- **PeerPublisher** - Gerencia transmissões de vídeo e áudio usando PeerJS.
+- **PeerViewer** - Permite visualização das transmissões pelos espectadores.
+- **LiveStreamContext** - Contexto React que gerencia estado e interações com o banco de dados.
+
+### Tecnologias utilizadas:
+
+- **PeerJS** - Simplifica a comunicação WebRTC peer-to-peer
+- **WebRTC** - Tecnologia para transmissão em tempo real
+- **Supabase** - Banco de dados para armazenamento de metadados
+- **React** - Interface de usuário
+
+### Como utilizar:
+
+1. Para iniciar uma transmissão, acesse a página "Transmissões" e clique em "Iniciar Transmissão".
+2. Preencha os detalhes e permita acesso à câmera e microfone.
+3. Sua transmissão estará disponível para todos os usuários da plataforma.
+
+### Configuração do PeerJS:
+
+O sistema está configurado para usar o servidor público do PeerJS (`0.peerjs.com`) para sinalização. As configurações podem ser encontradas em:
+
+```javascript
+// src/services/webrtc/peerService.ts
+export const DEFAULT_PEER_CONFIG: PeerConfig = {
+  host: '0.peerjs.com',
+  secure: true,
+  port: 443,
+  path: '/',
+  debug: 1,
+  // ...
+};
+```
+
+Para produção, considere hospedar seu próprio servidor PeerJS para maior controle e desempenho.
