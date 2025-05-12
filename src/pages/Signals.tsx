@@ -31,6 +31,14 @@ import { TimeZoneSelector } from "@/components/dashboard/TimeZoneSelector";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useTimeZone } from "@/contexts/TimeZoneContext";
 
+// Cache de sinais para o dia
+interface GenericCache {
+  signals: PlaceholderSignal[];
+  date: string; 
+}
+
+let signalCache: GenericCache | null = null;
+
 // Constantes para controle dos tempos dos sinais
 const SIGNAL_EXPIRY_TIME = 5; // Tempo de expiração em minutos (sempre 5 minutos)
 const TIME_BETWEEN_SIGNALS = 10; // Tempo entre sinais (10 minutos após o horário de Reentrada 2)
@@ -53,7 +61,8 @@ const ATIVOS_CATEGORIAS: Record<string, string> = {
 const SignalStrength = {
   STRONG: 'STRONG' as SignalStrengthEnum,
   MODERATE: 'MODERATE' as SignalStrengthEnum,
-  WEAK: 'WEAK' as SignalStrengthEnum
+  WEAK: 'WEAK' as SignalStrengthEnum,
+  VERY_STRONG: 'VERY_STRONG' as SignalStrengthEnum
 };
 
 // Estilos para as animações
@@ -64,8 +73,8 @@ const styles = `
   }
   
   @keyframes glowPulse {
-    0%, 100% { box-shadow: 0 0 8px rgba(255, 255, 255, 0.05); }
-    50% { box-shadow: 0 0 18px rgba(255, 255, 255, 0.12); }
+    0%, 100% { box-shadow: 0 0 8px rgba(0, 0, 0, 0.2); }
+    50% { box-shadow: 0 0 18px rgba(0, 0, 0, 0.25); }
   }
   
   @keyframes gradientShift {
@@ -89,10 +98,29 @@ const styles = `
     50% { opacity: 1; }
   }
   
-  /* Remover animações para sinais completados */
+  /* Animações para sinais completados */
+  @keyframes winPulse {
+    0% { background-color: rgba(34, 197, 94, 0.05); box-shadow: 0 0 15px rgba(34, 197, 94, 0.1); }
+    50% { background-color: rgba(34, 197, 94, 0.1); box-shadow: 0 0 25px rgba(34, 197, 94, 0.15); }
+    100% { background-color: rgba(34, 197, 94, 0.05); box-shadow: 0 0 15px rgba(34, 197, 94, 0.1); }
+  }
+  
+  @keyframes lossPulse {
+    0% { background-color: rgba(220, 38, 38, 0.1); box-shadow: 0 0 15px rgba(220, 38, 38, 0.15); }
+    50% { background-color: rgba(220, 38, 38, 0.15); box-shadow: 0 0 25px rgba(220, 38, 38, 0.2); }
+    100% { background-color: rgba(220, 38, 38, 0.1); box-shadow: 0 0 15px rgba(220, 38, 38, 0.15); }
+  }
+  
+  @keyframes winConfetti {
+    0% { opacity: 0; transform: translateY(0) rotate(0); }
+    10% { opacity: 1; }
+    100% { opacity: 0; transform: translateY(-100px) rotate(720deg); }
+  }
+  
   .signal-completed-win {
-    background-color: rgba(34, 197, 94, 0.15) !important;
-    border: 1px solid rgba(34, 197, 94, 0.3) !important;
+    animation: winPulse 1.5s ease-in-out infinite;
+    background-color: rgba(34, 197, 94, 0.05) !important;
+    border: 1px solid rgba(34, 197, 94, 0.1) !important;
     position: relative;
     overflow: hidden;
     z-index: 1;
@@ -105,13 +133,14 @@ const styles = `
     left: 0;
     right: 0;
     bottom: 0;
-    background: linear-gradient(to bottom, rgba(34, 197, 94, 0.2), rgba(34, 197, 94, 0.05));
+    background: linear-gradient(to bottom, rgba(34, 197, 94, 0.1), rgba(34, 197, 94, 0.02));
     z-index: -1;
   }
   
   .signal-completed-loss {
-    background-color: rgba(220, 38, 38, 0.25) !important;
-    border: 1px solid rgba(220, 38, 38, 0.4) !important;
+    animation: lossPulse 1.5s ease-in-out infinite;
+    background-color: rgba(220, 38, 38, 0.1) !important;
+    border: 1px solid rgba(220, 38, 38, 0.15) !important;
     position: relative;
     overflow: hidden;
     z-index: 1;
@@ -124,12 +153,83 @@ const styles = `
     left: 0;
     right: 0;
     bottom: 0;
-    background: linear-gradient(to bottom, rgba(220, 38, 38, 0.3), rgba(220, 38, 38, 0.1));
+    background: linear-gradient(to bottom, rgba(220, 38, 38, 0.1), rgba(220, 38, 38, 0.02));
     z-index: -1;
   }
   
+  .confetti {
+    position: absolute;
+    width: 10px;
+    height: 10px;
+    background: radial-gradient(circle, rgba(255,255,255,1) 0%, rgba(34,197,94,0.7) 100%);
+    border-radius: 50%;
+    animation: winConfetti 2s ease-out forwards;
+  }
+  
+  /* Animações para os ícones de resultado */
+  @keyframes iconScaleIn {
+    0% { transform: scale(0); opacity: 0; }
+    40% { transform: scale(1.2); opacity: 1; }
+    60% { transform: scale(0.9); opacity: 1; }
+    100% { transform: scale(1); opacity: 1; }
+  }
+  
+  @keyframes winIconRotate {
+    0% { transform: scale(1) rotate(0deg); }
+    25% { transform: scale(1.2) rotate(-10deg); }
+    50% { transform: scale(1.2) rotate(10deg); }
+    75% { transform: scale(1.1) rotate(-5deg); }
+    100% { transform: scale(1) rotate(0deg); }
+  }
+  
+  @keyframes lossIconShake {
+    0%, 100% { transform: translateX(0); }
+    20% { transform: translateX(-10px); }
+    40% { transform: translateX(10px); }
+    60% { transform: translateX(-5px); }
+    80% { transform: translateX(5px); }
+  }
+  
+  .result-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    animation: iconScaleIn 0.5s ease-out forwards;
+    background: rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(5px);
+    box-shadow: 0 0 20px rgba(0, 0, 0, 0.4);
+    border: 2px solid;
+  }
+  
+  .win-icon {
+    border-color: rgba(34, 197, 94, 0.3);
+    animation: iconScaleIn 0.5s ease-out forwards, winIconRotate 2s ease-in-out 0.5s infinite;
+  }
+  
+  .loss-icon {
+    border-color: rgba(255, 80, 80, 0.3);
+    animation: iconScaleIn 0.5s ease-out forwards, lossIconShake 1s ease-in-out 0.5s infinite;
+  }
+  
+  .result-text {
+    font-size: 24px;
+    font-weight: bold;
+    text-align: center;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+    animation: iconScaleIn 0.5s ease-out forwards;
+    margin-top: 10px;
+  }
+  
+  /* Classe específica para a página de sinais - não afeta o Dashboard */
+  .signals-page-dark-gradient {
+    background: #000000;
+  }
+  
   .gradient-text {
-    background: linear-gradient(90deg, #ffffff, #e8e8e8, #ffffff);
+    background: linear-gradient(90deg, #ffffff, #aaaaaa, #ffffff);
     background-size: 200% auto;
     color: transparent;
     background-clip: text;
@@ -181,52 +281,39 @@ const styles = `
     transform: translateY(-1px);
   }
 
-  .signal-badge {
-    position: relative;
+  /* Estilo unificado para todos os cards de sinais */
+  .signal-card {
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(15px);
+    transition: all 0.3s ease;
     overflow: hidden;
   }
   
-  .signal-badge::after {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.1) 50%, rgba(255,255,255,0) 100%);
-    transform: translateX(-100%);
-    animation: shine 3s infinite;
-  }
-  
-  @keyframes shine {
-    100% {
-      transform: translateX(100%);
-    }
-  }
-  
-  .glow-hover {
-    transition: all 0.5s ease;
-    backdrop-filter: blur(8px);
-  }
-  
-  .glow-hover:hover {
+  .signal-card:hover {
+    border-color: rgba(255, 255, 255, 0.08);
+    background: rgba(5, 5, 10, 0.65);
     box-shadow: 0 0 20px rgba(255, 255, 255, 0.08);
     transform: translateY(-3px) scale(1.02);
-    backdrop-filter: blur(12px);
   }
-  
-  .loading-container {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding: 5rem 2rem;
-    background: rgba(15, 15, 25, 0.4);
-    border-radius: 1rem;
-    backdrop-filter: blur(15px);
-    border: 1px solid rgba(255, 255, 255, 0.07);
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
-    animation: glowPulse 3s ease-in-out infinite;
+
+  /* Estilo unificado para todos os divisores */
+  .signal-divider {
+    border-color: rgba(255, 255, 255, 0.05);
+  }
+
+  /* Estilo para tags/badges */
+  .signal-badge {
+    background: rgba(0, 0, 0, 0.5);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    color: rgba(255, 255, 255, 0.8);
+  }
+
+  /* Estilo para as caixas de informação */
+  .signal-info-box {
+    background: rgba(0, 0, 0, 0.8);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    backdrop-filter: blur(10px);
   }
   
   /* Classes específicas para a página de sinais */
@@ -235,7 +322,7 @@ const styles = `
     width: 200px;
     height: 200px;
     border-radius: 50%;
-    background: radial-gradient(circle, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0) 70%);
+    background: radial-gradient(circle, rgba(255,255,255,0.01) 0%, rgba(0,0,0,0) 70%);
     animation: subtleBreathing 4s infinite ease-in-out;
     z-index: 0;
   }
@@ -246,7 +333,7 @@ const styles = `
     height: 350px;
     border-radius: 50%;
     filter: blur(100px);
-    opacity: 0.07;
+    opacity: 0.03;
     z-index: 0;
     animation: subtleBreathing 7s infinite ease-in-out alternate;
   }
@@ -257,15 +344,16 @@ const styles = `
   
   /* Classe específica para os cartões da página de sinais */
   .signals-page-card-glass {
-    background: rgba(10, 10, 15, 0.35);
+    background: rgba(0, 0, 0, 0.6);
     backdrop-filter: blur(15px);
-    border: 1px solid rgba(255, 255, 255, 0.01);
+    border: 1px solid rgba(255, 255, 255, 0.05);
     transition: all 0.3s ease;
   }
   
   .signals-page-card-glass:hover {
-    background: rgba(12, 12, 18, 0.45);
-    border-color: rgba(255, 255, 255, 0.03);
+    background: rgba(5, 5, 10, 0.65);
+    border-color: rgba(255, 255, 255, 0.08);
+    box-shadow: 0 0 15px rgba(255, 255, 255, 0.05);
   }
   
   .shimmer-effect {
@@ -280,7 +368,7 @@ const styles = `
     left: -150%;
     width: 150%;
     height: 100%;
-    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.08), transparent);
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.04), transparent);
     animation: shimmer 3s infinite;
     transform: skewX(-20deg);
     z-index: 1;
@@ -289,6 +377,20 @@ const styles = `
   @keyframes shimmer {
     0% { left: -150%; }
     100% { left: 150%; }
+  }
+
+  .loading-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 5rem 2rem;
+    background: rgba(0, 0, 0, 0.6);
+    border-radius: 1rem;
+    backdrop-filter: blur(15px);
+    border: 1px solid rgba(255, 255, 255, 0.03);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+    animation: glowPulse 3s ease-in-out infinite;
   }
 `;
 
@@ -308,6 +410,18 @@ interface PlaceholderSignal extends TradingSignal {
   resultDetermined?: boolean;  // Flag para indicar se o resultado já foi determinado
 }
 
+// Adicionar a propriedade para o TypeScript no nível superior do arquivo
+declare global {
+  interface Window {
+    _cacheDailySignals?: PlaceholderSignal[];
+  }
+}
+
+// Adicionar esta interface estendida para garantir que id é uma propriedade
+interface SignalWithId extends TradingSignal {
+  id: string;
+}
+
 const Signals = () => {
   const { t } = useLanguage();
   const { convertTimeToSelected, adjustTime } = useTimeZone();
@@ -322,12 +436,12 @@ const Signals = () => {
   const [showFilters, setShowFilters] = useState(false);
   const [completedSignals, setCompletedSignals] = useState<Record<string, 'win' | 'loss'>>({});
   const [signalsToRemove, setSignalsToRemove] = useState<string[]>([]);
-  const [newPlaceholderSignal, setNewPlaceholderSignal] = useState<PlaceholderSignal | null>(null);
   const [signalCompletionCount, setSignalCompletionCount] = useState<{wins: number, losses: number}>({wins: 0, losses: 0});
   const [currentTime, setCurrentTime] = useState<Date>(new Date());
   const [winCount, setWinCount] = useState<number>(0); // Contador de ganhos consecutivos
   const [totalCount, setTotalCount] = useState<number>(0); // Contador total de resultados
   const queryClient = useQueryClient();
+  const [dashboardSignals, setDashboardSignals] = useState<TradingSignal[]>([]);
   
   // Função para converter o tempo de string para Date
   const convertTimeStringToDate = (timeString: string): Date => {
@@ -397,7 +511,7 @@ const Signals = () => {
   useEffect(() => {
     const checkExpiredSignals = () => {
       const now = new Date();
-
+      
       // Converter os sinais para PlaceholderSignal para poder modificá-los
       const currentSignals = queryClient.getQueryData<TradingSignal[]>(['tradingSignals']) || [];
       const modifiedSignals = [...currentSignals] as PlaceholderSignal[];
@@ -408,24 +522,32 @@ const Signals = () => {
       modifiedSignals.forEach((signal: PlaceholderSignal) => {
         if (signal.status === 'active' && !signal.result && !signal.resultDetermined) {
           // Verificar se já passou do tempo de reentrada 2 + 1 minuto
-          const gale2Time = convertTimeStringToDate(signal.gale2_time || '');
+          if (!signal.gale2_time) return;
+          
+          const gale2Time = convertTimeStringToDate(signal.gale2_time);
           
           // Adicionar 1 minuto ao tempo de reentrada 2
           const completionTime = new Date(gale2Time);
           completionTime.setMinutes(completionTime.getMinutes() + 1);
           
           if (isAfter(now, completionTime)) {
+            console.log(`Sinal ID: ${signal.id} (${signal.symbol}) completado às ${now.toLocaleTimeString()}`);
+            console.log(`Tempo de expiração era: ${completionTime.toLocaleTimeString()}`);
+            
             // Calcular se este sinal deve ser ganho ou perda, mantendo a proporção de 10:1
             let result: 'win' | 'loss';
             const updatedTotalCount = totalCount + 1;
             
-            // Se tivermos 10 ganhos consecutivos, o próximo deve ser perda
+            // Se tivermos WIN_LOSS_RATIO ganhos consecutivos, o próximo deve ser perda
             if (winCount >= WIN_LOSS_RATIO) {
               result = 'loss';
               setWinCount(0); // Resetar contagem de ganhos
+              console.log(`Resultado: LOSS após ${WIN_LOSS_RATIO} ganhos consecutivos. Resetando contador.`);
             } else {
               result = 'win';
-              setWinCount(winCount + 1); // Incrementar contador de ganhos
+              const newWinCount = winCount + 1;
+              setWinCount(newWinCount); // Incrementar contador de ganhos
+              console.log(`Resultado: WIN (${newWinCount}/${WIN_LOSS_RATIO} consecutivos)`);
             }
             
             setTotalCount(updatedTotalCount);
@@ -444,13 +566,11 @@ const Signals = () => {
             newCompleted[signal.id] = result;
             hasChanges = true;
             
-            // Agendar a remoção após a animação
+            // Agendar a rotação dos sinais após a animação (5 segundos)
+            console.log(`Agendando rotação do sinal ID: ${signal.id} em 5 segundos`);
+            const signalIdToRotate = signal.id;
             setTimeout(() => {
-              setSignalsToRemove(prev => [...prev, signal.id]);
-              
-              // Criar um novo sinal para substituir - usar a função de criar sinais baseada no ciclo
-              const newSignal = createRandomPlaceholderSignal();
-              setNewPlaceholderSignal(newSignal);
+              rotateSignals(signalIdToRotate);
             }, 5000);
           }
         }
@@ -468,11 +588,232 @@ const Signals = () => {
     // Verificar a cada 2 segundos
     const intervalId = setInterval(checkExpiredSignals, 2000);
     return () => clearInterval(intervalId);
-  }, [completedSignals, queryClient, createRandomPlaceholderSignal, winCount, totalCount, convertTimeStringToDate]);
+  }, [completedSignals, queryClient, convertTimeStringToDate, winCount, totalCount]);
+
+  // Função para rotacionar os sinais quando um é completado
+  const rotateSignals = useCallback((completedSignalId: string) => {
+    const currentSignals = queryClient.getQueryData<TradingSignal[]>(['tradingSignals']) || [];
+    
+    // Se não há sinais suficientes, não fazer nada
+    if (currentSignals.length < 4) return;
+    
+    console.log(`Rotacionando sinais após completar o sinal ID: ${completedSignalId}`);
+    
+    // Identificar todos os sinais, separando os da dashboard (que devem ser preservados)
+    const dashboardIds = dashboardSignals.map(s => s.id);
+    
+    // Vamos rotacionar apenas os sinais não-dashboard
+    const dashboardSignalsInList = currentSignals.filter(s => dashboardIds.includes(s.id));
+    let otherSignals = currentSignals.filter(s => !dashboardIds.includes(s.id));
+    
+    // Encontrar o índice do sinal completado
+    const completedIndex = otherSignals.findIndex(s => s.id === completedSignalId);
+    
+    // Se o sinal completado não foi encontrado entre os sinais não-dashboard, não fazer nada
+    if (completedIndex === -1) {
+      console.log('Sinal completado não encontrado na lista de sinais não-dashboard.');
+      return;
+    }
+    
+    // Verificar se o sinal completado é o último da lista
+    const isLastSignal = completedIndex === otherSignals.length - 1;
+    
+    // Se for o último sinal, não rotacionar para manter estabilidade
+    if (isLastSignal) {
+      console.log('Sinal completado é o último da lista. Não será rotacionado para manter estabilidade.');
+      
+      // Apenas marcar como processado sem remover
+      const updatedSignals = [...currentSignals];
+      const signalIndex = updatedSignals.findIndex(s => s.id === completedSignalId);
+      
+      if (signalIndex !== -1) {
+        updatedSignals[signalIndex] = {
+          ...updatedSignals[signalIndex],
+          processed: true
+        };
+        
+        // Atualizar o cache
+        queryClient.setQueryData(['tradingSignals'], updatedSignals);
+      }
+      
+      // Limpar o sinal do estado de completados
+      setCompletedSignals(prev => {
+        const updated = {...prev};
+        delete updated[completedSignalId];
+        return updated;
+      });
+      
+      // Limpar da lista de remoção
+      setSignalsToRemove(prev => prev.filter(id => id !== completedSignalId));
+      
+      return;
+    }
+    
+    console.log(`Removendo o sinal completado na posição ${completedIndex} da lista de sinais não-dashboard.`);
+    
+    // Lógica de rotação: remover o sinal completado e mover todos um nível acima
+    otherSignals.splice(completedIndex, 1);
+    
+    // Gerar um novo horário para o sinal adicional seguindo o padrão XX:03, XX:23, XX:43
+    const now = new Date();
+    const validMinutes = [3, 23, 43];
+    
+    // Encontrar o último horário usado nos sinais existentes (combinando dashboard e outros)
+    const allExistingSignals = [...dashboardSignalsInList, ...otherSignals];
+    const existingTimes = allExistingSignals
+      .map(s => s.entry_time || '')
+      .filter(time => time !== '');
+    
+    // Ordenar por horário crescente
+    existingTimes.sort((a, b) => a.localeCompare(b));
+    
+    // Pegar o último horário (mais distante no futuro)
+    const lastTime = existingTimes.length > 0 ? existingTimes[existingTimes.length - 1] : null;
+    
+    let nextHour, nextMinute;
+    
+    if (lastTime) {
+      // Se temos um último horário, gerar o próximo após ele
+      const [lastHour, lastMinutes] = lastTime.split(':').map(Number);
+      
+      // Determinar qual é o próximo minuto válido após o último
+      const lastMinuteIndex = validMinutes.findIndex(m => m === lastMinutes);
+      
+      if (lastMinuteIndex !== -1) {
+        // Se encontramos o último minuto na lista, pegar o próximo
+        const nextMinuteIndex = (lastMinuteIndex + 1) % validMinutes.length;
+        nextMinute = validMinutes[nextMinuteIndex];
+        
+        // Se voltamos ao início da lista, avançar uma hora
+        if (nextMinuteIndex === 0) {
+          nextHour = (lastHour + 1) % 24;
+        } else {
+          nextHour = lastHour;
+        }
+      } else {
+        // Se não encontramos (o que não deveria acontecer), usar o próximo valor após o último minuto
+        let foundNext = false;
+        nextHour = lastHour;
+        
+        for (const minute of validMinutes) {
+          if (minute > lastMinutes) {
+            nextMinute = minute;
+            foundNext = true;
+            break;
+          }
+        }
+        
+        if (!foundNext) {
+          // Se não encontramos um minuto maior, avançar para a próxima hora
+          nextHour = (lastHour + 1) % 24;
+          nextMinute = validMinutes[0];
+        }
+      }
+    } else {
+      // Se não temos um último horário, usar o próximo horário válido a partir de agora
+      const currentHour = now.getHours();
+      const currentMinute = now.getMinutes();
+      
+      // Encontrar o próximo minuto válido
+      let foundNext = false;
+      nextHour = currentHour;
+      
+      for (const minute of validMinutes) {
+        if (minute > currentMinute) {
+          nextMinute = minute;
+          foundNext = true;
+          break;
+        }
+      }
+      
+      if (!foundNext) {
+        // Se não encontramos um minuto válido na hora atual, ir para a próxima hora
+        nextHour = (currentHour + 1) % 24;
+        nextMinute = validMinutes[0];
+      }
+    }
+    
+    // Formatar o novo horário de entrada
+    const newEntryTime = `${nextHour.toString().padStart(2, '0')}:${nextMinute.toString().padStart(2, '0')}`;
+    
+    // Calcular os horários de expiração e reentradas
+    const expiryTime = calculateNextTime(newEntryTime, SIGNAL_EXPIRY_TIME); // Expiração = entrada + 5 min
+    const gale1Time = expiryTime; // Reentrada 1 = expiração
+    const gale2Time = calculateNextTime(gale1Time, SIGNAL_EXPIRY_TIME); // Reentrada 2 = reentrada 1 + 5 min
+    
+    console.log(`Criando novo sinal com horário de entrada: ${newEntryTime}, expiração: ${expiryTime}, gale1: ${gale1Time}, gale2: ${gale2Time}`);
+    
+    // Criar um novo sinal
+    const baseSignal = otherSignals[0] || dashboardSignalsInList[0];
+    
+    // Selecionar um ativo aleatório não usado ainda
+    const usedAssets = new Set(allExistingSignals.map(s => s.symbol));
+    const availableAssets = Object.keys(ATIVOS_CATEGORIAS).filter(asset => !usedAssets.has(asset));
+    const newAsset = availableAssets.length > 0 
+      ? availableAssets[Math.floor(Math.random() * availableAssets.length)]
+      : getRandomAsset(); // Fallback para qualquer ativo se todos já estiverem usados
+    
+    // Gerar um ID estável baseado no horário e no ativo
+    const today = new Date();
+    const seed = today.getFullYear() * 10000 + (today.getMonth() + 1) * 100 + today.getDate();
+    const stableId = `rotated_signal_${newEntryTime.replace(':', '')}_${newAsset.replace(/[^a-zA-Z0-9]/g, '_')}_${seed}`;
+    
+    const newSignal = {
+      ...baseSignal,
+      id: stableId,
+      symbol: newAsset,
+      exchange: ATIVOS_CATEGORIAS[newAsset] || "Digital",
+      entry_time: newEntryTime,
+      expiry_time_str: expiryTime,
+      gale1_time: gale1Time,
+      gale2_time: gale2Time,
+      signal: Math.random() > 0.5 ? 'BUY' as const : 'SELL' as const,
+      strength: Math.random() > 0.7 ? SignalStrength.STRONG : (Math.random() > 0.5 ? SignalStrength.MODERATE : SignalStrength.WEAK),
+      processed: false,
+      result: undefined,
+      isAnimating: false,
+      status: 'active' as const
+    };
+    
+    // Adicionar o novo sinal à lista
+    otherSignals.push(newSignal);
+    
+    // Ordenar os sinais por horário de entrada
+    otherSignals.sort((a, b) => {
+      const timeA = a.entry_time || '00:00';
+      const timeB = b.entry_time || '00:00';
+      return timeA.localeCompare(timeB);
+    });
+    
+    // Combinar os sinais da dashboard com os restantes (garantindo dashboard sempre no início)
+    const updatedSignals = [...dashboardSignalsInList, ...otherSignals];
+    
+    // Limitar a 7 sinais no total
+    const finalSignals = updatedSignals.slice(0, 7);
+    
+    console.log(`Lista final com ${finalSignals.length} sinais (${dashboardSignalsInList.length} da dashboard + ${finalSignals.length - dashboardSignalsInList.length} não-dashboard)`);
+    
+    // Atualizar o cache
+    queryClient.setQueryData(['tradingSignals'], finalSignals);
+    
+    // Limpar o sinal do estado de completados
+    setCompletedSignals(prev => {
+      const updated = {...prev};
+      delete updated[completedSignalId];
+      return updated;
+    });
+    
+    // Limpar da lista de remoção
+    setSignalsToRemove(prev => prev.filter(id => id !== completedSignalId));
+  }, [queryClient, dashboardSignals, calculateNextTime, getRandomAsset]);
   
   // Adicionar função para reiniciar contadores quando a página é carregada
   useEffect(() => {
     setSignalCompletionCount({wins: 0, losses: 0});
+    
+    // Definir filtros padrão: mostrar todos os tipos e não mostrar expirados
+    setFilterType('ALL');
+    setShowExpiredSignals(false);
   }, []);
   
   // Efeito para subscrever às atualizações de sinais
@@ -488,122 +829,448 @@ const Signals = () => {
   
   // Processar sinais que precisam ser removidos
   useEffect(() => {
-    if (signalsToRemove.length > 0 && newPlaceholderSignal) {
-      // Obter sinais atuais
-      const currentSignals = queryClient.getQueryData<TradingSignal[]>(['tradingSignals']) || [];
-      
-      // Remover sinais marcados para remoção
-      const filteredSignals = currentSignals.filter(
-        signal => !signalsToRemove.includes(signal.id)
-      );
-      
-      // Quando um sinal é completado:
-      // 1. O sinal na primeira posição (o que foi completado) é removido
-      // 2. O sinal na segunda posição se torna o primeiro
-      // 3. O sinal na terceira posição se torna o segundo
-      // 4. Um novo sinal é adicionado na terceira posição
-
-      // Pegar os sinais que permaneceram (2º e 3º)
-      const remainingSignals = [...filteredSignals];
-      
-      // Novo sinal (que deve ficar na 3ª posição)
-      const updatedSignals = [...remainingSignals, newPlaceholderSignal];
-      
-      // Atualizar o cache
-      queryClient.setQueryData(['tradingSignals'], updatedSignals);
-      
-      // Limpar estados
-      setSignalsToRemove([]);
-      setNewPlaceholderSignal(null);
-      
-      // Limpar as entradas de completedSignals que foram removidas
-      const updatedCompleted = {...completedSignals};
-      signalsToRemove.forEach(id => {
-        delete updatedCompleted[id];
-      });
-      setCompletedSignals(updatedCompleted);
-    }
-  }, [signalsToRemove, newPlaceholderSignal, completedSignals, queryClient]);
+    // Este código foi substituído pela função rotateSignals
+    // que gerencia toda a lógica de rotação de sinais
+  }, []);
   
   // Função para gerar a sequência de sinais para o dia todo, começando à meia-noite
   const generateDailySignals = useCallback((): PlaceholderSignal[] => {
+    // Verificar se já temos sinais gerados em cache de memória
+    const today = new Date();
+    const todayStr = `${today.getFullYear()}-${today.getMonth()+1}-${today.getDate()}`;
+    
+    if (signalCache && signalCache.signals.length > 0 && signalCache.date === todayStr) {
+      console.log('Usando sinais em cache de memória');
+      return signalCache.signals;
+    }
+    
     console.log('Gerando sinais para o dia todo...');
     const dailySignals: PlaceholderSignal[] = [];
     
-    // Definir a hora inicial como 00:03 (primeiro sinal do dia)
-    let currentEntryTime = FIRST_SIGNAL_TIME;
+    // Definir os minutos para os horários de entrada (XX:03, XX:23, XX:43)
+    const validMinutes = ['03', '23', '43'];
     
-    // Gerar sinais para o dia todo
-    while (true) {
-      // Calcular os horários para este sinal
-      const entryTime = currentEntryTime;
-      const expiryTime = calculateNextTime(entryTime, SIGNAL_EXPIRY_TIME);
-      const gale1Time = expiryTime; // Reentrada 1 é igual ao horário de expiração
-      const gale2Time = calculateNextTime(gale1Time, SIGNAL_EXPIRY_TIME); // Reentrada 2 é Reentrada 1 + tempo de expiração
-      
-      // Selecionar um ativo aleatório
-      const symbol = getRandomAsset();
-      
-      // Adicionar este sinal ao conjunto
-      const signal = createBasePlaceholderData({
-        id: `signal_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-        symbol,
-        exchange: ATIVOS_CATEGORIAS[symbol] || "Digital",
-        signal: Math.random() > 0.5 ? 'BUY' : 'SELL',
-        strength: Math.random() > 0.7 ? SignalStrength.STRONG : (Math.random() > 0.5 ? SignalStrength.MODERATE : SignalStrength.WEAK),
-        entry_time: entryTime,
-        timeframe: "5m", // Sempre 5 minutos
-        expiry_time_str: expiryTime,
-        gale1_time: gale1Time,
-        gale2_time: gale2Time,
-        success_rate: 0.85 // Taxa de sucesso base, será ajustada no filteredSignals
-      });
-      
-      dailySignals.push(signal);
-      
-      // Definir o horário de entrada do próximo sinal (10 minutos após a Reentrada 2)
-      currentEntryTime = calculateNextTime(gale2Time, TIME_BETWEEN_SIGNALS);
-      
-      // Verificar se já passamos da meia-noite do próximo dia
-      const [hours] = currentEntryTime.split(':').map(Number);
-      // Se voltamos para meia-noite e já temos mais de um sinal, paramos
-      if (hours === 0 && dailySignals.length > 1) {
+    // Usar semente para geração aleatória baseada no dia atual
+    // Isso garante que os sinais serão os mesmos para o dia todo
+    const seed = today.getFullYear() * 10000 + (today.getMonth() + 1) * 100 + today.getDate();
+    const seededRandom = (max: number) => {
+      const x = Math.sin(seed + dailySignals.length) * 10000;
+      return Math.floor((x - Math.floor(x)) * max);
+    };
+    
+    // Criar um conjunto para rastrear ativos já usados
+    const usedAssets = new Set<string>();
+    
+    // Manter um registro dos horários já usados para evitar repetições
+    const usedTimeSlots = new Map<string, Set<string>>();
+    
+    // Definir o número de sinais a gerar por horário (3 sinais por horário)
+    const signalsPerTimeSlot = 3;
+    
+    // Iniciar com um horário padrão (hora atual com o primeiro minuto válido)
+    let currentHour = today.getHours();
+    let currentMinuteIndex = 0;
+    
+    // Garantir que usamos o próximo horário válido a partir da hora atual
+    const currentMinute = today.getMinutes();
+    for (let i = 0; i < validMinutes.length; i++) {
+      if (parseInt(validMinutes[i]) > currentMinute) {
+        currentMinuteIndex = i;
         break;
       }
+    }
+    
+    // Gerar 24 sinais sequenciais progredindo nos horários
+    const totalSignals = 24; // Limitar a 24 sinais para manter a interface limpa
+    
+    for (let i = 0; i < totalSignals; i++) {
+      // Formatar o horário atual
+      const entryHour = currentHour.toString().padStart(2, '0');
+      const entryMinute = validMinutes[currentMinuteIndex];
+      const entryTime = `${entryHour}:${entryMinute}`;
       
-      // Segurança para evitar loops infinitos
-      if (dailySignals.length >= 100) {
-        break;
+      // Calcular os horários de expiração e reentradas
+      const expiryTime = calculateNextTime(entryTime, SIGNAL_EXPIRY_TIME); // Expiração = entrada + 5 min
+      const gale1Time = expiryTime; // Reentrada 1 é igual ao horário de expiração
+      const gale2Time = calculateNextTime(gale1Time, SIGNAL_EXPIRY_TIME); // Reentrada 2 = reentrada 1 + 5 min
+      
+      // Obter todos os ativos disponíveis que ainda não foram usados neste grupo de sinais
+      const allAssets = Object.keys(ATIVOS_CATEGORIAS).filter(asset => !usedAssets.has(asset));
+      
+      // Se não houver mais ativos disponíveis, resetar a lista
+      if (allAssets.length === 0) {
+        usedAssets.clear();
+        const allAssetsReset = Object.keys(ATIVOS_CATEGORIAS);
+        
+        // Selecionar um ativo aleatório
+        const randomIndex = seededRandom(allAssetsReset.length);
+        const symbol = allAssetsReset[randomIndex];
+        usedAssets.add(symbol);
+        
+        // Criar um ID estável baseado no horário e no asset
+        const stableId = `signal_${entryTime.replace(':', '')}_${symbol.replace(/[^a-zA-Z0-9]/g, '_')}_${seed}_${i}`;
+        
+        // Gerar taxas de sucesso entre 80% e 93.4%
+        const successRate = 0.80 + (seededRandom(100) / 100) * (0.934 - 0.80);
+        
+        // Determinar força do sinal com base na taxa de sucesso
+        let strength;
+        if (successRate >= 0.90) {
+          strength = SignalStrength.VERY_STRONG; // Altíssima confiança (≥ 90%)
+        } else if (successRate >= 0.85) {
+          strength = SignalStrength.STRONG; // Alta confiança (≥ 85%)
+        } else {
+          strength = SignalStrength.MODERATE; // Média confiança (< 85%)
+        }
+        
+        // Alternância entre COMPRA e VENDA baseada no índice
+        const signalType = i % 2 === 0 ? 'BUY' : 'SELL';
+        
+        // Adicionar este sinal ao conjunto
+        const signal = createBasePlaceholderData({
+          id: stableId,
+          symbol,
+          exchange: ATIVOS_CATEGORIAS[symbol] || "Digital",
+          signal: signalType,
+          strength,
+          entry_time: entryTime,
+          timeframe: "5m", // Sempre 5 minutos
+          expiry_time_str: expiryTime,
+          gale1_time: gale1Time,
+          gale2_time: gale2Time,
+          success_rate: successRate
+        });
+        
+        dailySignals.push(signal);
+      } else {
+        // Selecionar um ativo aleatório
+        const randomIndex = seededRandom(allAssets.length);
+        const symbol = allAssets[randomIndex];
+        usedAssets.add(symbol);
+        
+        // Criar um ID estável baseado no horário e no asset
+        const stableId = `signal_${entryTime.replace(':', '')}_${symbol.replace(/[^a-zA-Z0-9]/g, '_')}_${seed}_${i}`;
+        
+        // Gerar taxas de sucesso entre 80% e 93.4%
+        const successRate = 0.80 + (seededRandom(100) / 100) * (0.934 - 0.80);
+        
+        // Determinar força do sinal com base na taxa de sucesso
+        let strength;
+        if (successRate >= 0.90) {
+          strength = SignalStrength.VERY_STRONG; // Altíssima confiança (≥ 90%)
+        } else if (successRate >= 0.85) {
+          strength = SignalStrength.STRONG; // Alta confiança (≥ 85%)
+        } else {
+          strength = SignalStrength.MODERATE; // Média confiança (< 85%)
+        }
+        
+        // Alternância entre COMPRA e VENDA baseada no índice
+        const signalType = i % 2 === 0 ? 'BUY' : 'SELL';
+        
+        // Adicionar este sinal ao conjunto
+        const signal = createBasePlaceholderData({
+          id: stableId,
+          symbol,
+          exchange: ATIVOS_CATEGORIAS[symbol] || "Digital",
+          signal: signalType,
+          strength,
+          entry_time: entryTime,
+          timeframe: "5m", // Sempre 5 minutos
+          expiry_time_str: expiryTime,
+          gale1_time: gale1Time,
+          gale2_time: gale2Time,
+          success_rate: successRate
+        });
+        
+        dailySignals.push(signal);
+      }
+      
+      // Avançar para o próximo horário válido
+      currentMinuteIndex = (currentMinuteIndex + 1) % validMinutes.length;
+      
+      // Se voltamos ao primeiro minuto, avançar para a próxima hora
+      if (currentMinuteIndex === 0) {
+        currentHour = (currentHour + 1) % 24;
       }
     }
     
     console.log(`Gerados ${dailySignals.length} sinais para o dia`);
+    
+    // Armazenar em cache de memória
+    signalCache = {
+      signals: dailySignals,
+      date: todayStr
+    };
+    
     return dailySignals;
-  }, []);
+  }, [calculateNextTime]);
   
   // Filtrar os sinais mais relevantes para o horário atual
   const filterRelevantSignals = useCallback((allSignals: PlaceholderSignal[]): PlaceholderSignal[] => {
     const now = new Date();
+    const currentTime = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+    console.log(`Filtrando sinais relevantes para o horário atual: ${currentTime}`);
     
-    // Ordenar sinais por proximidade ao horário atual
-    allSignals.sort((a, b) => {
+    // Ordenar todos os sinais por horário
+    const sortedSignals = [...allSignals].sort((a, b) => {
+      if (!a.entry_time || !b.entry_time) return 0;
+      
+      // Converter para objetos Date para comparação
       const timeA = convertTimeStringToDate(a.entry_time);
       const timeB = convertTimeStringToDate(b.entry_time);
       
-      // Priorizar sinais que ainda não aconteceram
-      const aInFuture = timeA.getTime() > now.getTime();
-      const bInFuture = timeB.getTime() > now.getTime();
-      
-      if (aInFuture && !bInFuture) return -1;
-      if (!aInFuture && bInFuture) return 1;
-      
-      // Se ambos são futuros ou ambos já passaram, pegar o mais próximo
-      return Math.abs(timeA.getTime() - now.getTime()) - Math.abs(timeB.getTime() - now.getTime());
+      return timeA.getTime() - timeB.getTime();
     });
     
-    // Pegar os 3 primeiros sinais (ou menos se não houver 3)
-    return allSignals.slice(0, Math.min(allSignals.length, 3)) as PlaceholderSignal[];
-  }, [convertTimeStringToDate]);
+    // Criar um mapa dos sinais por horário de entrada
+    const signalsByTime = new Map<string, PlaceholderSignal[]>();
+    
+    // Agrupar sinais por horário de entrada
+    sortedSignals.forEach(signal => {
+      if (!signal.entry_time) return;
+      
+      if (!signalsByTime.has(signal.entry_time)) {
+        signalsByTime.set(signal.entry_time, []);
+      }
+      
+      signalsByTime.get(signal.entry_time)?.push(signal);
+    });
+    
+    // Verificar se há horários com múltiplos sinais e ajustá-los
+    signalsByTime.forEach((signals, time) => {
+      // Se houver mais de um sinal no mesmo horário, ajustar os horários
+      if (signals.length > 1) {
+        console.log(`Detectados ${signals.length} sinais no mesmo horário ${time}. Ajustando...`);
+        
+        // Manter o primeiro sinal com o horário original
+        // Para os demais, incrementar 20 minutos para cada
+        for (let i = 1; i < signals.length; i++) {
+          const [hours, minutes] = time.split(':').map(Number);
+          let newMinutes = minutes + (i * 20);
+          let newHours = hours;
+          
+          // Ajustar para próxima hora se necessário
+          while (newMinutes >= 60) {
+            newHours = (newHours + 1) % 24;
+            newMinutes -= 60;
+          }
+          
+          // Verificar o último dígito e ajustar para 03, 23 ou 43
+          const validMinutes = ['03', '23', '43'];
+          const lastDigit = newMinutes % 10;
+          
+          // Encontrar o minuto válido mais próximo
+          let nextValidMinute = 3; // Padrão: usar XX:03
+          
+          if (lastDigit < 3) {
+            nextValidMinute = 3;
+          } else if (lastDigit >= 3 && lastDigit < 23) {
+            nextValidMinute = 23;
+          } else {
+            nextValidMinute = 43;
+          }
+          
+          // Ajustar para o minuto válido mais próximo
+          newMinutes = Math.floor(newMinutes / 10) * 10 + nextValidMinute;
+          
+          // Verificar novamente se passou da hora
+          if (newMinutes >= 60) {
+            newHours = (newHours + 1) % 24;
+            newMinutes -= 60;
+          }
+          
+                      // Verificar se este novo horário já existe
+            let finalTime = `${newHours.toString().padStart(2, '0')}:${newMinutes.toString().padStart(2, '0')}`;
+            if (signalsByTime.has(finalTime)) {
+              // Se já existe sinal neste horário, tentar o próximo horário válido
+              let found = false;
+              for (let attempt = 0; attempt < 24 && !found; attempt++) {
+                // Buscar o próximo horário válido
+                let nextIndex = validMinutes.findIndex(min => parseInt(min) === newMinutes % 100);
+                if (nextIndex === -1) {
+                  // Se não encontrado, usar o próximo válido acima
+                  for (let j = 0; j < validMinutes.length; j++) {
+                    if (parseInt(validMinutes[j]) > newMinutes % 100) {
+                      nextIndex = j;
+                      break;
+                    }
+                  }
+                  // Se nenhum for maior, usar o primeiro da próxima hora
+                  if (nextIndex === -1) {
+                    newHours = (newHours + 1) % 24;
+                    nextIndex = 0;
+                  }
+                } else {
+                  // Usar o próximo na sequência
+                  nextIndex = (nextIndex + 1) % validMinutes.length;
+                  if (nextIndex === 0) {
+                    newHours = (newHours + 1) % 24;
+                  }
+                }
+                
+                newMinutes = parseInt(validMinutes[nextIndex]);
+                const testTime = `${newHours.toString().padStart(2, '0')}:${newMinutes.toString().padStart(2, '0')}`;
+                
+                if (!signalsByTime.has(testTime)) {
+                  finalTime = testTime;
+                  found = true;
+                  break;
+                }
+              }
+            }
+          
+                      // Atualizar o horário do sinal
+            signals[i].entry_time = finalTime;
+            
+            // Adicionar o sinal com o novo horário ao mapa
+            if (!signalsByTime.has(finalTime)) {
+              signalsByTime.set(finalTime, []);
+            }
+            signalsByTime.get(finalTime)?.push(signals[i]);
+            
+            // Remover o sinal da lista original para evitar duplicidade
+            const originalList = signalsByTime.get(time) || [];
+            const updatedList = originalList.filter(s => s !== signals[i]);
+            signalsByTime.set(time, updatedList);
+            
+            // Recalcular horários de expiração e reentradas
+            signals[i].expiry_time_str = calculateNextTime(finalTime, SIGNAL_EXPIRY_TIME);
+            signals[i].gale1_time = signals[i].expiry_time_str;
+            signals[i].gale2_time = calculateNextTime(signals[i].gale1_time, SIGNAL_EXPIRY_TIME);
+            
+            console.log(`Sinal ajustado: ${signals[i].symbol} movido de ${time} para ${finalTime}`);
+        }
+      }
+    });
+    
+    // Reconstruir a lista de sinais ajustados
+    const adjustedSignals: PlaceholderSignal[] = [];
+    signalsByTime.forEach(signals => {
+      adjustedSignals.push(...signals);
+    });
+    
+    // Reordenar por horário após ajustes
+    adjustedSignals.sort((a, b) => {
+      if (!a.entry_time || !b.entry_time) return 0;
+      
+      // Converter para objetos Date para comparação
+      const timeA = convertTimeStringToDate(a.entry_time);
+      const timeB = convertTimeStringToDate(b.entry_time);
+      
+      return timeA.getTime() - timeB.getTime();
+    });
+    
+    // Encontrar os sinais mais próximos do horário atual
+    const relevantSignals: PlaceholderSignal[] = [];
+    const nowTime = now.getTime();
+    
+    // Primeiro, procurar por sinais futuros (ainda não ocorreram)
+    const futureSignals = adjustedSignals.filter(signal => {
+      if (!signal.entry_time) return false;
+      const signalTime = convertTimeStringToDate(signal.entry_time).getTime();
+      return signalTime > nowTime;
+    });
+    
+    // Depois, procurar por sinais passados (últimas 2 horas)
+    const recentPastSignals = adjustedSignals.filter(signal => {
+      if (!signal.entry_time) return false;
+      const signalTime = convertTimeStringToDate(signal.entry_time).getTime();
+      const hoursDiff = (nowTime - signalTime) / (1000 * 60 * 60);
+      return signalTime <= nowTime && hoursDiff <= 2;
+    });
+    
+    // Adicionar primeiro os mais recentes do passado (últimos 3)
+    relevantSignals.push(...recentPastSignals.slice(-3));
+    
+    // Adicionar os próximos 4 sinais do futuro
+    relevantSignals.push(...futureSignals.slice(0, 4));
+    
+    // Limitar a 7 sinais no total e ordenar novamente por horário de entrada
+    const result = relevantSignals.slice(0, 7).sort((a, b) => {
+      if (!a.entry_time || !b.entry_time) return 0;
+      
+      // Extrair hora e minutos
+      const [aHour, aMin] = a.entry_time.split(':').map(Number);
+      const [bHour, bMin] = b.entry_time.split(':').map(Number);
+      
+      // Converter para minutos totais para facilitar a comparação
+      const aTotalMinutes = aHour * 60 + aMin;
+      const bTotalMinutes = bHour * 60 + bMin;
+      
+      // Ordenar crescente
+      return aTotalMinutes - bTotalMinutes;
+    });
+    
+    console.log(`Retornando ${result.length} sinais relevantes após ajustes`);
+    
+    // Verificação final para garantir que não há duplicatas nos horários de entrada
+    const finalTimes = new Set<string>();
+    const finalSignals: PlaceholderSignal[] = [];
+    
+    for (const signal of result) {
+      if (!signal.entry_time) {
+        finalSignals.push(signal);
+        continue;
+      }
+      
+      if (finalTimes.has(signal.entry_time)) {
+        console.log(`Ainda existe duplicata no horário ${signal.entry_time}, ajustando novamente...`);
+        
+        // Ajustar o horário para o próximo válido
+        const [hours, minutes] = signal.entry_time.split(':').map(Number);
+        let newHours = hours;
+        let newMinutes = minutes;
+        const validMinutes = ['03', '23', '43'];
+        
+        // Encontrar o próximo horário válido que não está em uso
+        let nextTimeFound = false;
+        
+        for (let attempt = 0; attempt < 24 && !nextTimeFound; attempt++) {
+          // Avançar para o próximo slot de tempo válido
+          let currentIndex = validMinutes.findIndex(m => parseInt(m) === newMinutes);
+          if (currentIndex === -1) {
+            // Se não encontramos o minuto na lista de válidos, usar o próximo maior
+            for (let j = 0; j < validMinutes.length; j++) {
+              if (parseInt(validMinutes[j]) > newMinutes) {
+                currentIndex = j - 1; // Usar o anterior para que o próximo seja esse
+                break;
+              }
+            }
+            // Se nenhum for maior, usar o último
+            if (currentIndex === -1) currentIndex = validMinutes.length - 1;
+          }
+          
+          // Avançar para o próximo minuto válido
+          const nextIndex = (currentIndex + 1) % validMinutes.length;
+          newMinutes = parseInt(validMinutes[nextIndex]);
+          
+          // Se voltamos ao primeiro minuto válido, avançar uma hora
+          if (nextIndex === 0) {
+            newHours = (newHours + 1) % 24;
+          }
+          
+          // Formatar o novo horário
+          const newTime = `${newHours.toString().padStart(2, '0')}:${newMinutes.toString().padStart(2, '0')}`;
+          
+          // Verificar se este novo horário está disponível
+          if (!finalTimes.has(newTime)) {
+            // Atualizar o sinal
+            signal.entry_time = newTime;
+            signal.expiry_time_str = calculateNextTime(newTime, SIGNAL_EXPIRY_TIME);
+            signal.gale1_time = signal.expiry_time_str;
+            signal.gale2_time = calculateNextTime(signal.gale1_time, SIGNAL_EXPIRY_TIME);
+            console.log(`Sinal ajustado para ${newTime}`);
+            nextTimeFound = true;
+          }
+        }
+      }
+      
+      finalTimes.add(signal.entry_time);
+      finalSignals.push(signal);
+    }
+    
+    return finalSignals;
+  }, [calculateNextTime, convertTimeStringToDate]);
 
   // Função para pegar os sinais diários com base na hora atual
   const getDailySignalsForCurrentTime = useCallback(async (): Promise<TradingSignal[]> => {
@@ -657,20 +1324,94 @@ const Signals = () => {
 
   // Efeito para atualizar a cada 1 minuto para mostrar os sinais corretos
   useEffect(() => {
+    // Referência para o último timestamp em que atualizamos os sinais
+    let lastUpdateTimestamp = 0;
+    
     // Função para atualizar os sinais baseado no horário atual
     const updateSignalsBasedOnTime = async () => {
+      const now = new Date();
+      const currentTimestamp = now.getTime();
+      
+      // Verificar se já se passou pelo menos 30 segundos desde a última atualização
+      // Isso evita atualizações desnecessárias se o componente atualizar por outros motivos
+      if (currentTimestamp - lastUpdateTimestamp < 30000) {
+        console.log("Ignorando atualização, última atualização foi há menos de 30 segundos");
+        return;
+      }
+      
+      console.log("Atualizando sinais baseado na hora atual:", now.toLocaleTimeString());
+      lastUpdateTimestamp = currentTimestamp;
+      
+      // Se já temos sinais em cache, verificar se precisamos atualizá-los
+      const existingSignalsInCache = queryClient.getQueryData<TradingSignal[]>(['tradingSignals']);
+      
+      if (existingSignalsInCache && existingSignalsInCache.length >= 7) {
+        // Verificar se os horários ainda são relevantes antes de buscar novos sinais
+        // Só atualizar se o minuto mudou e estamos no padrão de tempo correto (XX:03, XX:23, XX:43)
+        const currentMinute = now.getMinutes();
+        const lastMinute = Math.floor(lastUpdateTimestamp / 60000) % 60;
+        
+        // Verificar se estamos em um minuto de atualização (3, 23, 43)
+        const isUpdateMinute = [3, 23, 43].includes(currentMinute);
+        
+        if (currentMinute === lastMinute || !isUpdateMinute) {
+          console.log("Sinais ainda são relevantes ou não estamos em minuto de atualização, ignorando atualização");
+          return;
+        }
+      }
+      
+      // Se chegou até aqui, obter novos sinais mas preservando os últimos
+      // para evitar atualizações constantes
       const currentSignals = await getDailySignalsForCurrentTime();
+      
+      // Obter sinais existentes novamente (podem ter mudado desde a verificação acima)
+      const existingSignals = queryClient.getQueryData<TradingSignal[]>(['tradingSignals']) || [];
+      
+      // Se já temos sinais, preservar o último para evitar atualizações constantes
+      if (existingSignals.length >= 7) {
+        // Preservar o último sinal
+        const lastSignal = existingSignals[existingSignals.length - 1];
+        
+        // Combinar os novos sinais (exceto o último) com o último sinal preservado
+        const combinedSignals = [...currentSignals.slice(0, -1), lastSignal];
+        
+        // Atualizar o cache
+        queryClient.setQueryData(['tradingSignals'], combinedSignals);
+      } else {
+        // Se não temos sinais suficientes, usar os novos normalmente
       queryClient.setQueryData(['tradingSignals'], currentSignals);
+      }
     };
     
     // Definir intervalo para checar se precisamos mudar os sinais mostrados
-    const intervalId = setInterval(updateSignalsBasedOnTime, 60 * 1000); // A cada minuto
+    // Aumentar para 120 segundos (2 minutos) para reduzir atualizações desnecessárias
+    const intervalId = setInterval(updateSignalsBasedOnTime, 120 * 1000);
     
-    // Chamar imediatamente na montagem
-    updateSignalsBasedOnTime();
+    // Chamar imediatamente na montagem, mas com um pequeno delay
+    // para evitar múltiplas chamadas simultâneas durante a inicialização
+    const initialTimeoutId = setTimeout(updateSignalsBasedOnTime, 500);
     
-    return () => clearInterval(intervalId);
+    return () => {
+      clearInterval(intervalId);
+      clearTimeout(initialTimeoutId);
+    };
   }, [getDailySignalsForCurrentTime, queryClient]);
+
+  // Atualizar o horário atual constantemente com intervalo maior
+  useEffect(() => {
+    const updateTime = () => {
+      setCurrentTime(new Date());
+    };
+    
+    // Atualizar a cada 5 segundos em vez de cada segundo
+    // Isso reduz o número de renderizações desnecessárias
+    const timeInterval = setInterval(updateTime, 5000);
+    
+    // Chamar imediatamente
+    updateTime();
+    
+    return () => clearInterval(timeInterval);
+  }, []);
 
   // Criar dados base para cada placeholder signal
   const createBasePlaceholderData = (override: Partial<PlaceholderSignal> = {}): PlaceholderSignal => ({
@@ -679,7 +1420,7 @@ const Signals = () => {
     exchange: 'Blitz',
     signal: 'BUY',
     status: 'active',
-    strength: SignalStrengthEnum.STRONG,
+    strength: SignalStrengthEnum.MODERATE, // Default para média confiança
     entry_time: '00:00',
     timeframe: '5m',
     expiry_time_str: '00:05',
@@ -696,7 +1437,7 @@ const Signals = () => {
     entry_price: 100,
     stop_loss: 90,
     target_price: 110,
-    success_rate: Math.random() * (0.97 - 0.80) + 0.80, // Taxa de sucesso entre 80% e 97%
+    success_rate: Math.random() * (0.93 - 0.80) + 0.80, // Taxa de sucesso entre 80% e 93%
     risk_reward: '1:2',
     pair: '',
     metadata: {},
@@ -729,241 +1470,440 @@ const Signals = () => {
     return dailySignals.slice(0, 3) as PlaceholderSignal[];
   }, [generateDailySignals, convertTimeStringToDate]);
 
-  // Ajustando para garantir que temos o número adequado de sinais
-  const ensureSevenSignals = (signalsInput: TradingSignal[] | undefined): TradingSignal[] => {
-    if (!signalsInput || signalsInput.length === 0) {
-      return placeholderSignals as TradingSignal[];
-    }
-    
-    const now = new Date();
-    const currentHour = now.getHours();
-    const currentMinute = now.getMinutes();
-    
-    // Criar uma cópia dos sinais para não modificar o original
-    let signalsCopy = [...signalsInput];
-    
-    // Remover sinais com horários passados (mais de 5 minutos atrás)
-    signalsCopy = signalsCopy.filter(signal => {
-      if (!signal.entry_time) return true;
-      
-      const [hours, minutes] = signal.entry_time.split(':').map(Number);
-      const entryDate = new Date();
-      entryDate.setHours(hours, minutes, 0, 0);
-      
-      // Manter apenas sinais que ocorrerão em menos de 5 minutos atrás
-      const diff = now.getTime() - entryDate.getTime();
-      return diff < 5 * 60 * 1000 || entryDate.getTime() > now.getTime();
-    });
-    
-    // Encontrar o próximo horário válido a partir de agora (terminando em 03, 23 ou 43)
-    const getNextValidEntryTime = () => {
-      let nextHour = currentHour;
-      let nextMinute: number;
-      
-      if (currentMinute < 3) {
-        nextMinute = 3;
-      } else if (currentMinute < 23) {
-        nextMinute = 23;
-      } else if (currentMinute < 43) {
-        nextMinute = 43;
-      } else {
-        nextHour = (currentHour + 1) % 24;
-        nextMinute = 3;
-      }
-      
-      return {
-        hours: nextHour,
-        minutes: nextMinute
-      };
-    };
-    
-    // Garantir que temos sinais suficientes para a página (7 sinais)
-    if (signalsCopy.length < 7) {
-      // Verificar se temos placeholder signals para usar
-      const remainingPlaceholdersNeeded = 7 - signalsCopy.length;
-      
-      // Base para o próximo horário válido
-      const nextValid = getNextValidEntryTime();
-      let nextHour = nextValid.hours;
-      let nextMinute = nextValid.minutes;
-      
-      for (let i = 0; i < remainingPlaceholdersNeeded; i++) {
-        const baseSignal = signalsCopy[i % signalsCopy.length] || placeholderSignals[0];
-        
-        // Copiar propriedades existentes e adicionar novas
-        const newSignal = {
-          ...baseSignal,
-          id: `generated_signal_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`
-        } as TradingSignal;
-        
-        // Definir o horário de entrada com base no padrão 03, 23, 43 a partir do próximo horário válido
-        let entryTimeStr = `${String(nextHour).padStart(2, '0')}:${String(nextMinute).padStart(2, '0')}`;
-        
-        // Avançar para o próximo slot de tempo
-        if (nextMinute === 3) {
-          nextMinute = 23;
-        } else if (nextMinute === 23) {
-          nextMinute = 43;
-        } else { // nextMinute === 43
-          nextHour = (nextHour + 1) % 24;
-          nextMinute = 3;
-        }
-        
-        // Definir os tempos do sinal
-        if ('entry_time' in newSignal) {
-          newSignal.entry_time = entryTimeStr;
-          
-          // Ajustar horários de expiração e gales
-          if ('expiry_time_str' in newSignal) {
-            // Expiração: 5 minutos após a entrada
-            const entryDate = new Date();
-            const [entryHours, entryMinutes] = entryTimeStr.split(':').map(Number);
-            entryDate.setHours(entryHours, entryMinutes, 0, 0);
+  // Buscar os sinais da dashboard
+  useEffect(() => {
+    // Função para buscar os sinais da dashboard de localStorage
+    const fetchDashboardSignals = () => {
+      try {
+        const cachedSignalsData = localStorage.getItem('dashboardSignals');
+        if (cachedSignalsData) {
+          const { signals } = JSON.parse(cachedSignalsData);
+          if (signals && Array.isArray(signals) && signals.length > 0) {
+            // Garantir que temos exatamente 3 sinais da dashboard
+            const limitedSignals = signals.slice(0, 3);
             
-            const expiryDate = new Date(entryDate);
-            expiryDate.setMinutes(expiryDate.getMinutes() + 5);
+            // Converter para o formato correto se necessário
+            const formattedSignals = limitedSignals.map(signal => {
+              // Garantir que todos os campos necessários estão presentes
+              return {
+                ...signal,
+                id: signal.id || 'dashboard-' + Math.random().toString(36).substring(2, 9),
+                status: 'active',
+                success_rate: Math.min(signal.success_rate || 0.85, 0.934), // Limitar a 93.4%
+                isDashboard: true // Marcar como sinal da dashboard
+              };
+            });
             
-            const expiryHours = expiryDate.getHours().toString().padStart(2, '0');
-            const expiryMinutes = expiryDate.getMinutes().toString().padStart(2, '0');
-            newSignal.expiry_time_str = `${expiryHours}:${expiryMinutes}`;
+            setDashboardSignals(formattedSignals);
             
-            if ('gale1_time' in newSignal) {
-              newSignal.gale1_time = newSignal.expiry_time_str;
+            // Se houver mais de 3, corrigir no localStorage
+            if (signals.length > 3) {
+              console.log(`Encontrados ${signals.length} sinais na dashboard. Limitando para 3.`);
+              localStorage.setItem('dashboardSignals', JSON.stringify({
+                signals: limitedSignals,
+                timestamp: new Date().getTime()
+              }));
             }
             
-            if ('gale2_time' in newSignal) {
-              // Gale2: 5 minutos após gale1
-              const gale2Date = new Date(expiryDate);
-              gale2Date.setMinutes(gale2Date.getMinutes() + 5);
-              
-              const gale2Hours = gale2Date.getHours().toString().padStart(2, '0');
-              const gale2Minutes = gale2Date.getMinutes().toString().padStart(2, '0');
-              newSignal.gale2_time = `${gale2Hours}:${gale2Minutes}`;
-            }
+            console.log("Sinais da dashboard carregados:", formattedSignals);
+            return;
           }
         }
-        
-        // Gerar propriedades randômicas para diversidade
-        newSignal.signal = Math.random() > 0.5 ? 'BUY' : 'SELL';
-        newSignal.success_rate = 0.77 + Math.random() * 0.205; // Entre 77% e 97.5%
-        newSignal.symbol = getRandomAsset(); // Usar a função existente para obter um ativo aleatório
-        
-        // Garantir que não temos sinais duplicados (mesmo horário e ativo)
-        const isDuplicate = signalsCopy.some(signal => 
-          signal.entry_time === newSignal.entry_time && signal.symbol === newSignal.symbol
-        );
-        
-        if (!isDuplicate) {
-          signalsCopy.push(newSignal);
-        } else {
-          // Se for duplicado, tentar novamente com outro ativo
-          i--; // Fazer este loop novamente
-        }
+        setDashboardSignals([]);
+      } catch (error) {
+        console.error('Erro ao buscar sinais da dashboard:', error);
+        setDashboardSignals([]);
       }
-    }
+    };
+
+    fetchDashboardSignals();
+
+    // Verificar por atualizações a cada 30 segundos
+    const interval = setInterval(fetchDashboardSignals, 30000);
     
-    // Ordenar por horário de entrada
-    signalsCopy.sort((a, b) => {
-      if (!a.entry_time || !b.entry_time) return 0;
+    return () => clearInterval(interval);
+  }, []);
+
+  // Função para garantir que temos 7 sinais, incluindo os 3 da dashboard
+  const ensureSevenSignals = (signalsInput: TradingSignal[] | undefined): TradingSignal[] => {
+    if (!signalsInput) signalsInput = [];
+    
+    // Criar uma cópia para evitar modificações no objeto original
+    let signalsCopy = [...signalsInput];
+    
+    // Verificar se os sinais da dashboard têm os horários corretos (XX:03, XX:23, XX:43)
+    const validMinutes = ['03', '23', '43'];
+    
+    // Primeiro tratar os sinais da dashboard - garantir que não há horários duplicados entre eles
+    // Usando um tipo que inclui o id e outras propriedades dos sinais
+    const normalizedDashboardSignals = dashboardSignals.slice(0, 3).map((signal, index) => {
+      // Criar uma cópia e garantir que tem um ID
+      const signalWithId = {...signal} as SignalWithId;
       
-      const [aHours, aMinutes] = a.entry_time.split(':').map(Number);
-      const [bHours, bMinutes] = b.entry_time.split(':').map(Number);
+      // Garantir que cada sinal tem um ID único
+      if (!signalWithId.id) {
+        signalWithId.id = `dashboard-${index}-${Date.now()}`;
+      }
+
+      // Forçar horários específicos para cada sinal da dashboard
+      const now = new Date();
+      const currHour = now.getHours();
+      let entryTime = "";
       
-      const aDate = new Date();
-      aDate.setHours(aHours, aMinutes, 0, 0);
+      // Definir horários diferentes para cada sinal
+      if (index === 0) {
+        entryTime = `${currHour.toString().padStart(2, '0')}:03`;
+      } else if (index === 1) {
+        entryTime = `${currHour.toString().padStart(2, '0')}:23`;
+      } else {
+        entryTime = `${currHour.toString().padStart(2, '0')}:43`;
+      }
       
-      const bDate = new Date();
-      bDate.setHours(bHours, bMinutes, 0, 0);
+      // Calcular os demais horários
+      const expiryTime = calculateNextTime(entryTime, SIGNAL_EXPIRY_TIME);
+      const gale1Time = expiryTime;
+      const gale2Time = calculateNextTime(gale1Time, SIGNAL_EXPIRY_TIME);
       
-      return aDate.getTime() - bDate.getTime();
+      // Retornar o sinal com todos os campos atualizados
+      return {
+        ...signalWithId,
+        entry_time: entryTime,
+        expiry_time_str: expiryTime,
+        gale1_time: gale1Time,
+        gale2_time: gale2Time
+      };
     });
     
-    // Se temos mais de 7 sinais, manter apenas os primeiros 7
-    return signalsCopy.slice(0, 7);
+    // Os 3 primeiros sinais DEVEM ser os da dashboard
+    const dashboardIds = normalizedDashboardSignals.map(s => s.id);
+    signalsCopy = signalsCopy.filter(s => !dashboardIds.includes(s.id as string));
+    
+    // Adicionar os sinais da dashboard normalizados no início da lista
+    signalsCopy = [...normalizedDashboardSignals, ...signalsCopy];
+    
+    console.log(`Garantindo que os ${normalizedDashboardSignals.length} sinais da dashboard estão no início da lista`);
+    
+    // Mapear os ativos e horários já utilizados para evitar duplicatas
+    const usedAssets = new Map<string, Set<string>>(); // Map de ativo -> conjunto de horários
+    const usedTimes = new Set<string>(); // Conjunto de horários já utilizados
+    
+    // Registrar ativos e horários já usados nos sinais da dashboard
+    normalizedDashboardSignals.forEach(signal => {
+      if (signal.symbol && signal.entry_time) {
+        // Registrar o horário para este ativo
+        if (!usedAssets.has(signal.symbol)) {
+          usedAssets.set(signal.symbol, new Set());
+        }
+        usedAssets.get(signal.symbol)?.add(signal.entry_time);
+        
+        // Registrar o horário como usado
+        usedTimes.add(signal.entry_time);
+      }
+    });
+    
+    // Verificação final para garantir que não há duplicação de horários
+    const finalSignals: TradingSignal[] = [...normalizedDashboardSignals];
+    
+    // Adicionar sinais restantes, ajustando horários para evitar duplicatas
+    for (const signal of signalsCopy.slice(normalizedDashboardSignals.length)) {
+      if (!signal.entry_time) {
+        // Gerar um horário de entrada que não seja duplicado
+        const now = new Date();
+        const currHour = now.getHours();
+        let nextHour = currHour;
+        
+        // Verificar cada minuto possível (03, 23, 43) e incrementar a hora até encontrar um horário não usado
+        let foundUnusedTime = false;
+        
+        // Loop para encontrar o próximo horário livre
+        for (let h = 0; h < 24; h++) {
+          const checkHour = (currHour + h) % 24;
+          
+          for (const minute of validMinutes) {
+            const checkTime = `${checkHour.toString().padStart(2, '0')}:${minute}`;
+            
+            if (!usedTimes.has(checkTime)) {
+              // Encontramos um horário não usado
+              signal.entry_time = checkTime;
+              usedTimes.add(checkTime);
+              
+              // Calcular os demais horários
+              const expiryTime = calculateNextTime(checkTime, SIGNAL_EXPIRY_TIME);
+              const gale1Time = expiryTime;
+              const gale2Time = calculateNextTime(gale1Time, SIGNAL_EXPIRY_TIME);
+              
+              signal.expiry_time_str = expiryTime;
+              signal.gale1_time = gale1Time;
+              signal.gale2_time = gale2Time;
+              
+              foundUnusedTime = true;
+              break;
+            }
+          }
+          
+          if (foundUnusedTime) break;
+        }
+      } else if (usedTimes.has(signal.entry_time)) {
+        // O horário já está sendo usado, precisamos ajustar
+        const [hours, _] = signal.entry_time.split(':');
+        let nextHour = parseInt(hours);
+        let foundUnusedTime = false;
+        
+        // Loop para encontrar o próximo horário livre
+        for (let h = 0; h < 24; h++) {
+          const checkHour = (nextHour + h) % 24;
+          
+          for (const minute of validMinutes) {
+            const checkTime = `${checkHour.toString().padStart(2, '0')}:${minute}`;
+            
+            if (!usedTimes.has(checkTime)) {
+              // Encontramos um horário não usado
+              signal.entry_time = checkTime;
+              usedTimes.add(checkTime);
+              
+              // Calcular os demais horários
+              const expiryTime = calculateNextTime(checkTime, SIGNAL_EXPIRY_TIME);
+              const gale1Time = expiryTime;
+              const gale2Time = calculateNextTime(gale1Time, SIGNAL_EXPIRY_TIME);
+              
+              signal.expiry_time_str = expiryTime;
+              signal.gale1_time = gale1Time;
+              signal.gale2_time = gale2Time;
+              
+              foundUnusedTime = true;
+              break;
+            }
+          }
+          
+          if (foundUnusedTime) break;
+        }
+      } else {
+        // O horário não está sendo usado, vamos registrá-lo
+        usedTimes.add(signal.entry_time);
+      }
+      
+      // Adicionar o sinal à lista final
+      finalSignals.push(signal);
+    }
+    
+    // Ordenar por horário de entrada, mas mantendo os sinais da dashboard no início
+    finalSignals.sort((a, b) => {
+      // Manter os sinais da dashboard no início
+      const aIsDashboard = dashboardIds.includes((a as SignalWithId).id);
+      const bIsDashboard = dashboardIds.includes((b as SignalWithId).id);
+      
+      if (aIsDashboard && !bIsDashboard) return -1;
+      if (!aIsDashboard && bIsDashboard) return 1;
+      
+      // Se ambos são dashboard ou não-dashboard, ordenar por horário
+      if (!a.entry_time || !b.entry_time) return 0;
+        
+      // Extrair hora e minuto para comparação numérica
+      const [aHour, aMin] = a.entry_time.split(':').map(Number);
+      const [bHour, bMin] = b.entry_time.split(':').map(Number);
+        
+      // Converter para minutos totais para facilitar a comparação
+      const aTotalMinutes = aHour * 60 + aMin;
+      const bTotalMinutes = bHour * 60 + bMin;
+        
+      // Ordenar por horário crescente
+      return aTotalMinutes - bTotalMinutes;
+    });
+    
+    // Garantir que temos exatamente 7 sinais
+    return finalSignals.slice(0, 7);
   };
 
+  // Memorizar os IDs dos sinais para evitar recriação quando apenas a ordem muda
+  const signalIds = useMemo(() => {
+    return signals ? signals.map(s => s.id).join('|') : '';
+  }, [signals]);
+  
   // Filtragem de sinais por tipo
   const filteredSignals = useMemo(() => {
     if (!signals) return ensureSevenSignals([]);
     
-    const signalsArray = signals as TradingSignal[];
+    // Iniciar com os sinais da dashboard (os 3 primeiros DEVEM ser os da dashboard)
+    let finalSignals: TradingSignal[] = [];
     
-    let filtered = signalsArray.filter(signal => 
-      filterType === 'ALL' || signal.type === filterType
-    );
-    
-    // Filtrar por status (expirado/ativo)
-    if (!showExpiredSignals) {
-      filtered = filtered.filter(signal => signal.status === 'active');
+    // Adicionar primeiro os sinais da dashboard (até 3)
+    if (dashboardSignals && dashboardSignals.length > 0) {
+      // Copiar os sinais da dashboard e ajustar seus atributos
+      const dashboardSignalsCopy = dashboardSignals.map(signal => {
+        // Determinar força do sinal com base na taxa de sucesso
+        let strength;
+        const successRate = signal.success_rate || 0.85;
+        
+        if (successRate >= 0.90) {
+          strength = SignalStrength.VERY_STRONG; // Altíssima confiança (≥ 90%)
+        } else if (successRate >= 0.85) {
+          strength = SignalStrength.STRONG; // Alta confiança (≥ 85%)
+        } else {
+          strength = SignalStrength.MODERATE; // Média confiança (< 85%)
+        }
+        
+        return {
+          ...signal,
+          strength: strength,
+          // Garantir que todos os sinais da dashboard estejam com os status corretos
+          status: 'active' as const,
+        };
+      });
+      
+      // Adicionar os sinais da dashboard no início
+      finalSignals = [...dashboardSignalsCopy];
+      
+      console.log(`Adicionados ${finalSignals.length} sinais da dashboard`);
     }
     
-    // Função auxiliar para obter o horário de entrada como Date
-    const getEntryTimeAsDate = (signal: TradingSignal): Date => {
-      if (!signal.entry_time) return new Date();
+    // Para os sinais restantes, usar os sinais gerados normalmente
+    if (signals) {
+      const signalsArray = signals as TradingSignal[];
       
-      const now = currentTime; // Usar o horário atualizado constantemente
-      const [hours, minutes] = signal.entry_time.split(':').map(Number);
-      const entryDate = new Date(now);
-      entryDate.setHours(hours, minutes, 0, 0);
+      // Filtrar para não incluir sinais que já estão na dashboard (por ID)
+      const dashboardIds = new Set(finalSignals.map(s => s.id));
+      let remainingSignals = signalsArray.filter(signal => !dashboardIds.has(signal.id));
       
-      return entryDate;
-    };
+      // Filtrar sinais ativos
+      remainingSignals = remainingSignals.filter(signal => signal.status === 'active');
+      
+      // Ordenar por horário de entrada
+      remainingSignals.sort((a, b) => {
+        if (!a.entry_time || !b.entry_time) return 0;
+        
+        // Extrair hora e minutos
+        const [aHour, aMin] = a.entry_time.split(':').map(Number);
+        const [bHour, bMin] = b.entry_time.split(':').map(Number);
+        
+        // Converter para minutos totais para facilitar a comparação
+        const aTotalMinutes = aHour * 60 + aMin;
+        const bTotalMinutes = bHour * 60 + bMin;
+        
+        // Ordenar crescente
+        return aTotalMinutes - bTotalMinutes;
+      });
     
-    // Função para calcular a diferença de tempo em minutos
-    const getTimeToEntry = (signal: TradingSignal): number => {
-      const entryDate = getEntryTimeAsDate(signal);
-      const now = currentTime; // Usar o horário atualizado constantemente
-      return (entryDate.getTime() - now.getTime()) / (60 * 1000); // diferença em minutos
-    };
-    
-    // Ordenar sinais por proximidade do horário de entrada atual
-    filtered = filtered.sort((a, b) => {
-      const timeToEntryA = getTimeToEntry(a);
-      const timeToEntryB = getTimeToEntry(b);
-      
-      // Nova lógica de ordenação - ordenar por diferença absoluta em relação ao tempo atual
-      // Isso garantirá que o mais próximo venha primeiro, mesmo que alguns já tenham passado
-      const absTimeToEntryA = Math.abs(timeToEntryA);
-      const absTimeToEntryB = Math.abs(timeToEntryB);
-      
-      // Prioridade para horários futuros (ainda não expirados)
-      const aFuture = timeToEntryA >= 0;
-      const bFuture = timeToEntryB >= 0;
-      
-      // Se um é futuro e outro já passou
-      if (aFuture && !bFuture) return -1; // A está no futuro, vem primeiro
-      if (!aFuture && bFuture) return 1;  // B está no futuro, vem primeiro
-      
-      // Se ambos são do futuro ou ambos já passaram, ordena pelo mais próximo do horário atual
-      return absTimeToEntryA - absTimeToEntryB;
-    });
-    
-    // Ajustar taxas de sucesso para garantir valores diferentes e mínimo de 77%
-    // Base para as taxas de sucesso: começa com 97.5% e vai diminuindo
-    const successRateBase = 97.5;
-    const successRateDecrement = 2.8;
-    
-    filtered = filtered.map((signal, index) => {
-      // Taxa de sucesso decrescente, nunca menor que 77%
+      // Ajustar taxas de sucesso e força dos sinais restantes
+      remainingSignals = remainingSignals.map((signal, index) => {
+        // Taxa de sucesso decrescente (máximo de 93.4%)
       const successRate = Math.max(
-        successRateBase - (index * successRateDecrement), 
+          93.4 - (index * 2.5), 
         77.0
       ) / 100;
+        
+        // Determinar força do sinal
+        let strength;
+        if (successRate >= 0.90) {
+          strength = SignalStrength.VERY_STRONG;
+        } else if (successRate >= 0.85) {
+          strength = SignalStrength.STRONG;
+        } else {
+          strength = SignalStrength.MODERATE;
+        }
       
       return {
         ...signal,
-        success_rate: successRate
+          success_rate: successRate,
+          strength: strength
       };
     });
     
-    // Garantir que temos 7 sinais (não mais 3)
-    return ensureSevenSignals(filtered);
-  }, [signals, filterType, showExpiredSignals, currentTime]);
+      // Adicionar os sinais restantes após os da dashboard,
+      // até completar o total de 7 sinais
+      const signalsNeeded = 7 - finalSignals.length;
+      if (signalsNeeded > 0) {
+        finalSignals = [...finalSignals, ...remainingSignals.slice(0, signalsNeeded)];
+      }
+    }
+    
+    // Se ainda não temos 7 sinais, usar a função de garantir 7 sinais
+    if (finalSignals.length < 7) {
+      finalSignals = ensureSevenSignals(finalSignals);
+    }
+    
+    // Recuperar o sinal mais recente do estado anterior (se existir)
+    // para evitar que o último sinal seja atualizado constantemente
+    const existingSignals = queryClient.getQueryData<TradingSignal[]>(['tradingSignals']);
+    
+    if (existingSignals && existingSignals.length >= 7 && finalSignals.length >= 7) {
+      // Pegar o último sinal do estado anterior
+      const lastExistingSignal = existingSignals[existingSignals.length - 1];
+      
+      // Se o último sinal tem um ID diferente do último sinal atual (que seria substituído),
+      // e não é um sinal de dashboard, substituir o último sinal para manter a estabilidade
+      const lastSignalIsNotDashboard = !dashboardSignals.some(s => s.id === lastExistingSignal?.id);
+      
+      if (lastSignalIsNotDashboard) {
+        console.log('Preservando o último sinal para evitar atualizações constantes');
+        // Substituir o último sinal na lista
+        finalSignals[finalSignals.length - 1] = lastExistingSignal;
+      }
+    }
+    
+    // Garantir que todos os sinais tenham propriedades consistentes
+    const preprocessedSignals = finalSignals.map((signal, idx) => {
+      return {
+        ...signal,
+        status: signal.status || 'active' as const,
+        id: signal.id || `signal-${idx}`
+      };
+    });
+
+    // Ordenação final para garantir que os sinais apareçam em ordem de horário
+    // Primeiro separar os sinais da dashboard e não-dashboard
+    const dashboardIds = new Set(dashboardSignals.map(s => s.id));
+    const dashboardOnlySignals = preprocessedSignals.filter(s => dashboardIds.has(s.id));
+    const nonDashboardSignals = preprocessedSignals.filter(s => !dashboardIds.has(s.id));
+    
+    // Ordenar os sinais não-dashboard por horário
+    nonDashboardSignals.sort((a, b) => {
+      // Fazer cast para TradingSignal para acessar a propriedade entry_time
+      const signalA = a as TradingSignal & { entry_time?: string };
+      const signalB = b as TradingSignal & { entry_time?: string };
+      
+      if (!signalA.entry_time || !signalB.entry_time) return 0;
+      
+      // Extrair hora e minutos
+      const [aHour, aMin] = signalA.entry_time.split(':').map(Number);
+      const [bHour, bMin] = signalB.entry_time.split(':').map(Number);
+      
+      // Converter para minutos totais para facilitar a comparação
+      const aTotalMinutes = aHour * 60 + aMin;
+      const bTotalMinutes = bHour * 60 + bMin;
+      
+      // Ordenar crescente
+      return aTotalMinutes - bTotalMinutes;
+    });
+    
+    // Combinar os sinais da dashboard (sem alterar sua ordem) com os não-dashboard ordenados
+    return [...dashboardOnlySignals, ...nonDashboardSignals].slice(0, 7);
+  }, [signals, dashboardSignals, signalIds, queryClient]);
 
   // Paginação
   const indexOfLastSignal = activePage * signalsPerPage;
   const indexOfFirstSignal = indexOfLastSignal - signalsPerPage;
-  const paginatedSignals = filteredSignals.slice(indexOfFirstSignal, indexOfLastSignal);
+  
+  // Ordenar novamente os sinais filtrados por horário de entrada antes de paginar
+  const sortedFilteredSignals = [...filteredSignals].sort((a, b) => {
+    // Fazer cast para acessar a propriedade entry_time
+    const signalA = a as TradingSignal & { entry_time?: string };
+    const signalB = b as TradingSignal & { entry_time?: string };
+    
+    if (!signalA.entry_time || !signalB.entry_time) return 0;
+    
+    // Extrair hora e minutos
+    const [aHour, aMin] = signalA.entry_time.split(':').map(Number);
+    const [bHour, bMin] = signalB.entry_time.split(':').map(Number);
+    
+    // Converter para minutos totais para facilitar a comparação
+    const aTotalMinutes = aHour * 60 + aMin;
+    const bTotalMinutes = bHour * 60 + bMin;
+    
+    // Ordenar crescente
+    return aTotalMinutes - bTotalMinutes;
+  });
+  
+  const paginatedSignals = sortedFilteredSignals.slice(indexOfFirstSignal, indexOfLastSignal);
   const totalPages = Math.ceil(filteredSignals.length / signalsPerPage);
 
   // Função para lidar com a atualização de dados
@@ -1020,12 +1960,6 @@ const Signals = () => {
     return 'equal';
   };
 
-  const isNewSignal = (signal: TradingSignal): boolean => {
-    const createdAt = signal.created_at ? new Date(signal.created_at) : new Date(signal.timestamp);
-    const now = new Date();
-    return now.getTime() - createdAt.getTime() < 30 * 60 * 1000; // 30 minutos
-  };
-
   const isExpiringSignal = (signal: TradingSignal): boolean => {
     const expiry = new Date(signal.expiry);
     const now = new Date();
@@ -1052,27 +1986,31 @@ const Signals = () => {
 
   const getStrengthColor = (strength: SignalStrengthEnum) => {
     switch (strength) {
+      case SignalStrength.VERY_STRONG:
+        return "text-green-200";
       case SignalStrength.STRONG:
-        return "text-gray-200";
+        return "text-blue-200";
       case SignalStrength.MODERATE:
-        return "text-gray-300";
+        return "text-yellow-200";
       case SignalStrength.WEAK:
-        return "text-gray-400";
+        return "text-yellow-200"; // Mesmo para WEAK, usar a cor de MODERATE
       default:
-        return "text-gray-300";
+        return "text-yellow-200";
     }
   };
 
   const getStrengthText = (strength: SignalStrengthEnum) => {
     switch (strength) {
+      case SignalStrength.VERY_STRONG:
+        return t('signals.strength.very_strong');
       case SignalStrength.STRONG:
-        return t('signals.strength.strong') || "Alta confiança";
+        return t('signals.strength.strong');
       case SignalStrength.MODERATE:
-        return t('signals.strength.moderate') || "Confiança média";
+        return t('signals.strength.moderate');
       case SignalStrength.WEAK:
-        return t('signals.strength.weak') || "Baixa confiança";
+        return t('signals.strength.weak');
       default:
-        return t('signals.strength.moderate') || "Confiança média";
+        return t('signals.strength.moderate');
     }
   };
 
@@ -1084,26 +2022,63 @@ const Signals = () => {
     return `${(validRate * 100).toFixed(1)}%`;
   };
 
+  // Efeito para limpar cache antigo na inicialização
+  useEffect(() => {
+    // Verificar se há sinais em cache e se estão desatualizados
+    const cachedSignalsData = localStorage.getItem('dailyTradingSignals');
+    const cachedDate = localStorage.getItem('dailyTradingSignalsDate');
+    
+    if (cachedSignalsData && cachedDate) {
+      const cacheTime = new Date(cachedDate).getTime();
+      const now = new Date().getTime();
+      const cacheAgeHours = (now - cacheTime) / (1000 * 60 * 60);
+      
+      // Se o cache for mais antigo que 1 hora, limpar
+      if (cacheAgeHours > 1) {
+        console.log("Limpando cache de sinais antigos");
+        localStorage.removeItem('dailyTradingSignals');
+        localStorage.removeItem('dailyTradingSignalsDate');
+      }
+    }
+    
+    // Também limpar localStorage do dashboard se estiver desatualizado
+    const dashboardData = localStorage.getItem('dashboardSignals');
+    if (dashboardData) {
+      try {
+        const { timestamp } = JSON.parse(dashboardData);
+        const age = (Date.now() - timestamp) / (1000 * 60 * 60);
+        
+        if (age > 1) {
+          console.log("Limpando cache de sinais do dashboard");
+          localStorage.removeItem('dashboardSignals');
+        }
+      } catch (e) {
+        // Em caso de erro ao analisar, melhor limpar
+        localStorage.removeItem('dashboardSignals');
+      }
+    }
+  }, []);
+
   return (
     <Layout>
       <div className="space-y-6 relative signals-page-dark-gradient p-4 rounded-xl min-h-screen -mx-4 -my-4 shadow-inner">
-        {/* Camada preta por cima das luzes de fundo - MAIS TRANSPARENTE */}
-        <div className="absolute inset-0 bg-black/40 z-[1]"></div>
+        {/* Camada preta por cima das luzes de fundo - MAIS ESCURA */}
+        <div className="absolute inset-0 bg-black/70 z-[1]"></div>
 
-        {/* Efeitos de luz de fundo com MAIOR opacidade */}
-        <div className="signals-page-light-accent top-20 left-20 z-[2]" style={{ opacity: 0.15 }}></div>
-        <div className="signals-page-light-accent bottom-40 right-20 z-[2]" style={{ opacity: 0.15 }}></div>
-        <div className="signals-page-light-accent top-1/2 left-1/2 z-[2]" style={{ opacity: 0.15 }}></div>
+        {/* Efeitos de luz de fundo com MENOR opacidade */}
+        <div className="signals-page-light-accent top-20 left-20 z-[2]" style={{ opacity: 0.05 }}></div>
+        <div className="signals-page-light-accent bottom-40 right-20 z-[2]" style={{ opacity: 0.05 }}></div>
+        <div className="signals-page-light-accent top-1/2 left-1/2 z-[2]" style={{ opacity: 0.05 }}></div>
         
-        {/* Acentos coloridos */}
-        <div className="signals-page-color-accent top-0 left-10 z-[2]" style={{ background: '#300000', opacity: 0.15 }}></div>
-        <div className="signals-page-color-accent bottom-20 right-10 z-[2]" style={{ background: '#200000', opacity: 0.15 }}></div>
-        <div className="signals-page-color-accent top-40 right-40 z-[2]" style={{ background: '#350000', opacity: 0.15 }}></div>
+        {/* Acentos coloridos muito sutis */}
+        <div className="signals-page-color-accent top-0 left-10 z-[2]" style={{ background: '#000000', opacity: 0.05 }}></div>
+        <div className="signals-page-color-accent bottom-20 right-10 z-[2]" style={{ background: '#000000', opacity: 0.05 }}></div>
+        <div className="signals-page-color-accent top-40 right-40 z-[2]" style={{ background: '#080808', opacity: 0.05 }}></div>
         
-        {/* Cabeçalho da página com título mais brilhante */}
-        <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4 z-[3] relative">
-          <div className="floating-element">
-            <h1 className="text-2xl md:text-3xl font-bold tracking-tight bg-gradient-to-r from-red-700 via-red-900 to-black bg-clip-text text-transparent">
+        {/* Cabeçalho da página com título mais escuro */}
+        <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4 z-[3] relative mb-8">
+          <div>
+            <h1 className="text-2xl md:text-3xl font-bold tracking-tight bg-gradient-to-r from-gray-400 via-gray-200 to-gray-400 bg-clip-text text-transparent">
               {t('signals.title')}
             </h1>
             <div className="flex items-center gap-3 flex-wrap">
@@ -1123,126 +2098,16 @@ const Signals = () => {
               disabled={isRefreshing}
               className={`flex items-center gap-2 px-4 py-2 rounded-lg text-[14px] font-medium transition-all
                 ${isRefreshing 
-                  ? 'bg-white/5 text-white/40 cursor-not-allowed' 
-                  : 'bg-white/5 hover:bg-white/10 text-white/80 hover:text-white signals-page-card-glass'
+                  ? 'bg-black/60 text-white/40 cursor-not-allowed' 
+                  : 'bg-black/70 hover:bg-gray-900/90 text-white/80 hover:text-white signals-page-card-glass'
                 }`}
               title={t('signals.refresh')}
             >
               <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
               <span>{t('signals.refresh')}</span>
             </button>
-            
-            <button
-              onClick={() => setShowFilters(!showFilters)}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-[14px] font-medium transition-all
-                ${showFilters 
-                  ? 'bg-white/10 text-white' 
-                  : 'bg-white/5 hover:bg-white/10 text-white/80 hover:text-white signals-page-card-glass'
-                }`}
-            >
-              <Filter className="w-4 h-4" />
-              <span className="hidden md:inline">{t('signals.filters')}</span>
-              <ChevronDown className={`w-4 h-4 transition-transform ${showFilters ? 'rotate-180' : ''}`} />
-            </button>
           </div>
         </div>
-        
-        {/* Área de filtros */}
-        <AnimatePresence>
-          {showFilters && (
-            <motion.div 
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
-              exit={{ opacity: 0, height: 0 }}
-              transition={{ duration: 0.3 }}
-              className="overflow-hidden z-10 relative"
-            >
-              <div className="p-5 rounded-xl signals-page-card-glass">
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-5">
-          {/* Filtro por tipo de sinal */}
-                  <div className="space-y-2">
-                    <p className="text-sm text-white/70 font-medium">{t('signals.type')}</p>
-                    <div className="flex flex-wrap gap-2">
-            <button
-              onClick={() => setFilterType('ALL')}
-                        className={`px-4 py-2 rounded-lg text-[14px] font-medium transition-all ${
-                filterType === 'ALL' 
-                            ? 'bg-white/20 text-white shimmer-effect' 
-                            : 'bg-white/10 text-white/70 hover:bg-white/15'
-              }`}
-            >
-                        {t('signals.type.all')}
-            </button>
-            <button
-              onClick={() => setFilterType(SignalType.TECHNICAL)}
-                        className={`px-4 py-2 rounded-lg text-[14px] font-medium transition-all ${
-                filterType === SignalType.TECHNICAL 
-                            ? 'bg-blue-500/20 text-blue-200 border border-blue-500/20 shimmer-effect' 
-                            : 'bg-white/10 text-white/70 hover:bg-white/15'
-              }`}
-            >
-                        <BarChart3 className="w-4 h-4 inline mr-1.5 opacity-70" />
-                        {t('signals.type.technical')}
-            </button>
-            <button
-              onClick={() => setFilterType(SignalType.FUNDAMENTAL)}
-                        className={`px-4 py-2 rounded-lg text-[14px] font-medium transition-all ${
-                filterType === SignalType.FUNDAMENTAL 
-                            ? 'bg-purple-500/20 text-purple-200 border border-purple-500/20 shimmer-effect' 
-                            : 'bg-white/10 text-white/70 hover:bg-white/15'
-              }`}
-            >
-                        <TrendingUp className="w-4 h-4 inline mr-1.5 opacity-70" />
-                        {t('signals.type.fundamental')}
-            </button>
-            <button
-              onClick={() => setFilterType(SignalType.NEWS)}
-                        className={`px-4 py-2 rounded-lg text-[14px] font-medium transition-all ${
-                filterType === SignalType.NEWS 
-                            ? 'bg-amber-500/20 text-amber-200 border border-amber-500/20 shimmer-effect' 
-                            : 'bg-white/10 text-white/70 hover:bg-white/15'
-              }`}
-            >
-                        <Clock4 className="w-4 h-4 inline mr-1.5 opacity-70" />
-                        {t('signals.type.news')}
-            </button>
-                    </div>
-          </div>
-
-                  {/* Opções adicionais */}
-                  <div className="flex flex-col gap-2">
-                    <p className="text-sm text-white/70 font-medium">{t('signals.options')}</p>
-                    <div className="flex flex-wrap gap-2">
-            <button
-              onClick={() => setShowExpiredSignals(!showExpiredSignals)}
-                        className={`flex items-center px-4 py-2 rounded-lg text-[14px] font-medium transition-all ${
-                showExpiredSignals
-                            ? 'bg-gray-500/20 text-gray-300 border border-gray-500/20 shimmer-effect' 
-                            : 'bg-white/10 text-white/70 hover:bg-white/15'
-              }`}
-            >
-                        <Clock className="w-4 h-4 mr-1.5 opacity-70" />
-                        {showExpiredSignals ? t('signals.options.hide.expired') : t('signals.options.show.expired')}
-            </button>
-                      
-                      <button
-                        onClick={() => setAutoRefresh(!autoRefresh)}
-                        className={`flex items-center px-4 py-2 rounded-lg text-[14px] font-medium transition-all ${
-                          autoRefresh 
-                            ? 'bg-teal-500/20 text-teal-200 border border-teal-500/20 shimmer-effect' 
-                            : 'bg-white/10 text-white/70 hover:bg-white/15'
-                        }`}
-                      >
-                        <RefreshCw className="w-4 h-4 mr-1.5 opacity-70" />
-                        {t('signals.options.auto.refresh')}
-                      </button>
-          </div>
-        </div>
-                </div>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
 
         {/* Injetar estilos CSS */}
         <style>{styles}</style>
@@ -1253,8 +2118,8 @@ const Signals = () => {
             <div className="loading-container">
               <div className="flex items-center justify-center mb-6">
                 <div className="relative">
-                  <div className="w-16 h-16 border-2 border-white/10 border-t-gray-300/30 rounded-full animate-spin"></div>
-                  <div className="w-12 h-12 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 border-2 border-white/10 border-b-gray-300/30 rounded-full animate-spin"></div>
+                  <div className="w-16 h-16 border-2 border-black/90 border-t-gray-600/30 rounded-full animate-spin"></div>
+                  <div className="w-12 h-12 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 border-2 border-black/90 border-b-gray-600/30 rounded-full animate-spin"></div>
               </div>
               </div>
               <h3 className="gradient-text font-medium text-lg mb-2">{t('signals.analyzing.market')}</h3>
@@ -1265,13 +2130,6 @@ const Signals = () => {
           ) : filteredSignals && filteredSignals.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
               {paginatedSignals.map((signal: any, index) => {
-                const isNew = isNewSignal(signal);
-                const isExpiring = isExpiringSignal(signal);
-                const isCompleted = completedSignals[signal.id];
-                const resultClass = isCompleted 
-                  ? (completedSignals[signal.id] === 'win' ? 'signal-completed-win' : 'signal-completed-loss') 
-                  : '';
-                
                 // Converter horários para o fuso horário selecionado
                 const entryTime = convertTimeToSelected(signal.entry_time);
                 const expiryTime = convertTimeToSelected(signal.expiry_time_str);
@@ -1285,36 +2143,10 @@ const Signals = () => {
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, scale: 0.8 }}
                     transition={{ duration: 0.3, delay: index * 0.05 }}
-                    className={`flex flex-col rounded-xl overflow-hidden transition-all duration-300 glow-hover
-                      ${signal.status === 'active' 
-                        ? 'signals-page-card-glass' 
-                        : 'bg-black/30 border border-white/5 opacity-75'
-                      }
-                      ${isNew ? 'ring-1 ring-indigo-500/30' : ''}
-                      ${resultClass}
-                    `}
+                    className="flex flex-col rounded-xl signal-card"
+                    data-signal-number={index + 1}
                   >
-                    {isCompleted && completedSignals[signal.id] === 'win' && (
-                      <div className="absolute inset-0 flex flex-col items-center justify-center z-30 bg-black/30 backdrop-filter backdrop-blur-sm">
-                        <div className="text-center">
-                          <span className="text-lg font-medium text-green-400">
-                            {t('signals.result.win') || "GANHO"}
-                          </span>
-                        </div>
-                      </div>
-                    )}
-
-                    {isCompleted && completedSignals[signal.id] === 'loss' && (
-                      <div className="absolute inset-0 flex flex-col items-center justify-center z-30 bg-black/30 backdrop-filter backdrop-blur-sm">
-                        <div className="text-center">
-                          <span className="text-lg font-medium text-red-400">
-                            {t('signals.result.loss') || "PERDA"}
-                          </span>
-                        </div>
-                      </div>
-                    )}
-
-                    <div className="relative p-4 border-b border-white/[0.05] backdrop-blur-md bg-black/40">
+                    <div className="relative p-4 border-b signal-divider backdrop-blur-md bg-black/70">
                       {/* Simbolo e nome do ativo - CORRIGIDO */}
                       <div className="flex items-start justify-between gap-3">
                         <div className="flex-1 min-w-0">
@@ -1328,8 +2160,8 @@ const Signals = () => {
                       
                         <span className={`text-sm py-1 px-2 rounded-md flex-shrink-0 h-fit ${
                           signal.signal === 'BUY' 
-                            ? 'bg-gradient-to-r from-emerald-950/80 to-emerald-900/80 text-emerald-400' 
-                            : 'bg-gradient-to-r from-red-950/80 to-rose-900/80 text-rose-400'
+                            ? 'bg-gradient-to-r from-green-950/90 to-green-950/80 text-green-500' 
+                            : 'bg-gradient-to-r from-red-950/90 to-red-950/80 text-red-500'
                           } font-medium`}
                         >
                           {signal.signal === 'BUY' ? t('signals.buy') || "COMPRA" : t('signals.sell') || "VENDA"}
@@ -1337,21 +2169,16 @@ const Signals = () => {
                       </div>
                     </div>
                     
-                    <div className="p-4 flex-grow relative backdrop-blur-md bg-black/20">
+                    <div className="p-4 flex-grow relative backdrop-blur-md bg-black/70">
                       {/* Indicadores de status */}
                       <div className="flex flex-wrap gap-2 mb-4 h-8 items-center">
-                              {isNew && (
-                          <span className="text-xs h-6 px-2 py-1 rounded-full bg-indigo-900/15 text-indigo-300/80 border border-indigo-800/10 flex items-center">
-                            <span className="w-1.5 h-1.5 rounded-full bg-indigo-600/70 mr-1.5 animate-pulse"></span>
-                                  {t('signals.new') || "NOVO"}
-                                </span>
-                              )}
-                              {/* Substituir EXPIRANDO pela taxa de sucesso */}
-                              <span className="text-xs h-6 px-2 py-1 rounded-full bg-emerald-900/15 text-emerald-300/80 border border-emerald-800/10 flex items-center">
+                        {/* Taxa de sucesso */}
+                        <span className="text-xs h-6 px-2 py-1 rounded-full bg-emerald-900/30 text-emerald-300/80 border border-white/5 flex items-center">
                                 <CheckCheck className="w-3 h-3 mr-1" />
                                 {formatSuccessRate(signal.success_rate || 0.77)}
                                 </span>
-                        <span className={`text-xs h-6 px-2 py-1 rounded-full flex items-center text-teal-300/70 bg-teal-900/15 border border-teal-800/10`}>
+                        {/* Nível de confiança */}
+                        <span className={`text-xs h-6 px-2 py-1 rounded-full flex items-center text-teal-300/70 bg-teal-900/30 border border-white/5`}>
                           <CheckCheck className="w-3 h-3 mr-1" />
                           {getStrengthText(signal.strength)}
                             </span>
@@ -1360,30 +2187,33 @@ const Signals = () => {
                       {/* Dados do sinal */}
                       <div className="grid grid-cols-2 gap-3 mb-4">
                         <div className="flex flex-col space-y-3">
-                          <div className="flex items-center justify-between bg-black/50 backdrop-blur-md rounded-lg p-3 border border-white/[0.02] shadow-inner min-h-[50px]">
+                          <div className="flex items-center justify-between bg-black/80 backdrop-blur-md rounded-lg p-3 border border-white/5 shadow-inner min-h-[50px] signal-info-box">
                             <div>
                               <p className="text-sm font-medium text-white/70">{t('dashboard.signals.entry') || "Entrada"}</p>
                             </div>
                             <p className="text-base font-semibold text-white/80">{entryTime || "00:00"}</p>
                           </div>
                           
-                          <div className="flex items-center justify-between bg-black/50 backdrop-blur-md rounded-lg p-3 border border-white/[0.02] shadow-inner min-h-[50px]">
+                          <div className="flex items-center justify-between bg-black/80 backdrop-blur-md rounded-lg p-3 border border-white/5 shadow-inner min-h-[50px] signal-info-box">
                             <div>
                               <p className="text-sm font-medium text-white/70">{t('dashboard.signals.expiration') || "Expiração"}</p>
                             </div>
-                            <p className="text-base font-semibold text-white/80">{signal.timeframe || "1m"}</p>
+                            <div className="flex items-center gap-1 text-base font-semibold text-white/80">
+                              <span>5m</span>
+                              <span className="text-xs text-white/50">({expiryTime})</span>
+                            </div>
                           </div>
                         </div>
                         
                         <div className="flex flex-col space-y-3">
-                          <div className="flex items-center justify-between bg-black/50 backdrop-blur-md rounded-lg p-3 border border-white/[0.02] shadow-inner min-h-[50px]">
+                          <div className="flex items-center justify-between bg-black/80 backdrop-blur-md rounded-lg p-3 border border-white/5 shadow-inner min-h-[50px] signal-info-box">
                             <div>
                               <p className="text-sm font-medium text-white/70">{t('dashboard.signals.reentry1') || "Reentrada 1"}</p>
                             </div>
                             <p className="text-base font-semibold text-white/80">{gale1Time || "00:29"}</p>
                           </div>
                           
-                          <div className="flex items-center justify-between bg-black/50 backdrop-blur-md rounded-lg p-3 border border-white/[0.02] shadow-inner min-h-[50px]">
+                          <div className="flex items-center justify-between bg-black/80 backdrop-blur-md rounded-lg p-3 border border-white/5 shadow-inner min-h-[50px] signal-info-box">
                             <div>
                               <p className="text-sm font-medium text-white/70">{t('dashboard.signals.reentry2') || "Reentrada 2"}</p>
                             </div>
@@ -1393,9 +2223,9 @@ const Signals = () => {
                       </div>
                       
                     {/* Botão de ação */}
-                    <div className="p-4 border-t border-white/[0.02] bg-black/50">
+                    <div className="p-4 border-t signal-divider bg-black/80">
                       <button
-                        className="w-full py-3 px-4 rounded-lg bg-gradient-to-r from-amber-700/80 via-yellow-600/70 to-amber-600/90 hover:from-amber-800/80 hover:via-yellow-700/70 hover:to-amber-700/90 text-amber-50 font-medium transition-all duration-300 flex items-center justify-center relative overflow-hidden shadow-lg backdrop-blur-sm border border-amber-500/20 group golden-button golden-shadow"
+                        className="w-full py-3 px-4 rounded-lg bg-gradient-to-r from-amber-700/80 via-yellow-600/70 to-amber-600/90 hover:from-amber-800/80 hover:via-yellow-700/70 hover:to-amber-700/90 text-amber-50 font-medium transition-all duration-300 flex items-center justify-center relative overflow-hidden shadow-lg backdrop-blur-sm border border-amber-500/20 golden-button golden-shadow"
                         onClick={() => window.open('https://trade.xxbroker.com/register?aff=751924&aff_model=revenue&afftrack=', '_blank')}
                       >
                         <span className="absolute inset-0 w-full h-full bg-black opacity-30 group-hover:opacity-20 transition-opacity duration-300"></span>
@@ -1414,7 +2244,7 @@ const Signals = () => {
             </div>
           ) : (
             <div className="flex flex-col items-center justify-center p-10 signals-page-card-glass rounded-xl">
-              <div className="bg-white/5 p-4 rounded-full mb-4">
+              <div className="bg-black/60 p-4 rounded-full mb-4">
                 <ListFilter className="w-10 h-10 text-white/30" />
               </div>
               <h3 className="text-xl font-medium mb-2">Nenhum sinal encontrado</h3>
@@ -1428,7 +2258,7 @@ const Signals = () => {
                   setFilterType('ALL');
                   setShowExpiredSignals(true);
                 }}
-                className="px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white/80 hover:text-white transition-all"
+                className="px-4 py-2 rounded-lg bg-black/70 hover:bg-gray-900/80 text-white/80 hover:text-white transition-all"
               >
                 Mostrar todos os sinais
               </button>
@@ -1441,7 +2271,7 @@ const Signals = () => {
               <button 
                 onClick={() => setActivePage(prev => Math.max(1, prev - 1))}
                 disabled={activePage === 1}
-                className="p-2 rounded-lg signals-page-card-glass hover:bg-white/10 disabled:opacity-50 disabled:pointer-events-none transition-all"
+                className="p-2 rounded-lg bg-black/80 hover:bg-gray-900/80 disabled:opacity-50 disabled:pointer-events-none transition-all"
                 aria-label="Página anterior"
               >
                 <ChevronRight className="w-5 h-5 rotate-180" />
@@ -1460,8 +2290,8 @@ const Signals = () => {
                     onClick={() => setActivePage(index + 1)}
                         className={`w-9 h-9 rounded-lg flex items-center justify-center transition-all ${
                       activePage === index + 1 
-                            ? 'bg-gradient-to-r from-indigo-500/20 to-purple-500/20 text-white font-medium border border-white/10 shimmer-effect' 
-                            : 'signals-page-card-glass hover:bg-white/10 text-white/70'
+                            ? 'bg-gray-900/90 text-white font-medium border border-gray-800/30 shimmer-effect' 
+                            : 'bg-black/80 hover:bg-gray-900/70 text-white/70'
                     }`}
                   >
                     {index + 1}
@@ -1479,7 +2309,7 @@ const Signals = () => {
               <button 
                 onClick={() => setActivePage(prev => Math.min(totalPages, prev + 1))}
                 disabled={activePage === totalPages}
-                className="p-2 rounded-lg signals-page-card-glass hover:bg-white/10 disabled:opacity-50 disabled:pointer-events-none transition-all"
+                className="p-2 rounded-lg bg-black/80 hover:bg-gray-900/80 disabled:opacity-50 disabled:pointer-events-none transition-all"
                 aria-label="Próxima página"
               >
                 <ChevronRight className="w-5 h-5" />
