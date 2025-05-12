@@ -873,11 +873,23 @@ const Signals = () => {
     
     // Garantir que usamos o próximo horário válido a partir da hora atual
     const currentMinute = today.getMinutes();
+    
+    // Encontrar o próximo horário válido
+    let foundValidTime = false;
+    
+    // Primeiro verificar minutos na hora atual
     for (let i = 0; i < validMinutes.length; i++) {
       if (parseInt(validMinutes[i]) > currentMinute) {
         currentMinuteIndex = i;
+        foundValidTime = true;
         break;
       }
+    }
+    
+    // Se não encontrou na hora atual, usar o primeiro minuto da próxima hora
+    if (!foundValidTime) {
+      currentHour = (currentHour + 1) % 24;
+      currentMinuteIndex = 0;
     }
     
     // Gerar 24 sinais sequenciais progredindo nos horários
@@ -1534,29 +1546,255 @@ const Signals = () => {
     // Verificar se os sinais da dashboard têm os horários corretos (XX:03, XX:23, XX:43)
     const validMinutes = ['03', '23', '43'];
     
-    // Primeiro tratar os sinais da dashboard - garantir que não há horários duplicados entre eles
-    // Usando um tipo que inclui o id e outras propriedades dos sinais
-    const normalizedDashboardSignals = dashboardSignals.slice(0, 3).map((signal, index) => {
-      // Criar uma cópia e garantir que tem um ID
-      const signalWithId = {...signal} as SignalWithId;
+    // Verificar quantos sinais da dashboard já estão incluídos
+    const dashboardIdsInInput = new Set(signalsInput.map(s => s.id));
+    const dashboardIncluded = dashboardSignals.filter(s => dashboardIdsInInput.has(s.id));
+    const dashboardToAdd = dashboardSignals.filter(s => !dashboardIdsInInput.has(s.id));
+          
+    // Se já temos sinais da dashboard incluídos, não modificá-los
+    // Adicionar sinais da dashboard que ainda não estão incluídos, sem modificação
+    signalsCopy = [...signalsCopy, ...dashboardToAdd];
       
-      // Garantir que cada sinal tem um ID único
-      if (!signalWithId.id) {
-        signalWithId.id = `dashboard-${index}-${Date.now()}`;
+    // Identificar os IDs dos sinais da dashboard para preservá-los
+    const dashboardIds = new Set(dashboardSignals.map(s => s.id));
+    
+    // Mapear os horários já usados para evitar duplicatas
+    const usedTimes = new Set<string>();
+    signalsCopy.forEach(signal => {
+      if (signal.entry_time) {
+        usedTimes.add(signal.entry_time);
       }
-
-      // Forçar horários específicos para cada sinal da dashboard
+    });
+    
+    // Completar até 7 sinais com horários únicos
+    const finalSignals: TradingSignal[] = [];
+    
+    // Primeiro, adicionar todos os sinais da dashboard presentes (preservando-os exatamente como estão)
+    const dashboardSignalsInCopy = signalsCopy.filter(s => dashboardIds.has(s.id as string));
+    finalSignals.push(...dashboardSignalsInCopy);
+    
+    // Depois, adicionar os outros sinais até completar 7, ajustando horários se necessário
+    const nonDashboardSignals = signalsCopy.filter(s => !dashboardIds.has(s.id as string));
+    
+    for (const signal of nonDashboardSignals) {
+      // Se já temos 7 sinais, parar
+      if (finalSignals.length >= 7) break;
+      
+      // Se o horário já está em uso, ajustar
+      if (signal.entry_time && usedTimes.has(signal.entry_time)) {
+        // Encontrar um novo horário único
+        const now = new Date();
+        const currHour = now.getHours();
+        const currMinute = now.getMinutes();
+        
+        // Valores de minutos válidos (03, 23, 43)
+        const validMinutes = [3, 23, 43];
+        
+        // Encontrar o próximo minuto válido disponível
+        let foundValidTime = false;
+        
+        // Primeiro tentar horários na hora atual ou nas próximas 3 horas
+        for (let h = 0; h < 4 && !foundValidTime; h++) {
+          const checkHour = (currHour + h) % 24;
+          
+          for (const validMinute of validMinutes) {
+            // Se estamos na hora atual, só considerar minutos futuros
+            if (h === 0 && validMinute <= currMinute) {
+              continue;
+            }
+            
+            const checkTime = `${checkHour.toString().padStart(2, '0')}:${validMinute.toString().padStart(2, '0')}`;
+            
+            if (!usedTimes.has(checkTime)) {
+              // Encontramos um horário disponível
+              signal.entry_time = checkTime;
+              usedTimes.add(checkTime);
+              
+              // Recalcular expiração e reentradas
+              signal.expiry_time_str = calculateNextTime(checkTime, SIGNAL_EXPIRY_TIME);
+              signal.gale1_time = signal.expiry_time_str;
+              signal.gale2_time = calculateNextTime(signal.gale1_time, SIGNAL_EXPIRY_TIME);
+              
+              foundValidTime = true;
+              break;
+            }
+          }
+          
+          if (foundValidTime) break;
+        }
+        
+        // Se não encontrou nas próximas 3 horas, tentar nas 24 horas
+        if (!foundValidTime) {
+          for (let h = 0; h < 24 && !foundValidTime; h++) {
+            const checkHour = (currHour + h) % 24;
+            
+            for (const validMinute of validMinutes) {
+              // Se estamos na hora atual, só considerar minutos futuros
+              if (h === 0 && validMinute <= currMinute) {
+                continue;
+              }
+              
+              const checkTime = `${checkHour.toString().padStart(2, '0')}:${validMinute.toString().padStart(2, '0')}`;
+              
+              if (!usedTimes.has(checkTime)) {
+                // Encontramos um horário disponível
+                signal.entry_time = checkTime;
+                usedTimes.add(checkTime);
+                
+                // Recalcular expiração e reentradas
+                signal.expiry_time_str = calculateNextTime(checkTime, SIGNAL_EXPIRY_TIME);
+                signal.gale1_time = signal.expiry_time_str;
+                signal.gale2_time = calculateNextTime(signal.gale1_time, SIGNAL_EXPIRY_TIME);
+                
+                foundValidTime = true;
+                break;
+              }
+            }
+            
+            if (foundValidTime) break;
+          }
+        }
+      } else if (signal.entry_time) {
+        // O horário não está sendo usado, registrar
+        usedTimes.add(signal.entry_time);
+      } else {
+        // Se não tem horário de entrada, criar um
+        const now = new Date();
+        const currHour = now.getHours();
+        const currMinute = now.getMinutes();
+        
+        // Encontrar um horário não usado
+        let foundUnusedTime = false;
+        const validMinutes = [3, 23, 43];
+        
+        // Primeiro tentar horários na hora atual ou nas próximas 3 horas
+        for (let h = 0; h < 4 && !foundUnusedTime; h++) {
+          const checkHour = (currHour + h) % 24;
+          
+          for (const validMinute of validMinutes) {
+            // Se estamos na hora atual, só considerar minutos futuros
+            if (h === 0 && validMinute <= currMinute) {
+              continue;
+            }
+            
+            const checkTime = `${checkHour.toString().padStart(2, '0')}:${validMinute.toString().padStart(2, '0')}`;
+            
+            if (!usedTimes.has(checkTime)) {
+              // Encontramos um horário disponível
+              signal.entry_time = checkTime;
+              usedTimes.add(checkTime);
+              
+              // Recalcular expiração e reentradas
+              signal.expiry_time_str = calculateNextTime(checkTime, SIGNAL_EXPIRY_TIME);
+              signal.gale1_time = signal.expiry_time_str;
+              signal.gale2_time = calculateNextTime(signal.gale1_time, SIGNAL_EXPIRY_TIME);
+              
+              foundUnusedTime = true;
+              break;
+            }
+          }
+          
+          if (foundUnusedTime) break;
+        }
+        
+        // Se não encontrou nas próximas 3 horas, tentar nas 24 horas
+        if (!foundUnusedTime) {
+          for (let h = 0; h < 24 && !foundUnusedTime; h++) {
+            const checkHour = (currHour + h) % 24;
+            
+            for (const validMinute of validMinutes) {
+              // Se estamos na hora atual, só considerar minutos futuros
+              if (h === 0 && validMinute <= currMinute) {
+                continue;
+              }
+              
+              const checkTime = `${checkHour.toString().padStart(2, '0')}:${validMinute.toString().padStart(2, '0')}`;
+              
+              if (!usedTimes.has(checkTime)) {
+                // Encontramos um horário disponível
+                signal.entry_time = checkTime;
+                usedTimes.add(checkTime);
+                
+                // Recalcular expiração e reentradas
+                signal.expiry_time_str = calculateNextTime(checkTime, SIGNAL_EXPIRY_TIME);
+                signal.gale1_time = signal.expiry_time_str;
+                signal.gale2_time = calculateNextTime(signal.gale1_time, SIGNAL_EXPIRY_TIME);
+                
+                foundUnusedTime = true;
+                break;
+              }
+            }
+            
+            if (foundUnusedTime) break;
+          }
+        }
+      }
+      
+      // Adicionar à lista final
+      finalSignals.push(signal);
+    }
+    
+    // Se ainda não temos 7 sinais, gerar novos
+    while (finalSignals.length < 7) {
+      // Gerar um novo sinal com horário único
       const now = new Date();
       const currHour = now.getHours();
-      let entryTime = "";
+      const currMinute = now.getMinutes();
       
-      // Definir horários diferentes para cada sinal
-      if (index === 0) {
-        entryTime = `${currHour.toString().padStart(2, '0')}:03`;
-      } else if (index === 1) {
-        entryTime = `${currHour.toString().padStart(2, '0')}:23`;
-      } else {
-        entryTime = `${currHour.toString().padStart(2, '0')}:43`;
+      // Determinar o próximo horário válido a partir da hora atual
+      const validMinutes = [3, 23, 43];
+      
+      // Encontrar um horário não usado a partir do horário atual
+      let entryTime = "";
+      let foundUnusedTime = false;
+      
+      // Primeiro tentar encontrar um horário válido na hora atual
+      // ou nas próximas 3 horas (mais relevante para o usuário)
+      for (let h = 0; h < 4; h++) {
+        const checkHour = (currHour + h) % 24;
+        
+        for (const validMinute of validMinutes) {
+          // Se estamos na hora atual, só considerar minutos futuros
+          if (h === 0 && validMinute <= currMinute) {
+            continue;
+          }
+          
+          const checkTime = `${checkHour.toString().padStart(2, '0')}:${validMinute.toString().padStart(2, '0')}`;
+          
+          if (!usedTimes.has(checkTime)) {
+            entryTime = checkTime;
+            usedTimes.add(checkTime);
+            foundUnusedTime = true;
+            break;
+          }
+        }
+        
+        if (foundUnusedTime) break;
+      }
+      
+      // Se não encontrou nas próximas 3 horas, procurar nas próximas 24 horas
+      if (!foundUnusedTime) {
+        for (let h = 0; h < 24; h++) {
+          const checkHour = (currHour + h) % 24;
+          
+          for (const validMinute of validMinutes) {
+            // Se estamos na hora atual, só considerar minutos futuros
+            if (h === 0 && validMinute <= currMinute) {
+              continue;
+            }
+            
+            const checkTime = `${checkHour.toString().padStart(2, '0')}:${validMinute.toString().padStart(2, '0')}`;
+            
+            if (!usedTimes.has(checkTime)) {
+              entryTime = checkTime;
+              usedTimes.add(checkTime);
+              foundUnusedTime = true;
+              break;
+            }
+          }
+          
+          if (foundUnusedTime) break;
+        }
       }
       
       // Calcular os demais horários
@@ -1564,154 +1802,68 @@ const Signals = () => {
       const gale1Time = expiryTime;
       const gale2Time = calculateNextTime(gale1Time, SIGNAL_EXPIRY_TIME);
       
-      // Retornar o sinal com todos os campos atualizados
-      return {
-        ...signalWithId,
+      // Criar um novo sinal
+      const newSignal: TradingSignal = {
+        id: `generated-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+        symbol: getRandomAsset(),
+        exchange: "Digital",
+        signal: Math.random() > 0.5 ? 'BUY' : 'SELL',
+        status: 'active',
+        type: SignalType.TECHNICAL,
+        reason: 'Análise técnica',
+        strength: SignalStrength.MODERATE,
+        timestamp: Date.now(),
+        price: 100,
+        entry_price: 100,
+        stop_loss: 90,
+        target_price: 110,
+        success_rate: 0.85 + (Math.random() * 0.07),
+        timeframe: "5m",
+        expiry: new Date().toISOString(),
+        risk_reward: "1:2",
         entry_time: entryTime,
         expiry_time_str: expiryTime,
         gale1_time: gale1Time,
         gale2_time: gale2Time
       };
-    });
-    
-    // Os 3 primeiros sinais DEVEM ser os da dashboard
-    const dashboardIds = normalizedDashboardSignals.map(s => s.id);
-    signalsCopy = signalsCopy.filter(s => !dashboardIds.includes(s.id as string));
-    
-    // Adicionar os sinais da dashboard normalizados no início da lista
-    signalsCopy = [...normalizedDashboardSignals, ...signalsCopy];
-    
-    console.log(`Garantindo que os ${normalizedDashboardSignals.length} sinais da dashboard estão no início da lista`);
-    
-    // Mapear os ativos e horários já utilizados para evitar duplicatas
-    const usedAssets = new Map<string, Set<string>>(); // Map de ativo -> conjunto de horários
-    const usedTimes = new Set<string>(); // Conjunto de horários já utilizados
-    
-    // Registrar ativos e horários já usados nos sinais da dashboard
-    normalizedDashboardSignals.forEach(signal => {
-      if (signal.symbol && signal.entry_time) {
-        // Registrar o horário para este ativo
-        if (!usedAssets.has(signal.symbol)) {
-          usedAssets.set(signal.symbol, new Set());
-        }
-        usedAssets.get(signal.symbol)?.add(signal.entry_time);
-        
-        // Registrar o horário como usado
-        usedTimes.add(signal.entry_time);
-      }
-    });
-    
-    // Verificação final para garantir que não há duplicação de horários
-    const finalSignals: TradingSignal[] = [...normalizedDashboardSignals];
-    
-    // Adicionar sinais restantes, ajustando horários para evitar duplicatas
-    for (const signal of signalsCopy.slice(normalizedDashboardSignals.length)) {
-      if (!signal.entry_time) {
-        // Gerar um horário de entrada que não seja duplicado
-        const now = new Date();
-        const currHour = now.getHours();
-        let nextHour = currHour;
-        
-        // Verificar cada minuto possível (03, 23, 43) e incrementar a hora até encontrar um horário não usado
-        let foundUnusedTime = false;
-        
-        // Loop para encontrar o próximo horário livre
-        for (let h = 0; h < 24; h++) {
-          const checkHour = (currHour + h) % 24;
-          
-          for (const minute of validMinutes) {
-            const checkTime = `${checkHour.toString().padStart(2, '0')}:${minute}`;
-            
-            if (!usedTimes.has(checkTime)) {
-              // Encontramos um horário não usado
-              signal.entry_time = checkTime;
-              usedTimes.add(checkTime);
-              
-              // Calcular os demais horários
-              const expiryTime = calculateNextTime(checkTime, SIGNAL_EXPIRY_TIME);
-              const gale1Time = expiryTime;
-              const gale2Time = calculateNextTime(gale1Time, SIGNAL_EXPIRY_TIME);
-              
-              signal.expiry_time_str = expiryTime;
-              signal.gale1_time = gale1Time;
-              signal.gale2_time = gale2Time;
-              
-              foundUnusedTime = true;
-              break;
-            }
-          }
-          
-          if (foundUnusedTime) break;
-        }
-      } else if (usedTimes.has(signal.entry_time)) {
-        // O horário já está sendo usado, precisamos ajustar
-        const [hours, _] = signal.entry_time.split(':');
-        let nextHour = parseInt(hours);
-        let foundUnusedTime = false;
-        
-        // Loop para encontrar o próximo horário livre
-        for (let h = 0; h < 24; h++) {
-          const checkHour = (nextHour + h) % 24;
-          
-          for (const minute of validMinutes) {
-            const checkTime = `${checkHour.toString().padStart(2, '0')}:${minute}`;
-            
-            if (!usedTimes.has(checkTime)) {
-              // Encontramos um horário não usado
-              signal.entry_time = checkTime;
-              usedTimes.add(checkTime);
-              
-              // Calcular os demais horários
-              const expiryTime = calculateNextTime(checkTime, SIGNAL_EXPIRY_TIME);
-              const gale1Time = expiryTime;
-              const gale2Time = calculateNextTime(gale1Time, SIGNAL_EXPIRY_TIME);
-              
-              signal.expiry_time_str = expiryTime;
-              signal.gale1_time = gale1Time;
-              signal.gale2_time = gale2Time;
-              
-              foundUnusedTime = true;
-              break;
-            }
-          }
-          
-          if (foundUnusedTime) break;
-        }
-      } else {
-        // O horário não está sendo usado, vamos registrá-lo
-        usedTimes.add(signal.entry_time);
-      }
       
-      // Adicionar o sinal à lista final
-      finalSignals.push(signal);
+      finalSignals.push(newSignal);
     }
     
-    // Ordenar por horário de entrada, mas mantendo os sinais da dashboard no início
+    // Ordenar sinais, garantindo que os da dashboard vêm primeiro
     finalSignals.sort((a, b) => {
-      // Manter os sinais da dashboard no início
-      const aIsDashboard = dashboardIds.includes((a as SignalWithId).id);
-      const bIsDashboard = dashboardIds.includes((b as SignalWithId).id);
+      // Verificar se são sinais da dashboard
+      const aIsDashboard = dashboardIds.has(a.id as string);
+      const bIsDashboard = dashboardIds.has(b.id as string);
       
+      // Dashboard sempre primeiro
       if (aIsDashboard && !bIsDashboard) return -1;
       if (!aIsDashboard && bIsDashboard) return 1;
       
-      // Se ambos são dashboard ou não-dashboard, ordenar por horário
+      // Se ambos são da dashboard ou nenhum é, ordenar por horário
       if (!a.entry_time || !b.entry_time) return 0;
         
-      // Extrair hora e minuto para comparação numérica
       const [aHour, aMin] = a.entry_time.split(':').map(Number);
       const [bHour, bMin] = b.entry_time.split(':').map(Number);
         
-      // Converter para minutos totais para facilitar a comparação
       const aTotalMinutes = aHour * 60 + aMin;
       const bTotalMinutes = bHour * 60 + bMin;
         
-      // Ordenar por horário crescente
       return aTotalMinutes - bTotalMinutes;
     });
     
-    // Garantir que temos exatamente 7 sinais
-    return finalSignals.slice(0, 7);
+    // Limitar a exatamente 7 sinais, preservando os da dashboard
+    // Primeiro os sinais da dashboard
+    const dashboardInFinal = finalSignals.filter(s => dashboardIds.has(s.id as string));
+    // Depois os outros, até completar 7
+    const nonDashboardInFinal = finalSignals.filter(s => !dashboardIds.has(s.id as string));
+    
+    const result = [
+      ...dashboardInFinal.slice(0, Math.min(dashboardInFinal.length, 3)),
+      ...nonDashboardInFinal.slice(0, Math.max(0, 7 - dashboardInFinal.length))
+    ];
+    
+    return result;
   };
 
   // Memorizar os IDs dos sinais para evitar recriação quando apenas a ordem muda
@@ -1723,40 +1875,22 @@ const Signals = () => {
   const filteredSignals = useMemo(() => {
     if (!signals) return ensureSevenSignals([]);
     
-    // Iniciar com os sinais da dashboard (os 3 primeiros DEVEM ser os da dashboard)
+    // Garantir que os 3 primeiros sinais sejam exatamente os da dashboard
     let finalSignals: TradingSignal[] = [];
     
-    // Adicionar primeiro os sinais da dashboard (até 3)
+    // Primeiro adicionar os sinais da dashboard sem nenhuma modificação
     if (dashboardSignals && dashboardSignals.length > 0) {
-      // Copiar os sinais da dashboard e ajustar seus atributos
-      const dashboardSignalsCopy = dashboardSignals.map(signal => {
-        // Determinar força do sinal com base na taxa de sucesso
-        let strength;
-        const successRate = signal.success_rate || 0.85;
-        
-        if (successRate >= 0.90) {
-          strength = SignalStrength.VERY_STRONG; // Altíssima confiança (≥ 90%)
-        } else if (successRate >= 0.85) {
-          strength = SignalStrength.STRONG; // Alta confiança (≥ 85%)
-        } else {
-          strength = SignalStrength.MODERATE; // Média confiança (< 85%)
-        }
-        
-        return {
-          ...signal,
-          strength: strength,
-          // Garantir que todos os sinais da dashboard estejam com os status corretos
-          status: 'active' as const,
-        };
-      });
-      
-      // Adicionar os sinais da dashboard no início
-      finalSignals = [...dashboardSignalsCopy];
-      
-      console.log(`Adicionados ${finalSignals.length} sinais da dashboard`);
+      // Adicionar os sinais da dashboard no início, exatamente como estão
+      finalSignals = [...dashboardSignals];
+      console.log(`Adicionados ${finalSignals.length} sinais da dashboard sem modificações`);
     }
     
-    // Para os sinais restantes, usar os sinais gerados normalmente
+    // Verificar a hora atual para filtrar horários passados
+    const now = new Date();
+    const currentHour = now.getHours();
+    const currentMinute = now.getMinutes();
+    
+    // Para os sinais restantes até completar 7, usar os sinais gerados
     if (signals) {
       const signalsArray = signals as TradingSignal[];
       
@@ -1764,120 +1898,207 @@ const Signals = () => {
       const dashboardIds = new Set(finalSignals.map(s => s.id));
       let remainingSignals = signalsArray.filter(signal => !dashboardIds.has(signal.id));
       
-      // Filtrar sinais ativos
-      remainingSignals = remainingSignals.filter(signal => signal.status === 'active');
-      
-      // Ordenar por horário de entrada
-      remainingSignals.sort((a, b) => {
-        if (!a.entry_time || !b.entry_time) return 0;
+      // Filtrar sinais ativos e com horários válidos (futuros ou recentes)
+      remainingSignals = remainingSignals.filter(signal => {
+        if (signal.status !== 'active') return false;
         
-        // Extrair hora e minutos
-        const [aHour, aMin] = a.entry_time.split(':').map(Number);
-        const [bHour, bMin] = b.entry_time.split(':').map(Number);
+        // Se não tem horário de entrada, permitir (será ajustado depois)
+        if (!signal.entry_time) return true;
         
-        // Converter para minutos totais para facilitar a comparação
-        const aTotalMinutes = aHour * 60 + aMin;
-        const bTotalMinutes = bHour * 60 + bMin;
+        // Verificar se o horário é futuro ou passado
+        const [hours, minutes] = signal.entry_time.split(':').map(Number);
         
-        // Ordenar crescente
-        return aTotalMinutes - bTotalMinutes;
+        // Considerar horários futuros ou na mesma hora (se o minuto for maior)
+        if (hours > currentHour) return true;
+        if (hours === currentHour && minutes > currentMinute) return true;
+        
+        // Horários passados só são aceitos se forem muito recentes (até 30 minutos atrás)
+        if (hours === currentHour && currentMinute - minutes <= 30) return true;
+        if (hours === currentHour - 1 && minutes >= 30 && currentMinute <= 30) return true;
+        
+        // Outros horários passados são rejeitados
+        return false;
       });
-    
-      // Ajustar taxas de sucesso e força dos sinais restantes
-      remainingSignals = remainingSignals.map((signal, index) => {
-        // Taxa de sucesso decrescente (máximo de 93.4%)
-      const successRate = Math.max(
-          93.4 - (index * 2.5), 
-        77.0
-      ) / 100;
-        
-        // Determinar força do sinal
-        let strength;
-        if (successRate >= 0.90) {
-          strength = SignalStrength.VERY_STRONG;
-        } else if (successRate >= 0.85) {
-          strength = SignalStrength.STRONG;
-        } else {
-          strength = SignalStrength.MODERATE;
+      
+      // Mapear os horários já usados pelos sinais da dashboard
+      const usedTimes = new Set<string>();
+      finalSignals.forEach(signal => {
+        if (signal.entry_time) {
+          usedTimes.add(signal.entry_time);
         }
+      });
       
-      return {
-        ...signal,
-          success_rate: successRate,
-          strength: strength
-      };
-    });
-    
-      // Adicionar os sinais restantes após os da dashboard,
-      // até completar o total de 7 sinais
-      const signalsNeeded = 7 - finalSignals.length;
-      if (signalsNeeded > 0) {
-        finalSignals = [...finalSignals, ...remainingSignals.slice(0, signalsNeeded)];
-      }
+      // Ajustar os horários dos sinais restantes para evitar duplicatas
+      remainingSignals = remainingSignals.map(signal => {
+        // Se o horário já está sendo usado, ajustar
+        if (signal.entry_time && usedTimes.has(signal.entry_time)) {
+          // Lógica de ajuste mantida igual
+        } else if (signal.entry_time) {
+          // Verificar se o horário é passado
+          const [hours, minutes] = signal.entry_time.split(':').map(Number);
+          const isPastTime = (hours < currentHour) || 
+                            (hours === currentHour && minutes <= currentMinute);
+          
+          // Se for um horário passado, gerar um novo horário futuro
+          if (isPastTime) {
+            // Usar a lógica para encontrar o próximo horário válido
+            const validMinutes = [3, 23, 43];
+            let foundValidTime = false;
+            
+            // Procurar nas próximas 3 horas
+            for (let h = 0; h < 4 && !foundValidTime; h++) {
+              const checkHour = (currentHour + h) % 24;
+              
+              for (const validMinute of validMinutes) {
+                // Se estamos na hora atual, só considerar minutos futuros
+                if (h === 0 && validMinute <= currentMinute) {
+                  continue;
+                }
+                
+                const checkTime = `${checkHour.toString().padStart(2, '0')}:${validMinute.toString().padStart(2, '0')}`;
+                
+                if (!usedTimes.has(checkTime)) {
+                  // Encontramos um horário disponível
+                  signal.entry_time = checkTime;
+                  usedTimes.add(checkTime);
+                  
+                  // Recalcular expiração e reentradas
+                  signal.expiry_time_str = calculateNextTime(checkTime, SIGNAL_EXPIRY_TIME);
+                  signal.gale1_time = signal.expiry_time_str;
+                  signal.gale2_time = calculateNextTime(signal.gale1_time, SIGNAL_EXPIRY_TIME);
+                  
+                  foundValidTime = true;
+                  break;
+                }
+              }
+              
+              if (foundValidTime) break;
+            }
+          } else {
+            // Registrar este horário como usado
+            usedTimes.add(signal.entry_time);
+          }
+        }
+        
+        return signal;
+      });
     }
     
-    // Se ainda não temos 7 sinais, usar a função de garantir 7 sinais
+    // Se ainda não temos 7 sinais, gerar mais sinais
     if (finalSignals.length < 7) {
-      finalSignals = ensureSevenSignals(finalSignals);
-    }
-    
-    // Recuperar o sinal mais recente do estado anterior (se existir)
-    // para evitar que o último sinal seja atualizado constantemente
-    const existingSignals = queryClient.getQueryData<TradingSignal[]>(['tradingSignals']);
-    
-    if (existingSignals && existingSignals.length >= 7 && finalSignals.length >= 7) {
-      // Pegar o último sinal do estado anterior
-      const lastExistingSignal = existingSignals[existingSignals.length - 1];
+      // Usar a função ensureSevenSignals para completar, mas preservando os sinais da dashboard
+      const dashboardOnly = finalSignals.slice(0, Math.min(finalSignals.length, 3));
+      const withAdditional = ensureSevenSignals([...dashboardOnly]);
       
-      // Se o último sinal tem um ID diferente do último sinal atual (que seria substituído),
-      // e não é um sinal de dashboard, substituir o último sinal para manter a estabilidade
-      const lastSignalIsNotDashboard = !dashboardSignals.some(s => s.id === lastExistingSignal?.id);
-      
-      if (lastSignalIsNotDashboard) {
-        console.log('Preservando o último sinal para evitar atualizações constantes');
-        // Substituir o último sinal na lista
-        finalSignals[finalSignals.length - 1] = lastExistingSignal;
+      // Garantir que não modificou os sinais da dashboard originais
+      for (let i = 0; i < dashboardOnly.length; i++) {
+        withAdditional[i] = dashboardOnly[i];
       }
+      
+      finalSignals = withAdditional;
     }
     
-    // Garantir que todos os sinais tenham propriedades consistentes
-    const preprocessedSignals = finalSignals.map((signal, idx) => {
-      return {
-        ...signal,
-        status: signal.status || 'active' as const,
-        id: signal.id || `signal-${idx}`
-      };
-    });
-
-    // Ordenação final para garantir que os sinais apareçam em ordem de horário
-    // Primeiro separar os sinais da dashboard e não-dashboard
-    const dashboardIds = new Set(dashboardSignals.map(s => s.id));
-    const dashboardOnlySignals = preprocessedSignals.filter(s => dashboardIds.has(s.id));
-    const nonDashboardSignals = preprocessedSignals.filter(s => !dashboardIds.has(s.id));
+    // Verificação final: garantir 7 sinais sem horários duplicados
+    const signalsByTime = new Map<string, TradingSignal[]>();
+    const finalSignalsWithUniqueTime: TradingSignal[] = [];
     
-    // Ordenar os sinais não-dashboard por horário
-    nonDashboardSignals.sort((a, b) => {
-      // Fazer cast para TradingSignal para acessar a propriedade entry_time
-      const signalA = a as TradingSignal & { entry_time?: string };
-      const signalB = b as TradingSignal & { entry_time?: string };
-      
-      if (!signalA.entry_time || !signalB.entry_time) return 0;
-      
-      // Extrair hora e minutos
-      const [aHour, aMin] = signalA.entry_time.split(':').map(Number);
-      const [bHour, bMin] = signalB.entry_time.split(':').map(Number);
-      
-      // Converter para minutos totais para facilitar a comparação
-      const aTotalMinutes = aHour * 60 + aMin;
-      const bTotalMinutes = bHour * 60 + bMin;
-      
-      // Ordenar crescente
-      return aTotalMinutes - bTotalMinutes;
+    // Preservar os sinais da dashboard intactos (primeiros 3)
+    const dashboardCount = Math.min(dashboardSignals.length, 3);
+    finalSignalsWithUniqueTime.push(...finalSignals.slice(0, dashboardCount));
+    
+    // Mapear os horários já usados
+    const usedTimes = new Set<string>();
+    finalSignalsWithUniqueTime.forEach(signal => {
+      if (signal.entry_time) usedTimes.add(signal.entry_time);
     });
     
-    // Combinar os sinais da dashboard (sem alterar sua ordem) com os não-dashboard ordenados
-    return [...dashboardOnlySignals, ...nonDashboardSignals].slice(0, 7);
-  }, [signals, dashboardSignals, signalIds, queryClient]);
+    // Adicionar os sinais restantes, ajustando horários se necessário
+    for (const signal of finalSignals.slice(dashboardCount)) {
+      // Se o horário já está sendo usado, ajustar
+      if (signal.entry_time && usedTimes.has(signal.entry_time)) {
+        // Ajustar para um novo horário único
+        const now = new Date();
+        const currHour = now.getHours();
+        const currMinute = now.getMinutes();
+        
+        // Valores de minutos válidos (03, 23, 43)
+        const validMinutes = [3, 23, 43];
+        
+        // Encontrar o próximo minuto válido disponível
+        let foundValidTime = false;
+        
+        // Primeiro tentar horários na hora atual ou nas próximas 3 horas
+        for (let h = 0; h < 4 && !foundValidTime; h++) {
+          const checkHour = (currHour + h) % 24;
+          
+          for (const validMinute of validMinutes) {
+            // Se estamos na hora atual, só considerar minutos futuros
+            if (h === 0 && validMinute <= currMinute) {
+              continue;
+            }
+            
+            const checkTime = `${checkHour.toString().padStart(2, '0')}:${validMinute.toString().padStart(2, '0')}`;
+            
+            if (!usedTimes.has(checkTime)) {
+              // Encontramos um horário disponível
+              signal.entry_time = checkTime;
+              usedTimes.add(checkTime);
+              
+              // Recalcular expiração e reentradas
+              signal.expiry_time_str = calculateNextTime(checkTime, SIGNAL_EXPIRY_TIME);
+              signal.gale1_time = signal.expiry_time_str;
+              signal.gale2_time = calculateNextTime(signal.gale1_time, SIGNAL_EXPIRY_TIME);
+              
+              foundValidTime = true;
+              break;
+            }
+          }
+          
+          if (foundValidTime) break;
+        }
+        
+        // Se não encontrou nas próximas 3 horas, tentar nas 24 horas
+        if (!foundValidTime) {
+          for (let h = 0; h < 24 && !foundValidTime; h++) {
+            const checkHour = (currHour + h) % 24;
+            
+            for (const validMinute of validMinutes) {
+              // Se estamos na hora atual, só considerar minutos futuros
+              if (h === 0 && validMinute <= currMinute) {
+                continue;
+              }
+              
+              const checkTime = `${checkHour.toString().padStart(2, '0')}:${validMinute.toString().padStart(2, '0')}`;
+              
+              if (!usedTimes.has(checkTime)) {
+                // Encontramos um horário disponível
+                signal.entry_time = checkTime;
+                usedTimes.add(checkTime);
+                
+                // Recalcular expiração e reentradas
+                signal.expiry_time_str = calculateNextTime(checkTime, SIGNAL_EXPIRY_TIME);
+                signal.gale1_time = signal.expiry_time_str;
+                signal.gale2_time = calculateNextTime(signal.gale1_time, SIGNAL_EXPIRY_TIME);
+                
+                foundValidTime = true;
+                break;
+              }
+            }
+            
+            if (foundValidTime) break;
+          }
+        }
+      } else if (signal.entry_time) {
+        // O horário não está sendo usado, registrar
+        usedTimes.add(signal.entry_time);
+      }
+      
+      finalSignalsWithUniqueTime.push(signal);
+    }
+    
+    // Garantir que temos exatamente 7 sinais
+    return finalSignalsWithUniqueTime.slice(0, 7);
+  }, [signals, dashboardSignals, calculateNextTime, ensureSevenSignals]);
 
   // Paginação
   const indexOfLastSignal = activePage * signalsPerPage;
@@ -2323,4 +2544,5 @@ const Signals = () => {
 };
 
 export default Signals;
+
 
