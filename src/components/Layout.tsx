@@ -20,9 +20,11 @@ import { motion } from "framer-motion";
 import { useNotifications } from "@/contexts/NotificationContext";
 import { useUser } from "@/contexts/UserContext";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { supabase } from "@/lib/supabase";
 import { Badge } from '@/components/ui/badge';
+import { ProfileMenu } from "@/components/ui/profile-menu";
+import { isBackgroundModeEnabled } from '../utils/visibilityManager';
 // Importar o componente de teste apenas em ambiente de desenvolvimento
 // import StreamTestUI from '@/components/dev/StreamTestUI';
 
@@ -61,10 +63,131 @@ export default function Layout({ children }: LayoutProps) {
   const readCount = notifications.filter(n => n.read).length;
   
   // Usando o contexto do usuário
-  const { userName, avatarUrl } = useUser();
+  const { userName, avatarUrl, refreshUserData } = useUser();
   
   // Estado para rastrear transmissões ativas
   const [liveStreamsCount, setLiveStreamsCount] = useState(0);
+  
+  // Estado para verificar se o componente carregou corretamente
+  const [layoutLoaded, setLayoutLoaded] = useState(false);
+  
+  // Referência para controlar se veio da página de seleção de idioma
+  const fromLanguageSelectRef = useRef(
+    sessionStorage.getItem('redirecting-from-language-select') === 'true' ||
+    sessionStorage.getItem('language-selection-completed') === 'true'
+  );
+  
+  // Verificar e limpar flags de redirecionamento
+  useEffect(() => {
+    const checkRedirectionFlags = () => {
+      const redirectingFromLanguage = sessionStorage.getItem('redirecting-from-language-select') === 'true';
+      const languageSelectionCompleted = sessionStorage.getItem('language-selection-completed') === 'true';
+      
+      if (redirectingFromLanguage || languageSelectionCompleted) {
+        console.log('Layout detectou redirecionamento da página de idioma, limpando flags');
+        
+        // Limpar flags de redirecionamento
+        sessionStorage.removeItem('redirecting-from-language-select');
+        sessionStorage.removeItem('language-selection-completed');
+        
+        // Forçar a atualização de dados do usuário
+        refreshUserData();
+      }
+    };
+    
+    // Verificar flags no carregamento
+    checkRedirectionFlags();
+    
+    // Marcar componente como carregado após um breve delay
+    const timer = setTimeout(() => {
+      setLayoutLoaded(true);
+    }, 100);
+    
+    return () => clearTimeout(timer);
+  }, [refreshUserData]);
+  
+  // Forçar renderização completa quando vem da página de seleção de idioma
+  useEffect(() => {
+    if (fromLanguageSelectRef.current) {
+      // Aplicar estilos globais para garantir renderização correta
+      document.documentElement.classList.add('layout-forced');
+      document.body.classList.add('bg-black');
+      
+      // Limpar a referência após o uso
+      fromLanguageSelectRef.current = false;
+    }
+    
+    return () => {
+      document.documentElement.classList.remove('layout-forced');
+    };
+  }, []);
+  
+  // Precarregar o avatar no cache do navegador para evitar flickering
+  useEffect(() => {
+    const preloadAvatar = () => {
+      // Verificar primeiro no localStorage
+      const storedAvatar = localStorage.getItem("user-avatar");
+      const avatarToPreload = storedAvatar || avatarUrl;
+      
+      if (avatarToPreload) {
+        const img = new Image();
+        img.src = avatarToPreload;
+      }
+    };
+    
+    // Precarregar imediatamente
+    preloadAvatar();
+    
+    // Precarregar quando a página carregar completamente
+    window.addEventListener('load', preloadAvatar);
+    
+    return () => {
+      window.removeEventListener('load', preloadAvatar);
+    };
+  }, [avatarUrl]);
+  
+  // Efeito para verificar alterações na foto de perfil e recarregar dados ao trocar abas
+  useEffect(() => {
+    // Função para verificar e atualizar dados do usuário silenciosamente
+    const syncUserData = async () => {
+      // Se o modo background está ativo, não fazer nada
+      if (isBackgroundModeEnabled()) {
+        return;
+      }
+      await refreshUserData();
+    };
+
+    // Verificar avatar no localStorage silenciosamente
+    const storedAvatar = localStorage.getItem("user-avatar");
+    if (!avatarUrl && storedAvatar) {
+      syncUserData();
+    }
+
+    // Executar na montagem do componente
+    syncUserData();
+    
+    // Handler para quando o app volta do background
+    const handleBackgroundResume = () => {
+      // Se o modo background está ativo, não fazer nada
+      if (isBackgroundModeEnabled()) {
+        return;
+      }
+      syncUserData();
+    };
+    
+    // Handler para eventos de avatar atualizado
+    const handleAvatarUpdated = () => {
+      syncUserData();
+    };
+    
+    window.addEventListener('background-resume', handleBackgroundResume);
+    window.addEventListener('avatar-updated', handleAvatarUpdated);
+    
+    return () => {
+      window.removeEventListener('background-resume', handleBackgroundResume);
+      window.removeEventListener('avatar-updated', handleAvatarUpdated);
+    };
+  }, [refreshUserData, avatarUrl]);
   
   // Verificar transmissões ativas
   useEffect(() => {
@@ -73,7 +196,7 @@ export default function Layout({ children }: LayoutProps) {
         const { data, error } = await supabase
           .from('live_streams')
           .select('id')
-          .eq('is_active', true);
+          .eq('status', 'live');
           
         if (!error && data) {
           setLiveStreamsCount(data.length);
@@ -83,20 +206,14 @@ export default function Layout({ children }: LayoutProps) {
       }
     };
     
-    // Verificar inicialmente
+    // Verificar streams ativos na inicialização
     checkActiveStreams();
     
-    // Configurar assinatura para atualizações em tempo real
-    const subscription = supabase
-      .channel('public:live_streams')
-      .on('postgres_changes', 
-        { event: '*', schema: 'public', table: 'live_streams' },
-        checkActiveStreams
-      )
-      .subscribe();
+    // Usar polling em vez de Realtime para verificar streams ativos
+    const pollingInterval = setInterval(checkActiveStreams, 30000); // A cada 30 segundos
       
     return () => {
-      subscription.unsubscribe();
+      clearInterval(pollingInterval);
     };
   }, []);
   
@@ -115,10 +232,7 @@ export default function Layout({ children }: LayoutProps) {
             <div className="flex items-center gap-2">
               <Logo />
             </div>
-            <Avatar className="h-8 w-8 ring-1 ring-white/10 hover:ring-white/20 transition-all">
-              <AvatarImage src={avatarUrl || "/placeholder.svg"} alt={userName} />
-              <AvatarFallback className="bg-black/20 text-white/80">{userName?.charAt(0) || "U"}</AvatarFallback>
-            </Avatar>
+            <ProfileMenu />
           </SidebarHeader>
           <SidebarContent className="p-4 flex flex-col h-[calc(100vh-65px)]">
             {/* Seção principal de navegação */}
@@ -132,7 +246,10 @@ export default function Layout({ children }: LayoutProps) {
                     ? "bg-white/5 text-white border-l-2 border-white/60 pl-3" 
                     : "pl-4"
                 )} 
-                onClick={() => navigate('/')}
+                onClick={() => {
+                  // Não limpar caches automaticamente ao trocar de aba - isso causa problemas de duplicação
+                  navigate('/');
+                }}
               >
                 <LayoutDashboard className="h-4 w-4 opacity-70" />
                 {t('nav.dashboard')}
@@ -147,10 +264,13 @@ export default function Layout({ children }: LayoutProps) {
                     ? "bg-white/5 text-white border-l-2 border-white/60 pl-3" 
                     : "pl-4"
                 )} 
-                onClick={() => navigate('/signals')}
+                onClick={() => {
+                  // Não limpar caches automaticamente ao trocar de aba - isso causa problemas de duplicação
+                  navigate('/signals');
+                }}
               >
                 <Signal className="h-4 w-4 opacity-70" />
-                {t('nav.signals') || 'Sinais'}
+                {t('nav.signals') || 'Trades'}
               </Button>
                
               <Button 
@@ -209,7 +329,7 @@ export default function Layout({ children }: LayoutProps) {
             {/* Divisor que separa as seções */}
             <div className="my-4 flex items-center gap-2 px-2">
               <div className="h-px flex-1 bg-white/5"></div>
-              <span className="text-[10px] uppercase text-white/30 font-medium">{t('nav.settings.notifications') || 'Notificações & Configurações'}</span>
+                                            <span className="text-[10px] uppercase text-white/30 font-medium">{t('nav.settings.notifications') || 'Área do Usuário'}</span>
               <div className="h-px flex-1 bg-white/5"></div>
             </div>
             
@@ -218,7 +338,7 @@ export default function Layout({ children }: LayoutProps) {
               <Button 
                 variant="ghost" 
                 className={cn(
-                  "w-full justify-start gap-3 py-3 text-sm font-medium transition-all group relative",
+                  "w-full justify-start gap-3 py-3 text-sm font-medium transition-all notification-button-group relative",
                   "hover:bg-white/5 text-white/80 hover:text-white",
                   isActive('/notifications') && !location.search.includes('filter=read')
                     ? "bg-white/5 text-white border-l-2 border-white/60 pl-3" 
@@ -227,9 +347,9 @@ export default function Layout({ children }: LayoutProps) {
                 onClick={() => navigate('/notifications')}
               >
                 <div className="relative">
-                  <Bell className="h-4 w-4 opacity-70 group-hover:opacity-0 transition-opacity" />
+                  <Bell className="h-4 w-4 opacity-70 notification-button-group-hover:opacity-0 transition-opacity" />
                   <motion.div 
-                    className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                    className="absolute inset-0 opacity-0 notification-button-group-hover:opacity-100 transition-opacity"
                     animate={isActive('/notifications') || false ? { rotate: [0, -10, 10, -5, 5, 0] } : { rotate: 0 }}
                     transition={{ 
                       duration: 0.5, 
@@ -248,27 +368,6 @@ export default function Layout({ children }: LayoutProps) {
                   <NotificationBadge count={unreadCount} />
                 )}
               </Button>
-              
-              {/* Botão para notificações lidas */}
-              {readCount > 0 && (
-                <Button 
-                  variant="ghost" 
-                  className={cn(
-                    "w-full justify-start gap-3 py-3 text-sm font-medium transition-all",
-                    "hover:bg-white/5 text-white/80 hover:text-white",
-                    isActive('/notifications') && location.search.includes('filter=read')
-                      ? "bg-white/5 text-white border-l-2 border-white/60 pl-3" 
-                      : "pl-4"
-                  )} 
-                  onClick={() => navigate('/notifications?filter=read')}
-                >
-                  <Check className="h-4 w-4 opacity-70" />
-                  <span>{t('nav.notifications.read') || 'Notificações Lidas'}</span>
-                  <span className="ml-auto bg-green-500/80 text-white text-xs min-w-5 h-5 rounded-full flex items-center justify-center">
-                    {readCount}
-                  </span>
-                </Button>
-              )}
               
               <Button 
                 variant="ghost" 
@@ -300,21 +399,10 @@ export default function Layout({ children }: LayoutProps) {
                 {t('nav.support') || "Suporte"}
               </Button>
             </nav>
-            
-            {/* Status do sistema (movido para o final) */}
-            <div className="mt-auto pt-4 border-t border-white/5">
-              <div className="rounded-lg bg-black/20 p-3">
-                <p className="text-xs text-white/60 mb-2">{t('nav.system.status') || 'Status do sistema'}</p>
-                <div className="flex items-center gap-2">
-                  <div className="h-2 w-2 rounded-full bg-emerald-500/80 animate-pulse"></div>
-                  <span className="text-xs text-white/80">{t('nav.system.online') || 'Online'}</span>
-                </div>
-              </div>
-            </div>
           </SidebarContent>
         </Sidebar>
         
-        <main className="flex-1 p-4 md:p-6 overflow-y-auto relative">
+        <main className="flex-1 p-4 md:p-6 overflow-y-auto relative" style={{ overflow: 'visible' }}>
           <div className="md:hidden flex items-center mb-4">
             <SidebarTrigger className="h-9 w-9 border-white/10 bg-black/20" />
             <span className="ml-3 text-sm font-medium">{location.pathname === '/' ? 'Dashboard' : location.pathname.substring(1).charAt(0).toUpperCase() + location.pathname.substring(2)}</span>

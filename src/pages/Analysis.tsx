@@ -225,7 +225,7 @@ const Analysis = () => {
     error 
   } = useMarketData({
     symbol: selectedAsset,
-    timeframe,
+    timeframe: timeframe as '1m' | '3m' | '5m' | '15m' | '30m' | '1h' | '2h' | '4h' | '6h' | '8h' | '12h' | '1d' | '3d' | '1w' | '1M',
     updateInterval: 5000 // Atualizar a cada 5 segundos
   });
 
@@ -523,7 +523,7 @@ const Analysis = () => {
                               fontSize: '11px',
                               marginBottom: '4px'
                             }}
-                            formatter={(value: any) => [value.toLocaleString('pt-BR'), 'Volume']}
+                            formatter={(value: number) => [value.toLocaleString('pt-BR'), 'Volume']}
                             labelFormatter={formatTime}
                             animationDuration={150}
                           />
@@ -606,7 +606,7 @@ const Analysis = () => {
                                 marginBottom: '4px'
                               }}
                               labelFormatter={formatTime}
-                              formatter={(value: any) => [value.toFixed(2), 'RSI']}
+                              formatter={(value: number) => [value.toFixed(2), 'RSI']}
                               animationDuration={150}
                             />
                             <Line 
@@ -702,7 +702,7 @@ const Analysis = () => {
                                 marginBottom: '4px'
                               }}
                               labelFormatter={formatTime}
-                              formatter={(value: any, name: string) => [
+                              formatter={(value: number, name: string) => [
                                 value.toFixed(2),
                                 name === 'macdHistogram' ? 'Histograma' : name === 'macdLine' ? 'MACD' : 'Sinal'
                               ]}
@@ -814,7 +814,7 @@ const Analysis = () => {
                                 marginBottom: '4px'
                               }}
                               labelFormatter={formatTime}
-                              formatter={(value: any, name: string) => [
+                              formatter={(value: number, name: string) => [
                                 value.toFixed(2),
                                 name === 'stochK' ? 'Linha K' : 'Linha D'
                               ]}
@@ -933,7 +933,7 @@ const Analysis = () => {
                                 marginBottom: '4px'
                               }}
                               labelFormatter={formatTime}
-                              formatter={(value: any, name: string) => [
+                              formatter={(value: number, name: string) => [
                                 value.toFixed(2),
                                 name === 'sma20' ? 'SMA 20' : name === 'sma50' ? 'SMA 50' : 'SMA 200'
                               ]}
@@ -1105,7 +1105,7 @@ const Analysis = () => {
                                 fontSize: '11px',
                                 marginBottom: '4px'
                               }}
-                              formatter={(value: any) => [value.toLocaleString('pt-BR'), 'Volume']}
+                              formatter={(value: number) => [value.toLocaleString('pt-BR'), 'Volume']}
                               labelFormatter={formatTime}
                               animationDuration={150}
                             />
@@ -1372,7 +1372,7 @@ const Analysis = () => {
                                     fontSize: '11px',
                                     marginBottom: '4px'
                                   }}
-                                  formatter={(value: any, name: string) => [
+                                  formatter={(value: number, name: string) => [
                                     value.toFixed(4),
                                     name === 'bidsTotal' ? 'Volume de Compra' : 'Volume de Venda'
                                   ]}

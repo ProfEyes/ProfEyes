@@ -1,12 +1,22 @@
 import { createBrowserRouter, redirect } from "react-router-dom";
 import App from "./App";
-import { Home, Dashboard, Settings, Auth, Admin, TestAuthPage, Live, EmailDiagnostico } from "./pages";
-import { supabase } from "./lib/supabase";
+import { Home, Dashboard, Settings, Auth, AuthCallback, Admin, Live, NotFound, Signals } from "./pages";
+import ResetPassword from "./pages/ResetPassword";
+import StreamerDashboard from "./pages/StreamerDashboard";
+import MeetingRoom from "./pages/MeetingRoom";
+import StreamViewer from "./pages/StreamViewer";
+import { getSupabase } from "./lib/supabase";
+import { Session } from '@supabase/supabase-js';
+import type { SupabaseClient } from '@supabase/supabase-js';
+import type { Database } from '@/types/supabase';
+
+// Log para debugging da rota de sinais
+console.log("[DEBUG] Importação de Signals:", !!Signals);
 
 // Função auxiliar para verificar autenticação
 const requireAuth = async () => {
-  const { data } = await supabase.auth.getSession();
-  if (!data.session) {
+  const { data: { session } } = await (getSupabase() as SupabaseClient<Database>).auth.getSession();
+  if (!session) {
     throw redirect("/auth");
   }
   return null;
@@ -14,8 +24,8 @@ const requireAuth = async () => {
 
 // Função auxiliar para direcionar usuários já autenticados
 const redirectIfAuthenticated = async () => {
-  const { data } = await supabase.auth.getSession();
-  if (data.session) {
+  const { data: { session } } = await (getSupabase() as SupabaseClient<Database>).auth.getSession();
+  if (session) {
     throw redirect("/");
   }
   return null;
@@ -43,6 +53,11 @@ export const router = createBrowserRouter([
         loader: requireAuth,
       },
       {
+        path: "profile",
+        element: <Settings />,
+        loader: requireAuth,
+      },
+      {
         path: "admin",
         element: <Admin />,
         loader: requireAuth,
@@ -52,7 +67,39 @@ export const router = createBrowserRouter([
         element: <Live />,
         loader: requireAuth,
       },
+      {
+        path: "signals",
+        element: <Signals />,
+        loader: requireAuth,
+      },
     ],
+  },
+  {
+    path: "/streamer/:streamId",
+    element: <StreamerDashboard />,
+    loader: requireAuth,
+  },
+  {
+    path: "/meeting/:streamId",
+    element: <MeetingRoom />,
+    loader: requireAuth,
+  },
+  {
+    path: "/watch/:streamId",
+    element: <StreamViewer />,
+    loader: requireAuth,
+  },
+  {
+    path: "/auth/reset-password", 
+    element: <ResetPassword />,
+  },
+  {
+    path: "/reset-password",
+    element: <ResetPassword />,
+  },
+  {
+    path: "/auth/callback",
+    element: <AuthCallback />,
   },
   {
     path: "/auth",
@@ -60,12 +107,7 @@ export const router = createBrowserRouter([
     loader: redirectIfAuthenticated,
   },
   {
-    path: "/test-auth",
-    element: <TestAuthPage />,
-    // Sem loader para permitir acesso sem autenticação
-  },
-  {
-    path: "/email-diagnostico",
-    element: <EmailDiagnostico />,
+    path: "*",
+    element: <NotFound />,
   },
 ]); 

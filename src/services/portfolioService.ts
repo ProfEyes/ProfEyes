@@ -1,4 +1,6 @@
-import { supabase } from "@/integrations/supabase/client";
+import { supabase } from "@/lib/supabase";
+import type { SupabaseClient } from '@supabase/supabase-js';
+import type { Database } from '@/types/supabase';
 import { getBinancePrice } from "./binanceApi";
 
 export interface Portfolio {
@@ -22,8 +24,7 @@ export interface PortfolioAsset {
 
 export async function fetchPortfolio(userId: string): Promise<Portfolio | null> {
   try {
-    const { data: portfolio, error } = await supabase
-      .from('portfolios')
+    const { data: portfolio, error } = await (supabase as SupabaseClient<Database>).from('portfolios')
       .select('*')
       .eq('user_id', userId)
       .single();
@@ -104,8 +105,7 @@ export async function updatePortfolio(
     const totalValue = portfolioAssets.reduce((sum, asset) => sum + asset.total_value, 0);
 
     // Atualizar no Supabase
-    const { data: portfolio, error } = await supabase
-      .from('portfolios')
+    const { data: portfolio, error } = await (supabase as SupabaseClient<Database>).from('portfolios')
       .upsert({
         user_id: userId,
         assets: portfolioAssets,

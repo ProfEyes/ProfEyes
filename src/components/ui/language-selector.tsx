@@ -8,10 +8,16 @@ import {
 import { useLanguage, Language } from "@/contexts/LanguageContext";
 import { useTimeZone } from "@/contexts/TimeZoneContext";
 import { useAuth } from "@/contexts/AuthContext";
-import { Globe, Check, ArrowRight } from "lucide-react";
+import { Globe, Check, ArrowRight, ChevronDown } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 
 interface LanguageOption {
   code: Language;
@@ -73,7 +79,12 @@ const languages: LanguageOption[] = [
   }
 ];
 
-export function LanguageSelector() {
+export interface LanguageSelectorProps {
+  variant?: 'default' | 'minimal' | 'auth';
+  showFlag?: boolean;
+}
+
+export function LanguageSelector({ variant = 'default', showFlag = true }: LanguageSelectorProps) {
   const { language, changeLanguage, updateUserLanguage } = useLanguage();
   const { setAvailableTimeZones, getTimeZonesForLanguage, setTimeZone, getDefaultTimeZone } = useTimeZone();
   const { user } = useAuth();
@@ -90,7 +101,7 @@ export function LanguageSelector() {
   const currentLanguage = languages.find(lang => lang.code === language) || languages[0];
   
   // Função para alterar o idioma e atualizar fusos horários
-  const handleLanguageChange = (lang: Language) => {
+  const handleLanguageChange = async (lang: Language) => {
     // Alterar o idioma usando a função do contexto
     changeLanguage(lang);
     
@@ -104,45 +115,179 @@ export function LanguageSelector() {
     
     // Se o usuário estiver logado, atualizar suas preferências
     if (user && user.id) {
-      // Salvar no localStorage para persistir mesmo após logout
-      localStorage.setItem('app-language', lang);
-      localStorage.setItem(`user-language-${user.id}`, lang);
-      
-      // Atualizar no contexto
-      updateUserLanguage(user.id, lang);
-      
-      // Também salvar no sessionStorage para garantir persistência durante navegação
-      sessionStorage.setItem('user-selected-language', lang);
-      sessionStorage.setItem('language-selection-completed', 'true');
+      try {
+        // Salvar idioma no banco de dados usando a função correta do contexto
+        await updateUserLanguage(user.id, lang);
+        
+        // Também salvar no sessionStorage para garantir persistência durante navegação
+        sessionStorage.setItem('user-selected-language', lang);
+        sessionStorage.setItem('language-selection-completed', 'true');
+        
+        console.log(`✅ Idioma ${lang} atualizado nas configurações para usuário ${user.id}`);
+        
+        // Idioma alterado com sucesso
+        console.log('Idioma alterado com sucesso!');
+      } catch (error) {
+        console.error('Erro ao salvar idioma:', error);
+        toast.error('Erro ao salvar idioma. Tente novamente.');
+      }
     } else {
       // Se não estiver logado, salvar apenas no localStorage
       localStorage.setItem('app-language', lang);
+      console.log('Idioma alterado com sucesso!');
     }
     
-    // Fechar diálogo e mostrar toast de confirmação
+    // Salvar todas as configurações automaticamente
+    try {
+      // Criar objeto com todas as configurações
+      const settings = {
+        autoBackup: localStorage.getItem('autoBackup') === 'true',
+        dataExport: localStorage.getItem('dataExport') === 'true',
+        twoFactorAuth: localStorage.getItem('twoFactorAuth') === 'true',
+        emailAuth: localStorage.getItem('emailAuth') === 'true',
+        priceAlerts: localStorage.getItem('priceAlerts') === 'true',
+        language: lang
+      };
+      
+      // Salvar no localStorage
+      localStorage.setItem('app-settings', JSON.stringify(settings));
+    } catch (error) {
+      console.error("Erro ao salvar configurações:", error);
+    }
+    
+    // Disparar evento customizado para notificar mudança de idioma (para página de autenticação)
+    window.dispatchEvent(new CustomEvent('languageChanged', { 
+      detail: { 
+        language: lang,
+        timestamp: Date.now()
+      } 
+    }));
+    
+    // Fechar diálogo sem mostrar toast
     setOpen(false);
-    
-    const langName = {
-      'pt': 'Português',
-      'en': 'English',
-      'es': 'Español'
-    }[lang];
-    
-    const successMessage = {
-      'pt': 'Idioma alterado para',
-      'en': 'Language changed to',
-      'es': 'Idioma cambiado a'
-    }[lang];
-    
-    toast.success(`${successMessage} ${langName}`);
   };
   
+  // Função para obter o texto traduzido de "Idioma"
+  const getLanguageText = (lang: Language) => {
+    switch (lang) {
+      case 'pt':
+        return 'Idioma';
+      case 'en':
+        return 'Language';
+      case 'es':
+        return 'Idioma';
+      default:
+        return 'Language';
+    }
+  };
+
+  if (variant === 'auth') {
+    return (
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <motion.button
+            className="group relative h-6 w-6 flex items-center justify-center rounded-full bg-black/10 hover:bg-black/30 border border-white/[0.03] hover:border-white/[0.12] transition-all duration-300 backdrop-blur-sm shadow-sm hover:shadow-md"
+            whileHover={{ scale: 1.08 }}
+            whileTap={{ scale: 0.92 }}
+          >
+            <motion.div
+              className="relative"
+              initial={false}
+              animate={{ rotate: 0 }}
+              whileHover={{ rotate: 12 }}
+              transition={{ duration: 0.25, ease: "easeOut" }}
+            >
+              {showFlag && currentLanguage ? (
+                <motion.span 
+                  className="text-[10px] leading-none block"
+                  whileHover={{ scale: 1.1 }}
+                  transition={{ duration: 0.2 }}
+                >
+                  {currentLanguage.icon}
+                </motion.span>
+              ) : (
+                <Globe className="w-3 h-3 text-white/50 group-hover:text-white/75 transition-colors duration-300" />
+              )}
+            </motion.div>
+            
+            {/* Indicador sutil de dropdown */}
+            <motion.div
+              className="absolute -bottom-0.5 -right-0.5 w-1 h-1 bg-white/30 rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-300"
+              initial={{ scale: 0 }}
+              whileHover={{ scale: 1 }}
+              transition={{ delay: 0.15, duration: 0.2 }}
+            />
+          </motion.button>
+        </DropdownMenuTrigger>
+        
+        <DropdownMenuContent 
+          align="end" 
+          className="bg-black/97 border-white/[0.06] backdrop-blur-xl rounded-lg min-w-[140px] p-0.5 shadow-xl"
+          sideOffset={6}
+        >
+          {languages.map((language, index) => (
+            <DropdownMenuItem
+              key={language.code}
+              onClick={() => handleLanguageChange(language.code)}
+              className="group relative p-0"
+              asChild
+            >
+              <motion.div
+                initial={{ opacity: 0, y: -8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: index * 0.03, duration: 0.2, ease: "easeOut" }}
+                className={`
+                  flex items-center space-x-2 px-2.5 py-1.5 cursor-pointer rounded-md
+                  hover:bg-white/[0.06] transition-all duration-200
+                  ${language.code === currentLanguage.code ? 'bg-white/[0.04] text-white' 
+                    : 'text-neutral-400 hover:text-white'
+                  }
+                `}
+              >
+                {/* Flag com animação sutil */}
+                <motion.span 
+                  className="text-xs leading-none flex-shrink-0"
+                  whileHover={{ scale: 1.05 }}
+                  transition={{ duration: 0.15 }}
+                >
+                  {language.icon}
+                </motion.span>
+                
+                {/* Nome do idioma compacto */}
+                <span className="text-xs font-medium tracking-normal flex-1">{language.nativeName}</span>
+                
+                {/* Indicador de selecionado minimalista */}
+                <AnimatePresence>
+                  {language.code === currentLanguage.code && (
+                    <motion.div
+                      initial={{ scale: 0, opacity: 0 }}
+                      animate={{ scale: 1, opacity: 1 }}
+                      exit={{ scale: 0, opacity: 0 }}
+                      transition={{ duration: 0.2 }}
+                      className="w-1 h-1 bg-green-400 rounded-full flex-shrink-0"
+                    />
+                  )}
+                </AnimatePresence>
+                
+                {/* Hover effect ultra-sutil */}
+                <motion.div
+                  className="absolute inset-0 rounded-md bg-gradient-to-r from-white/[0.01] to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"
+                  layoutId={`hover-${language.code}`}
+                />
+              </motion.div>
+            </DropdownMenuItem>
+          ))}
+        </DropdownMenuContent>
+      </DropdownMenu>
+    );
+  }
+
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         <Button 
           variant="outline" 
-          className="w-full p-0 h-auto bg-black border border-white/5 hover:bg-black/90 hover:border-white/10 transition-all duration-300 group shadow-sm rounded-md overflow-hidden"
+          className="w-full p-0 h-auto bg-black border border-white/5 hover:bg-black/90 hover:border-white/10 hover:scale-[1.02] transition-all duration-300 group shadow-sm rounded-md overflow-hidden"
         >
           <div className="w-full relative rounded-md">
             <div className="flex items-center p-2.5 gap-3 relative z-10">
@@ -250,7 +395,7 @@ export function LanguageSelector() {
           {/* Lista de idiomas à direita */}
           <div className="col-span-3 p-6 overflow-auto bg-black/30 backdrop-blur-sm">
             <h2 className="text-base font-medium text-white/90 mb-6 flex items-center gap-2 border-b border-white/10 pb-3">
-              <span>Idioma</span>
+              <span>{getLanguageText(language)}</span>
             </h2>
             
             <div className="grid grid-cols-1 gap-3">

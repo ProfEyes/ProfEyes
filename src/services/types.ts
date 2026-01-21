@@ -3,7 +3,10 @@
 export enum SignalType {
   TECHNICAL = 'TECHNICAL',
   NEWS = 'NEWS',
-  FUNDAMENTAL = 'FUNDAMENTAL'
+  FUNDAMENTAL = 'FUNDAMENTAL',
+  CORRELATION = 'CORRELATION',
+  COMPRA = 'COMPRA',
+  VENDA = 'VENDA'
 }
 
 export enum SignalStrength {
@@ -36,7 +39,7 @@ export interface MarketData {
 export type SignalStatus = 'active' | 'completed' | 'cancelled' | 'expired';
 
 export interface TradingSignal {
-  [x: string]: any;
+  [x: string]: unknown;
   symbol: string;
   type: SignalType;
   signal: 'BUY' | 'SELL';
@@ -52,11 +55,13 @@ export interface TradingSignal {
   expiry: string;
   risk_reward: string;
   status: 'active' | 'completed' | 'cancelled';
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 }
 
 export interface MarketNews {
+  id: string;
   title: string;
+  headline?: string;
   description?: string;
   summary?: string;
   content?: string;
@@ -69,5 +74,8 @@ export interface MarketNews {
   time?: number;
   datetime?: number;
   imageUrl?: string;
-  id?: string | number;
+  image?: string;
+  isTemporaryImage?: boolean;
+  relatedSymbols?: string[];
+  category?: string;
 } 

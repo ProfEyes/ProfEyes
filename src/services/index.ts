@@ -20,13 +20,12 @@ export * from './supabaseApi';
 // Exportar nova estrutura de sinais de trading
 export * from './signals';
 
-// Manter exportação do arquivo antigo para compatibilidade
-// Isso será removido após a migração completa
-export {
-  fetchTradingSignals as fetchTradingSignalsLegacy,
-  updateSignalStatus as updateSignalStatusLegacy,
-  comprehensiveAnalyzeAsset
-} from './tradingSignals';
+// Arquivo tradingSignals.ts foi removido - usando apenas signals/
+// export {
+//   fetchTradingSignals as fetchTradingSignalsLegacy,
+//   updateSignalStatus as updateSignalStatusLegacy,
+//   comprehensiveAnalyzeAsset
+// } from './tradingSignals';
 // Exportar tipos
 export type { 
   // Re-exportações explícitas para resolver ambiguidades
@@ -53,33 +52,33 @@ export { fetchMarketNews } from './news';
 // Exportar funções de análise de sentimento
 export { analyzeSentiment } from './sentimentAnalysis';
 
-// Importar o serviço de sinais de trading
-import { tradingSignalService } from './TradingSignalService';
-import { TradingSignal } from './types/tradingSignals';
+// Arquivos TradingSignalService.ts e tradingSignals.ts foram removidos
+// import { tradingSignalService } from './TradingSignalService';
+// import { TradingSignal } from '../types/tradingSignals';
 
-// Exportar funções do módulo signalMonitor
-export {
-  SignalMonitor,
-  signalMonitor,
-  startSignalMonitoring,
-  stopSignalMonitoring
-} from './signalMonitor';
+// Exportar funções do módulo signalMonitor - ARQUIVO REMOVIDO
+// export {
+//   SignalMonitor,
+//   signalMonitor,
+//   startSignalMonitoring,
+//   stopSignalMonitoring
+// } from './signalMonitor';
 
-// Re-exportar funções de sinais com nomes alternativos para evitar conflitos
-export {
-  fetchTradingSignals as fetchSimulatedSignals,
-  updateSignalStatus as updateSimulatedSignalStatus
-} from './tradingSignals';
+// Re-exportar funções de sinais com nomes alternativos - ARQUIVOS REMOVIDOS
+// export {
+//   fetchTradingSignals as fetchSimulatedSignals,
+//   updateSignalStatus as updateSimulatedSignalStatus
+// } from './tradingSignals';
 
-// Re-exportar o serviço de sinais
-export { tradingSignalService } from './TradingSignalService';
+// Re-exportar o serviço de sinais - ARQUIVO REMOVIDO
+// export { tradingSignalService } from './TradingSignalService';
 
-// Wrapper para manter compatibilidade com código existente
-export async function fetchTradingSignals(forceRefresh: boolean = false): Promise<TradingSignal[]> {
-  // Usa o serviço de sinais
-  const signals = await tradingSignalService.fetchTradingSignals(forceRefresh);
-  return signals;
-}
+// Wrapper para manter compatibilidade com código existente - DESATIVADO
+// export async function fetchTradingSignals(forceRefresh: boolean = false): Promise<TradingSignal[]> {
+//   // Usa o serviço de sinais
+//   const signals = await tradingSignalService.fetchTradingSignals(forceRefresh);
+//   return signals;
+// }
 
 // Função para calcular taxa de sucesso real e precisa baseada em múltiplos fatores
 function calculateRealSuccessRate(
@@ -462,7 +461,7 @@ export async function fetchOrderBookData(): Promise<Record<string, any>> {
       // Simulando dados do orderbook para evitar erros de tipo
       const bids: [string, string][] = [];
       const asks: [string, string][] = [];
-      const chartData: any[] = [];
+      const chartData: Record<string, unknown>[] = [];
       
       // Gerar dados simulados
       for (let i = 0; i < 10; i++) {

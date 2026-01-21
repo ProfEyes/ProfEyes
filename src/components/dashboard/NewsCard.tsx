@@ -12,7 +12,7 @@ import { MarketNews } from "@/services/types";
 import { fetchMarketNews } from '@/services/news';
 import { symbolToCompanyName } from '@/services/newsService';
 import { cn } from '@/lib/utils';
-import { toast } from "sonner";
+
 import {
   Tooltip,
   TooltipContent,
@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/tooltip";
 import { useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 // Verificar se o cache de notícias está válido
 function isNewsCacheValid(): boolean {
@@ -44,6 +45,20 @@ function shouldPrefetchNews(): boolean {
   return !isNewsCacheValid();
 }
 
+// Imagens de fallback confiáveis para casos de erro
+const FALLBACK_IMAGES = [
+  "https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?w=600&auto=format&fit=crop&q=80",
+  "https://images.unsplash.com/photo-1535320903710-d993d3d77d29?w=600&auto=format&fit=crop&q=80",
+  "https://images.unsplash.com/photo-1560221328-12fe60f83ab8?w=600&auto=format&fit=crop&q=80",
+  "https://images.unsplash.com/photo-1559526324-593bc073d938?w=600&auto=format&fit=crop&q=80",
+  "https://images.unsplash.com/photo-1569025690938-a00729c9e1f9?w=600&auto=format&fit=crop&q=80",
+  "https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=600&auto=format&fit=crop&q=80",
+  "https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=600&auto=format&fit=crop&q=80",
+  "https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f?w=600&auto=format&fit=crop&q=80",
+  "https://images.unsplash.com/photo-1526304640581-d334cdbbf45e?w=600&auto=format&fit=crop&q=80",
+  "https://images.unsplash.com/photo-1607082350899-7e105aa886ae?w=600&auto=format&fit=crop&q=80"
+];
+
 // Tipo mais abrangente para notícias que inclui todas as propriedades possíveis
 type ExtendedMarketNews = Partial<MarketNews> & {
   headline?: string;
@@ -59,11 +74,13 @@ type ExtendedMarketNews = Partial<MarketNews> & {
   imageUrl?: string;
   image?: string;
   relatedSymbols?: string[];
-  [key: string]: any; // Permite qualquer propriedade adicional
+  [key: string]: unknown; // Permite qualquer propriedade adicional
 };
 
 export function NewsCard() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const { t } = useLanguage();
   
   // Estado para controlar o atraso adicional de exibição
   const [isDelayedLoading, setIsDelayedLoading] = useState(true);
@@ -90,8 +107,13 @@ export function NewsCard() {
   } = useQuery({
     queryKey: ['dashboardMarketNews'],
     queryFn: async () => {
-      // Buscar notícias do Finnhub
-      return await fetchMarketNews();
+      // Buscar notícias do Finnhub com tratamento de erro para evitar rejeições não tratadas
+      try {
+        return await fetchMarketNews();
+      } catch (e) {
+        console.warn('Erro ao buscar notícias (queryFn):', e);
+        return [] as ExtendedMarketNews[];
+      }
     },
     // Não buscar automaticamente se o cache estiver válido
     enabled: shouldPrefetchNews(),
@@ -101,8 +123,6 @@ export function NewsCard() {
     retry: 1,
     retryDelay: 2000
   });
-  
-  const queryClient = useQueryClient();
   
   // Efeito para adicionar o atraso adicional de um segundo após o carregamento real
   useEffect(() => {
@@ -129,8 +149,8 @@ export function NewsCard() {
       isManualRefetch.current = false;
       // Atualizar o timestamp da última atualização bem-sucedida
       lastSuccessfulUpdate.current = Date.now();
-      // Mostrar toast de sucesso
-      toast.success("Notícias carregadas com sucesso!");
+      // Notícias carregadas com sucesso
+      console.log("Notícias carregadas com sucesso!");
     }
   }, [isQueryLoading, isError, news]);
   
@@ -139,11 +159,20 @@ export function NewsCard() {
   
   // Função para navegar para a página de notícias
   const goToNewsPage = useCallback(() => {
+    // Antes de navegar, garantir que temos notícias em cache para evitar AbortError na página de notícias
+    const currentNews = news || [];
+    if (currentNews.length > 0) {
+      // Salvar as notícias atuais no cache antes de navegar
+      localStorage.setItem('cached_market_news', JSON.stringify(currentNews));
+      localStorage.setItem('cached_market_news_timestamp', Date.now().toString());
+    }
+    
+    // Navegar para a página de notícias
     navigate('/news');
-  }, [navigate]);
+  }, [navigate, news]);
   
   // Função para recarregar notícias com verificação de recenticidade
-  const handleRefetch = useCallback(() => {
+  const handleRefetch = useCallback(async () => {
     // Verificar se as notícias já foram atualizadas recentemente (nos últimos 30 segundos)
     const now = Date.now();
     const timeSinceLastUpdate = now - lastSuccessfulUpdate.current;
@@ -164,8 +193,14 @@ export function NewsCard() {
       // Armazenar temporariamente as notícias atuais
       const currentNews = news || [];
       
-      // Fazer a chamada para buscar novas notícias
-      fetchMarketNews().then(newNews => {
+      // Usar um AbortController para limitar o tempo da requisição
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout
+      
+      // Fazer a chamada para buscar novas notícias com timeout
+      try {
+        const newNews = await fetchMarketNews();
+        clearTimeout(timeoutId); // Limpar o timeout se a requisição for bem-sucedida
         if (newNews && Array.isArray(newNews) && newNews.length > 0) {
           // Filtrar notícias para manter apenas as mais recentes ou da mesma data
           if (currentNews.length > 0) {
@@ -225,8 +260,8 @@ export function NewsCard() {
               setRefreshButtonState('default');
             }, 2000);
             
-            // Mostrar toast de sucesso
-            toast.success("Notícias atualizadas com sucesso!");
+            // Notícias atualizadas com sucesso
+            console.log("Notícias atualizadas com sucesso!");
           } else {
             // Se não há notícias anteriores, apenas usar as novas notícias
             queryClient.setQueryData(['dashboardMarketNews'], newNews);
@@ -237,17 +272,26 @@ export function NewsCard() {
               setRefreshButtonState('default');
             }, 2000);
             
-            // Mostrar toast de sucesso
-            toast.success("Notícias carregadas com sucesso!");
+            // Notícias carregadas com sucesso
+            console.log("Notícias carregadas com sucesso!");
           }
         } else {
           // Se não houver novas notícias, apenas fazer refetch
           refetch();
         }
-      }).catch(() => {
+      } catch (error) {
+        // Limpar o timeout em caso de erro
+        clearTimeout(timeoutId);
+
+        // Verificar se é um AbortError e fornecer uma mensagem mais clara
+        if (error instanceof Error && error.name === 'AbortError') {
+          console.warn('A requisição de notícias foi abortada devido ao timeout. Tentando refetch padrão.');
+        }
+
+        console.warn('Erro ao recarregar notícias:', error);
         // Em caso de erro, fazer a refetch normal
         refetch();
-      });
+      }
     }
   }, [refetch, news, queryClient]);
   
@@ -299,20 +343,6 @@ export function NewsCard() {
     return url.toLowerCase().includes('yahoo') || url.toLowerCase().includes('yimg');
   }, []);
   
-  // Imagens de fallback confiáveis para casos de erro
-  const FALLBACK_IMAGES = [
-    "https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?w=600&auto=format&fit=crop&q=80",
-    "https://images.unsplash.com/photo-1535320903710-d993d3d77d29?w=600&auto=format&fit=crop&q=80",
-    "https://images.unsplash.com/photo-1560221328-12fe60f83ab8?w=600&auto=format&fit=crop&q=80",
-    "https://images.unsplash.com/photo-1559526324-593bc073d938?w=600&auto=format&fit=crop&q=80",
-    "https://images.unsplash.com/photo-1569025690938-a00729c9e1f9?w=600&auto=format&fit=crop&q=80",
-    "https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=600&auto=format&fit=crop&q=80",
-    "https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=600&auto=format&fit=crop&q=80",
-    "https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f?w=600&auto=format&fit=crop&q=80",
-    "https://images.unsplash.com/photo-1526304640581-d334cdbbf45e?w=600&auto=format&fit=crop&q=80",
-    "https://images.unsplash.com/photo-1607082350899-7e105aa886ae?w=600&auto=format&fit=crop&q=80"
-  ];
-  
   // Função para obter uma imagem de fallback com base no índice
   const getImageFallback = useCallback((index: number): string => {
     return FALLBACK_IMAGES[index % FALLBACK_IMAGES.length];
@@ -342,6 +372,21 @@ export function NewsCard() {
       </TooltipProvider>
     );
   }, [getCompanyFullName]);
+
+  // Função para obter o favicon de uma URL
+  const getFaviconUrl = (url: string): string => {
+    try {
+      if (!url || url === '#' || !/^https?:\/\//.test(url)) {
+        return '/assets/news/default-news-icon.svg';
+      }
+      const urlObj = new URL(url);
+      // Tentar obter o favicon diretamente do site
+      return `${urlObj.protocol}//${urlObj.hostname}/favicon.ico`;
+    } catch (error) {
+      // Em caso de erro, retornar um ícone padrão do nosso sistema
+      return '/assets/news/default-news-icon.svg';
+    }
+  };
 
   // Função para renderizar um item de notícia
   const renderNewsItem = useCallback((item: ExtendedMarketNews, index: number) => {
@@ -377,7 +422,7 @@ export function NewsCard() {
             href={item.url} 
             target="_blank"
             rel="noopener noreferrer"
-            className="block w-full h-36 overflow-hidden rounded-lg bg-muted/30 transition-shadow duration-300 hover:shadow-md hover:shadow-black/50"
+            className="block w-full h-44 overflow-hidden rounded-lg bg-muted/30 transition-shadow duration-300 hover:shadow-md hover:shadow-black/50"
           >
             <img 
               src={imageUrl}
@@ -400,20 +445,7 @@ export function NewsCard() {
           <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
             <div className="flex items-center gap-2">
               <Avatar className="h-5 w-5">
-                <AvatarImage src={(() => {
-                  try {
-                    // Verificar se a URL é válida antes de tentar construí-la
-                    if (item.url && item.url !== '#' && /^https?:\/\//.test(item.url)) {
-                      const urlObj = new URL(item.url);
-                      return `https://www.google.com/s2/favicons?domain=${urlObj.hostname}&sz=64`;
-                    }
-                    // Fallback para URLs inválidas
-                    return '';
-                  } catch (e) {
-                    console.warn('URL inválida:', item.url);
-                    return '';
-                  }
-                })()} />
+                <AvatarImage src={getFaviconUrl(item.url || '')} />
                 <AvatarFallback className="text-[10px]">{getSourceInitials(item.source)}</AvatarFallback>
               </Avatar>
               <span>{item.source}</span>
@@ -449,8 +481,8 @@ export function NewsCard() {
           {/* Título */}
           <Skeleton className="h-5 w-full" />
           
-          {/* Imagem - altura reduzida para h-36 */}
-          <Skeleton className="h-36 w-full rounded-lg" />
+          {/* Imagem com altura h-44 */}
+          <Skeleton className="h-44 w-full rounded-lg" />
           
           {/* Conteúdo */}
           <Skeleton className="h-4 w-full" />
@@ -473,14 +505,14 @@ export function NewsCard() {
   // Renderizar mensagem amigável de erro
   const renderErrorMessage = useCallback(() => {
     // Extrair a mensagem de erro se disponível
-    let errorMessage = "Não foi possível carregar as notícias";
+    let errorMessage = t('news.error.loading');
     
     if (error instanceof Error) {
       // Não mostrar erros 401 para o usuário, mostrar uma mensagem mais amigável
       if (error.message.includes('401')) {
-        errorMessage = "Fonte de notícias temporariamente indisponível";
+        errorMessage = t('news.error.loading');
       } else {
-        errorMessage = "Erro ao carregar notícias: " + error.message;
+        errorMessage = `${t('news.error.loading')}: ${error.message}`;
       }
     }
     
@@ -494,17 +526,17 @@ export function NewsCard() {
           disabled={isFetching}
         >
           <RefreshCcw className={cn("h-4 w-4 mr-2", isFetching && "animate-spin")} />
-          Tentar novamente
+          {t('news.tryAgain')}
         </Button>
       </div>
     );
-  }, [error, isFetching, handleRefetch]);
+  }, [error, isFetching, handleRefetch, t]);
 
   return (
     <Card>
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between">
-          <CardTitle className="text-xl">Notícias do Mercado</CardTitle>
+          <CardTitle className="text-xl">{t('nav.news.title')}</CardTitle>
           <div className="relative min-w-[120px] h-9 flex items-center justify-end">
             {/* Botão de sucesso com fade-in/fade-out suave */}
             <div 
@@ -525,7 +557,7 @@ export function NewsCard() {
                 tabIndex={refreshButtonState === 'success' ? 0 : -1}
               >
                 <Check className="h-4 w-4 text-green-400 mr-1.5" />
-                <span className="text-green-400 text-xs font-normal">Atualizado!</span>
+                <span className="text-green-400 text-xs font-normal">{t('news.updated')}</span>
               </Button>
             </div>
             
@@ -543,7 +575,7 @@ export function NewsCard() {
                 size="icon"
                 onClick={handleRefetch}
                 disabled={isFetching}
-                title="Atualizar notícias"
+                title={t('news.refresh')}
                 tabIndex={refreshButtonState !== 'success' ? 0 : -1}
               >
                 <RefreshCcw className={cn("h-4 w-4", isFetching && "animate-spin")} />
@@ -570,14 +602,14 @@ export function NewsCard() {
         {/* Empty state - no news found but no error */}
         {!isLoading && !isError && (!news || news.length === 0) ? (
           <div className="py-8 text-center">
-            <p className="text-muted-foreground">Nenhuma notícia encontrada</p>
+            <p className="text-muted-foreground">{t('news.none')}</p>
           </div>
         ) : null}
       </CardContent>
       <CardFooter className="pt-0 flex justify-end">
         {/* Botão para ver todas as notícias - adicionado */}
         <Button variant="default" size="sm" onClick={goToNewsPage} className="rounded-full">
-          Ver todas
+          {t('notifications.viewAll')}
           <ArrowRight className="h-4 w-4 ml-2" />
         </Button>
       </CardFooter>

@@ -1,7 +1,9 @@
-import { supabase, doesTableExist, supabaseAdmin } from '@/lib/supabase';
+import { supabase, doesTableExist, getSupabaseAdmin } from '@/lib/supabase';
 import type { UserProfile, Session, Provider } from '@/types/auth';
 import { v4 as uuidv4 } from 'uuid';
 import { initDatabase, syncUserEmail } from '@/lib/db-helpers';
+import type { SupabaseClient } from '@supabase/supabase-js';
+import type { Database } from '@/types/supabase';
 
 // Serviço para gerenciar usuários no PostgreSQL via Supabase
 export const userService = {
@@ -91,7 +93,7 @@ export const userService = {
       const devices = JSON.parse(authorizedDevices);
       
       // Verificar se o dispositivo atual está na lista
-      return devices.some((device: any) => 
+      return devices.some((device: Record<string, unknown>) => 
         device.deviceId === deviceId || 
         device.ip === deviceIP
       );
@@ -115,7 +117,7 @@ export const userService = {
       const devices = authorizedDevicesStr ? JSON.parse(authorizedDevicesStr) : [];
       
       // Verificar se este dispositivo já está autorizado
-      const deviceExists = devices.some((device: any) => 
+      const deviceExists = devices.some((device: Record<string, unknown>) => 
         device.deviceId === deviceId || device.ip === deviceIP
       );
       
@@ -134,7 +136,7 @@ export const userService = {
         console.log(`Dispositivo ${deviceId} (IP: ${deviceIP}) adicionado como autorizado para usuário ${userId}`);
       } else {
         // Atualizar a data de último uso
-        const updatedDevices = devices.map((device: any) => {
+        const updatedDevices = devices.map((device: Record<string, unknown>) => {
           if (device.deviceId === deviceId || device.ip === deviceIP) {
             return {
               ...device,
@@ -172,7 +174,7 @@ export const userService = {
       const devices = JSON.parse(authorizedDevicesStr);
       
       // Filtrar o dispositivo a ser removido
-      const updatedDevices = devices.filter((device: any) => device.deviceId !== deviceId);
+      const updatedDevices = devices.filter((device: Record<string, unknown>) => device.deviceId !== deviceId);
       
       // Salvar a lista atualizada
       localStorage.setItem(`auth-devices-${userId}`, JSON.stringify(updatedDevices));
@@ -185,7 +187,7 @@ export const userService = {
   /**
    * Autenticação com Email/Senha
    */
-  async signInWithEmail(email: string, password: string, remember: boolean = true): Promise<{ data: Session | null; error: any }> {
+  async signInWithEmail(email: string, password: string, remember: boolean = true): Promise<{ data: Session | null; error: Record<string, unknown> }> {
     await this.init();
     
     try {
@@ -208,7 +210,7 @@ export const userService = {
       console.time('loginTime');
 
       // Tentar fazer login
-      const { data, error } = await supabase.auth.signInWithPassword({
+      const { data, error } = await (supabase as SupabaseClient<Database>).auth.signInWithPassword({
         email: email.trim().toLowerCase(),
         password: password,
       });
@@ -254,15 +256,29 @@ export const userService = {
       if (data.user) {
         await this.saveAuthorizedDevice(data.user.id);
         
-        // Salvar a sessão para uso futuro
-        try {
-          localStorage.setItem('supabase.auth.session', JSON.stringify({
-            session: data.session
-          }));
-          console.log('Sessão salva no localStorage para uso futuro');
-        } catch (e) {
-          console.warn('Erro ao salvar sessão no localStorage:', e);
-        }
+        // O Supabase já salva a sessão automaticamente no localStorage
+        console.log('Sessão criada com sucesso - Supabase gerenciará a persistência');
+        
+        // Debug: Verificar se a sessão foi realmente salva no localStorage
+        const storageKeys = Object.keys(localStorage).filter(key => key.includes('supabase') || key.includes('auth'));
+        console.log('🔍 DEBUG - Chaves de autenticação no localStorage:', storageKeys);
+        
+        // Verificar conteúdo da chave de sessão
+        storageKeys.forEach(key => {
+          try {
+            const value = localStorage.getItem(key);
+            if (value) {
+              const parsed = JSON.parse(value);
+              console.log(`🔍 DEBUG - ${key}:`, {
+                hasSession: !!parsed,
+                hasAccessToken: !!(parsed?.access_token || parsed?.currentSession?.access_token),
+                expiresAt: parsed?.expires_at || parsed?.currentSession?.expires_at || 'N/A'
+              });
+            }
+          } catch (e) {
+            console.log(`🔍 DEBUG - ${key}: (não é JSON)`);
+          }
+        });
       }
 
       console.log('Login bem-sucedido. Sessão será persistida.');
@@ -281,7 +297,7 @@ export const userService = {
   /**
    * Cadastro de usuário
    */
-  async signUp(email: string, password: string, name: string): Promise<any> {
+  async signUp(email: string, password: string, name: string): Promise<{ user: Record<string, unknown> | null; error: Error | null }> {
     try {
       await this.init();
       
@@ -290,9 +306,7 @@ export const userService = {
         console.error('Email e senha são obrigatórios');
         return {
           user: null,
-          error: {
-            message: 'Email e senha são obrigatórios'
-          }
+          error: new Error('Email e senha são obrigatórios')
         };
       }
 
@@ -301,9 +315,7 @@ export const userService = {
         console.error('A senha deve ter pelo menos 6 caracteres');
         return {
           user: null,
-          error: {
-            message: 'A senha deve ter pelo menos 6 caracteres'
-          }
+          error: new Error('A senha deve ter pelo menos 6 caracteres')
         };
       }
 
@@ -318,9 +330,7 @@ export const userService = {
         console.error('Email já está registrado e confirmado.');
         return {
           user: null, 
-          error: {
-            message: 'Este email já está registrado. Faça login ou use a recuperação de senha se necessário.'
-          }
+          error: new Error('Este email já está registrado. Faça login ou use a recuperação de senha se necessário.')
         };
       }
       
@@ -331,7 +341,7 @@ export const userService = {
 
       // Registrar o usuário
       console.log('Registrando novo usuário...');
-      const { data, error } = await supabase.auth.signUp({
+      const { data, error } = await (supabase as SupabaseClient<Database>).auth.signUp({
         email,
         password,
         options: {
@@ -347,14 +357,12 @@ export const userService = {
       }
 
       console.log('Usuário registrado com sucesso:', data);
-      return { user: data.user, error: null };
+      return { user: data.user as unknown as Record<string, unknown>, error: null };
     } catch (error) {
       console.error('Erro ao cadastrar usuário:', error);
       return {
         user: null,
-        error: {
-          message: 'Ocorreu um erro durante o cadastro. Tente novamente.'
-        }
+        error: new Error('Ocorreu um erro durante o cadastro. Tente novamente.')
       };
     }
   },
@@ -362,9 +370,9 @@ export const userService = {
   /**
    * Login com provedor OAuth (Google, GitHub, etc.)
    */
-  async signInWithProvider(provider: Provider): Promise<{ data: any; error: any }> {
+  async signInWithProvider(provider: Provider): Promise<{ data: Record<string, unknown>; error: Record<string, unknown> }> {
     try {
-      const { data, error } = await supabase.auth.signInWithOAuth({
+      const { data, error } = await (supabase as SupabaseClient<Database>).auth.signInWithOAuth({
         provider,
         options: {
           redirectTo: `${window.location.origin}/auth/callback`,
@@ -383,14 +391,14 @@ export const userService = {
   /**
    * Logout
    */
-  async signOut(): Promise<{ error: any }> {
+  async signOut(): Promise<{ error: Record<string, unknown> }> {
     try {
       // Remover a flag de "lembrar usuário"
       localStorage.removeItem('remember-user');
       
       // Remover autorização do dispositivo atual
       try {
-        const { data } = await supabase.auth.getUser();
+        const { data } = await (supabase as SupabaseClient<Database>).auth.getUser();
         if (data.user?.id) {
           const deviceId = this.getDeviceIdentifier();
           await this.removeAuthorizedDevice(data.user.id, deviceId);
@@ -399,7 +407,7 @@ export const userService = {
         console.warn('Erro ao remover autorização do dispositivo:', e);
       }
       
-      const { error } = await supabase.auth.signOut();
+      const { error } = await (supabase as SupabaseClient<Database>).auth.signOut();
       if (error) throw error;
 
       return { error: null };
@@ -412,9 +420,9 @@ export const userService = {
   /**
    * Recuperação de senha
    */
-  async resetPassword(email: string): Promise<{ data: any; error: any }> {
+  async resetPassword(email: string): Promise<{ data: Record<string, unknown>; error: Record<string, unknown> }> {
     try {
-      const { data, error } = await supabase.auth.resetPasswordForEmail(email, {
+      const { data, error } = await (supabase as SupabaseClient<Database>).auth.resetPasswordForEmail(email, {
         redirectTo: `${window.location.origin}/auth/reset-password`,
       });
 
@@ -436,14 +444,14 @@ export const userService = {
   /**
    * Verificação de email
    */
-  async verifyEmail(email: string): Promise<{ data: any; error: any }> {
+  async verifyEmail(email: string): Promise<{ data: Record<string, unknown>; error: Record<string, unknown> }> {
     try {
       console.log(`Iniciando verificação de email para: ${email}`);
       
       // Verificar primeiro se o email já existe na autenticação
       try {
         // Tentativa de login com senha incorreta para verificar se o email existe
-        const { error: authCheckError } = await supabase.auth.signInWithPassword({
+        const { error: authCheckError } = await (supabase as SupabaseClient<Database>).auth.signInWithPassword({
           email: email.trim().toLowerCase(),
           password: "senha-incorreta-para-verificacao"
         });
@@ -460,7 +468,7 @@ export const userService = {
       
       // Implementação dependente do fluxo de verificação do Supabase
       console.log(`Enviando solicitação de reenvio para o email: ${email}`);
-      const { data, error } = await supabase.auth.resend({
+      const { data, error } = await (supabase as SupabaseClient<Database>).auth.resend({
         type: 'signup',
         email: email.trim().toLowerCase(),
       });
@@ -488,12 +496,12 @@ export const userService = {
   /**
    * Obter perfil de usuário
    */
-  async getUserProfile(userId?: string): Promise<{ data: UserProfile | null; error: any }> {
+  async getUserProfile(userId?: string): Promise<{ data: UserProfile | null; error: Record<string, unknown> }> {
     try {
       // Como a tabela user_profiles pode não existir, retornamos um perfil mínimo
       const user = userId 
-        ? await supabase.auth.getUser(userId)
-        : await supabase.auth.getUser();
+        ? await (supabase as SupabaseClient<Database>).auth.getUser(userId)
+        : await (supabase as SupabaseClient<Database>).auth.getUser();
       
       if (!user.data.user) {
         return { data: null, error: { message: 'Usuário não encontrado' } };
@@ -509,6 +517,8 @@ export const userService = {
         avatar_url: user.data.user.user_metadata?.avatar_url || null,
         language: null,
         timezone: null,
+        // @ts-expect-error - risk_level não definido no schema
+
         risk_level: null,
         default_currency: null,
         phone_number: null,
@@ -530,9 +540,9 @@ export const userService = {
   /**
    * Atualizar perfil de usuário
    */
-  async updateUserProfile(profile: Partial<UserProfile>): Promise<{ data: UserProfile | null; error: any }> {
+  async updateUserProfile(profile: Partial<UserProfile>): Promise<{ data: UserProfile | null; error: Record<string, unknown> }> {
     try {
-      const { data: user } = await supabase.auth.updateUser({
+      const { data: user } = await (supabase as SupabaseClient<Database>).auth.updateUser({
         data: {
           full_name: profile.display_name,
           avatar_url: profile.avatar_url
@@ -553,6 +563,8 @@ export const userService = {
         avatar_url: user.user.user_metadata?.avatar_url || profile.avatar_url || null,
         language: null,
         timezone: null,
+        // @ts-expect-error - risk_level não definido no schema
+
         risk_level: null,
         default_currency: null,
         phone_number: null,
@@ -574,7 +586,7 @@ export const userService = {
   /**
    * Obter configurações de notificação
    */
-  async getNotificationSettings(userId?: string): Promise<{ data: any; error: any }> {
+  async getNotificationSettings(userId?: string): Promise<{ data: Record<string, unknown>; error: Record<string, unknown> }> {
     try {
       // Retornar configurações padrão já que não temos tabela
       const defaultSettings = {
@@ -593,7 +605,7 @@ export const userService = {
   /**
    * Atualizar configurações de notificação
    */
-  async updateNotificationSettings(settings: any): Promise<{ data: any; error: any }> {
+  async updateNotificationSettings(settings: Record<string, unknown>): Promise<{ data: Record<string, unknown>; error: Record<string, unknown> }> {
     try {
       // Simular sucesso já que não temos tabela
       return { data: settings, error: null };
@@ -606,11 +618,11 @@ export const userService = {
   /**
    * Obter preferências de trading
    */
-  async getTradingPreferences(userId?: string): Promise<{ data: any; error: any }> {
+  async getTradingPreferences(userId?: string): Promise<{ data: Record<string, unknown>; error: Record<string, unknown> }> {
     try {
       // Retornar configurações padrão já que não temos tabela
       const defaultPreferences = {
-        risk_level: 'medium',
+        // risk_level removido - não definido no schema
         preferred_markets: ['crypto', 'stocks'],
         auto_trade: false
       };
@@ -625,7 +637,7 @@ export const userService = {
   /**
    * Atualizar preferências de trading
    */
-  async updateTradingPreferences(preferences: any): Promise<{ data: any; error: any }> {
+  async updateTradingPreferences(preferences: Record<string, unknown>): Promise<{ data: Record<string, unknown>; error: Record<string, unknown> }> {
     try {
       // Simular sucesso já que não temos tabela
       return { data: preferences, error: null };
@@ -646,7 +658,7 @@ export const userService = {
   /**
    * Listar todos os usuários (apenas para admins)
    */
-  async listUsers(): Promise<{ data: any[]; error: any }> {
+  async listUsers(): Promise<{ data: Record<string, unknown>[]; error: Record<string, unknown> }> {
     try {
       // Como não temos tabela de perfis, considerar que não é possível listar usuários
       throw new Error('Funcionalidade não disponível');
@@ -659,7 +671,7 @@ export const userService = {
   /**
    * Excluir usuário (apenas admin)
    */
-  async deleteUser(userId: string): Promise<{ success: boolean; error: any }> {
+  async deleteUser(userId: string): Promise<{ success: boolean; error: Record<string, unknown> }> {
     try {
       // Como não temos tabela de perfis, considerar que não é possível excluir usuários
       throw new Error('Funcionalidade não disponível');
@@ -672,7 +684,7 @@ export const userService = {
   /**
    * Registrar ação do usuário
    */
-  async logUserAction(data: any): Promise<void> {
+  async logUserAction(data: Record<string, unknown>): Promise<void> {
     // Não faz nada, apenas retorna para não quebrar o código existente
     return Promise.resolve();
   },
@@ -725,59 +737,58 @@ export const userService = {
       const rememberUser = localStorage.getItem('remember-user') === 'true';
       console.log(`Verificando sessão (Permanecer conectado: ${rememberUser ? 'Sim' : 'Não'})`);
       
-      // Verificar se temos uma sessão em cache
-      const cachedSession = localStorage.getItem('supabase.auth.session');
-      
-      // Se não escolheu permanecer conectado, ignoramos sessões em cache
+      // O Supabase gerencia automaticamente a sessão
+      // Apenas verificamos se o usuário quer permanecer conectado
       if (!rememberUser) {
-        console.log('Usuário não escolheu permanecer conectado, ignorando sessão em cache');
-        // Limpar a sessão se existir e não for para lembrar o usuário
+        console.log('Usuário não escolheu permanecer conectado');
+        // O Supabase já limpa a sessão ao fazer signOut
+      } else {
+        // Tentar obter sessão armazenada do Supabase
+        const cachedSession = localStorage.getItem('supabase.auth.session');
         if (cachedSession) {
-          localStorage.removeItem('supabase.auth.session');
-        }
-      } else if (cachedSession) {
-        try {
-          // Analisar a sessão em cache
-          const parsed = JSON.parse(cachedSession);
-          const parsedSession = parsed?.session as Session | null;
-          
-          // Verificar se a sessão em cache é válida e contém um ID de usuário
-          if (parsedSession?.user?.id) {
-            // Verificar se o dispositivo atual está autorizado para este usuário
-            const isAuthorized = await this.isAuthorizedDevice(parsedSession.user.id);
+          try {
+            // Analisar a sessão em cache
+            const parsed = JSON.parse(cachedSession);
+            const parsedSession = parsed?.session as Session | null;
             
-            if (isAuthorized) {
-              console.log('Sessão em cache válida e dispositivo autorizado');
+            // Verificar se a sessão em cache é válida e contém um ID de usuário
+            if (parsedSession?.user?.id) {
+              // Verificar se o dispositivo atual está autorizado para este usuário
+              const isAuthorized = await this.isAuthorizedDevice(parsedSession.user.id);
               
-              // Verificar se a sessão não expirou
-              const expiresAt = parsedSession.expires_at;
-              const now = Math.floor(Date.now() / 1000);
-              
-              if (!expiresAt || expiresAt > now) {
-                console.log('Sessão ainda não expirou, retornando do cache');
+              if (isAuthorized) {
+                console.log('Sessão em cache válida e dispositivo autorizado');
                 
-                // Atualizar automaticamente a data de último uso do dispositivo
-                this.saveAuthorizedDevice(parsedSession.user.id).catch(e => 
-                  console.warn('Erro ao atualizar registro de dispositivo:', e)
-                );
+                // Verificar se a sessão não expirou
+                const expiresAt = parsedSession.expires_at;
+                const now = Math.floor(Date.now() / 1000);
                 
-                console.log(`Verificação de sessão concluída com sucesso (cache) [${timerId}]`);
-                return parsedSession;
+                if (!expiresAt || expiresAt > now) {
+                  console.log('Sessão ainda não expirou, retornando do cache');
+                  
+                  // Atualizar automaticamente a data de último uso do dispositivo
+                  this.saveAuthorizedDevice(parsedSession.user.id).catch(e => 
+                    console.warn('Erro ao atualizar registro de dispositivo:', e)
+                  );
+                  
+                  console.log(`Verificação de sessão concluída com sucesso (cache) [${timerId}]`);
+                  return parsedSession;
+                } else {
+                  console.log('Sessão em cache expirou, será necessário fazer login novamente');
+                }
               } else {
-                console.log('Sessão em cache expirou, será necessário fazer login novamente');
+                console.log('Dispositivo não autorizado para este usuário, fazendo logout');
+                await (supabase as SupabaseClient<Database>).auth.signOut();
               }
-            } else {
-              console.log('Dispositivo não autorizado para este usuário, ignorando sessão em cache');
-              localStorage.removeItem('supabase.auth.session');
             }
+          } catch (e) {
+            console.warn('Erro ao parsear sessão em cache:', e);
           }
-        } catch (e) {
-          console.warn('Erro ao parsear sessão em cache:', e);
         }
       }
       
       // Buscar a sessão se não houver cache válido ou não for para lembrar o usuário
-      const { data, error } = await supabase.auth.getSession();
+      const { data, error } = await (supabase as SupabaseClient<Database>).auth.getSession();
       if (error) {
         console.error('Erro ao obter sessão:', error);
         return null;
@@ -802,7 +813,7 @@ export const userService = {
    */
   async getCurrentUser() {
     try {
-      const { data } = await supabase.auth.getUser();
+      const { data } = await (supabase as SupabaseClient<Database>).auth.getUser();
       return data.user;
     } catch (error) {
       console.error('Erro ao obter usuário atual:', error);
@@ -813,14 +824,14 @@ export const userService = {
   /**
    * Função de debug para criar usuário de teste (remova em produção)
    */
-  async createTestUser(): Promise<{ success: boolean; error: any }> {
+  async createTestUser(): Promise<{ success: boolean; error: Record<string, unknown> }> {
     try {
       const testEmail = `teste${Date.now()}@example.com`;
       const testPassword = 'Teste123!';
       
       console.log('Tentando criar usuário de teste:', testEmail);
       
-      const { data, error } = await supabase.auth.signUp({
+      const { data, error } = await (supabase as SupabaseClient<Database>).auth.signUp({
         email: testEmail,
         password: testPassword,
         options: {
@@ -830,7 +841,7 @@ export const userService = {
       
       if (error) {
         console.error('Erro ao criar usuário de teste:', error);
-        return { success: false, error };
+        return { success: false, error: error as unknown as Record<string, unknown> };
       }
       
       console.log('Usuário de teste criado com sucesso:', {
@@ -885,7 +896,7 @@ export const userService = {
       try {
         console.log(`Verificando email ${normalizedEmail} via API de reset de senha...`);
         
-        const { error } = await supabase.auth.resetPasswordForEmail(normalizedEmail);
+        const { error } = await (supabase as SupabaseClient<Database>).auth.resetPasswordForEmail(normalizedEmail);
         
         if (!error) {
           // Se não ocorrer erro, o email existe e está confirmado
@@ -913,7 +924,7 @@ export const userService = {
         try {
           console.log(`Verificando email ${normalizedEmail} via tentativa de login...`);
           
-          const { error } = await supabase.auth.signInWithPassword({
+          const { error } = await (supabase as SupabaseClient<Database>).auth.signInWithPassword({
             email: normalizedEmail,
             password: 'SENHA_INCORRETA_PROPOSITAL_123!@#'
           });
@@ -950,7 +961,7 @@ export const userService = {
         try {
           console.log(`Verificando email ${normalizedEmail} via resend verification...`);
           
-          const { error } = await supabase.auth.resend({
+          const { error } = await (supabase as SupabaseClient<Database>).auth.resend({
             type: 'signup',
             email: normalizedEmail,
           });
@@ -981,7 +992,7 @@ export const userService = {
         const tableExists = await this.doesTableExist('user_profiles');
         
         if (tableExists) {
-          const { data, error } = await supabase
+          const { data, error} = await (supabase as SupabaseClient<Database>)
             .from('user_profiles')
             .select('*')
             .eq('email', normalizedEmail)
@@ -1023,8 +1034,8 @@ export const userService = {
       }
       
       // Verificar existência da tabela através de uma consulta
-      const { error } = await supabase
-        .from(tableName)
+      const { error } = await (supabase as SupabaseClient<Database>)
+        .from(tableName as never)
         .select('count(*)')
         .limit(1);
       

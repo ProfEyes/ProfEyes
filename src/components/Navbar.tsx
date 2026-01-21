@@ -22,7 +22,7 @@ import {
 } from "lucide-react";
 
 const Navbar = () => {
-  const { notifications, unreadCount, toggleNotifications } = useNotifications();
+  const { unreadCount } = useNotifications();
   const { t } = useLanguage();
   
   // Obter o pathname atual
@@ -70,13 +70,21 @@ const Navbar = () => {
         </div>
         <div className="flex items-center gap-4">
           <LanguageSelector variant="minimal" />
-          <Button variant="ghost" size="icon" onClick={toggleNotifications}>
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            onClick={() => {}}
+            className="hover:bg-transparent"
+            style={{
+              transition: 'none'
+            }}
+          >
             {unreadCount > 0 && (
               <Badge variant="destructive" className="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center p-0 text-xs">
                 {unreadCount}
               </Badge>
             )}
-            <Bell className="h-5 w-5 text-white/80" />
+            <Bell className="h-5 w-5 text-white/80" style={{ transition: 'none' }} />
           </Button>
           <Link
             href="/settings"

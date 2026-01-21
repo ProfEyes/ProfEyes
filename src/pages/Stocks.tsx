@@ -482,6 +482,8 @@ export default function Stocks() {
                     className="w-full p-2 border rounded-md"
                     value={filters.sector}
                     onChange={(e) => setFilters({...filters, sector: e.target.value})}
+                    title="Filtrar por setor"
+                    aria-label="Selecionar setor para filtrar ações"
                   >
                     <option value="all">Todos os setores</option>
                     {sectors.map((sector) => (

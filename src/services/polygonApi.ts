@@ -2,6 +2,28 @@ import { apiKeyManager } from './apiKeyManager';
 
 const BASE_URL = 'https://api.polygon.io/v2';
 
+interface PolygonHistoricalItem {
+  t: number;
+  o: number;
+  h: number;
+  l: number;
+  c: number;
+  v: number;
+}
+
+interface PolygonNewsItem {
+  title: string;
+  author: string;
+  published_utc: string;
+  article_url: string;
+  description: string;
+  keywords: string[];
+  publisher: {
+    name: string;
+  };
+  tickers: string[];
+}
+
 async function getApiKey(): Promise<string> {
   return await apiKeyManager.getApiKey('polygon');
 }
@@ -46,7 +68,7 @@ export async function getPolygonHistorical(symbol: string, from: string, to: str
       throw new Error(data.error);
     }
 
-    return data.results.map((item: any) => ({
+    return data.results.map((item: PolygonHistoricalItem) => ({
       timestamp: item.t,
       open: item.o,
       high: item.h,
@@ -72,7 +94,7 @@ export async function getPolygonNews(symbol: string, limit: number = 10) {
       throw new Error(data.error);
     }
 
-    return data.results.map((item: any) => ({
+    return data.results.map((item: PolygonNewsItem) => ({
       title: item.title,
       author: item.author,
       published_utc: item.published_utc,

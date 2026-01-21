@@ -55,3 +55,33 @@ html {
     @apply bg-background text-foreground;
   }
 } 
+
+/* Regras para forçar renderização correta após redirecionamento de idioma */
+html.layout-forced,
+html.layout-forced body {
+  background-color: #000 !important;
+  color: #fff !important;
+  min-height: 100vh !important;
+  overflow: auto !important;
+  display: block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+}
+
+html.layout-forced .min-h-screen {
+  min-height: 100vh !important;
+  display: flex !important;
+}
+
+html.layout-forced .bg-background {
+  background-color: #000 !important;
+} 
+
+/* Hover específico para o botão de notificações */
+.notification-button-group:hover .notification-button-group-hover\:opacity-0 {
+  opacity: 0;
+}
+
+.notification-button-group:hover .notification-button-group-hover\:opacity-100 {
+  opacity: 1;
+}

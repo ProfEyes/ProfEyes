@@ -178,7 +178,7 @@ export function detectPatterns(candles: PriceData[]): CandlestickPattern[] {
       description: 'Indica indecisão no mercado',
       reliability: 3,
       position: lastIndex,
-      timestamp: current.timestamp,
+      timestamp: current.time,
       accuracy
     });
   }
@@ -191,7 +191,7 @@ export function detectPatterns(candles: PriceData[]): CandlestickPattern[] {
       description: 'Possível reversão de baixa para alta',
       reliability: 4,
       position: lastIndex,
-      timestamp: current.timestamp,
+      timestamp: current.time,
       accuracy
     });
   }
@@ -204,7 +204,7 @@ export function detectPatterns(candles: PriceData[]): CandlestickPattern[] {
       description: 'Possível reversão de alta para baixa',
       reliability: 4,
       position: lastIndex,
-      timestamp: current.timestamp,
+      timestamp: current.time,
       accuracy
     });
   }
@@ -219,7 +219,7 @@ export function detectPatterns(candles: PriceData[]): CandlestickPattern[] {
       description: 'Forte sinal de reversão para alta',
       reliability: 5,
       position: lastIndex,
-      timestamp: current.timestamp,
+      timestamp: current.time,
       accuracy
     });
   }
@@ -232,7 +232,7 @@ export function detectPatterns(candles: PriceData[]): CandlestickPattern[] {
       description: 'Forte sinal de reversão para baixa',
       reliability: 5,
       position: lastIndex,
-      timestamp: current.timestamp,
+      timestamp: current.time,
       accuracy
     });
   }
@@ -245,7 +245,7 @@ export function detectPatterns(candles: PriceData[]): CandlestickPattern[] {
       description: 'Possível reversão para alta',
       reliability: 3,
       position: lastIndex,
-      timestamp: current.timestamp,
+      timestamp: current.time,
       accuracy
     });
   }
@@ -258,7 +258,7 @@ export function detectPatterns(candles: PriceData[]): CandlestickPattern[] {
       description: 'Possível reversão para baixa',
       reliability: 3,
       position: lastIndex,
-      timestamp: current.timestamp,
+      timestamp: current.time,
       accuracy
     });
   }
@@ -272,7 +272,7 @@ export function detectPatterns(candles: PriceData[]): CandlestickPattern[] {
       description: 'Forte sinal de reversão para alta',
       reliability: 5,
       position: lastIndex,
-      timestamp: current.timestamp,
+      timestamp: current.time,
       accuracy
     });
   }
@@ -285,7 +285,7 @@ export function detectPatterns(candles: PriceData[]): CandlestickPattern[] {
       description: 'Forte sinal de reversão para baixa',
       reliability: 5,
       position: lastIndex,
-      timestamp: current.timestamp,
+      timestamp: current.time,
       accuracy
     });
   }

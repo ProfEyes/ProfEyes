@@ -1,1 +1,0 @@
-// Arquivo corrigido para substituir marketData_backup_original.ts

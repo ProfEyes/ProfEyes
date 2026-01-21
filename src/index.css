@@ -1,7 +1,7 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
- 
+
 @layer base {
   :root {
     --background: 0 0% 0%;
@@ -24,7 +24,7 @@
     --input: 0 0% 20%;
     --ring: 0 0% 100%;
     --radius: 0.5rem;
-    
+
     /* Variáveis de animação */
     --fade-time: 1800ms;
     --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
@@ -34,7 +34,7 @@
   * {
     @apply border-border selection:bg-white/10 selection:text-white;
   }
-  
+
   body {
     @apply bg-black text-foreground antialiased;
     font-feature-settings: "ss01", "ss02", "cv01", "cv02", "cv03";
@@ -65,6 +65,18 @@
     }
   }
 
+  /* Remover outline e marcações de elementos select */
+  [data-radix-select-trigger],
+  [data-radix-select-trigger]:focus,
+  [data-radix-select-trigger]:focus-visible,
+  [data-radix-select-item],
+  [data-radix-select-item]:focus,
+  [data-radix-select-item]:focus-visible {
+    outline: none !important;
+    box-shadow: none !important;
+    border-color: inherit !important;
+  }
+
   .glass {
     background: rgba(0, 0, 0, 0.3);
     backdrop-filter: blur(12px);
@@ -87,6 +99,10 @@
 
   .slide-in {
     @apply animate-toast-in;
+  }
+  .theme {
+    --animate-marquee: marquee var(--duration) infinite linear;
+    --animate-marquee-vertical: marquee-vertical var(--duration) linear infinite;
   }
 }
 
@@ -536,6 +552,25 @@
   }
 }
 
+/* Classe para animação de sinais com delay dinâmico usando data attributes */
+.animate-signal-fade-in {
+  opacity: 1;
+  animation: fade-in-up 0.5s ease-out backwards;
+}
+
+/* Delays específicos para os primeiros sinais (fallback se data-delay não funcionar) */
+.animate-signal-fade-in:nth-child(1) {
+  animation-delay: 0ms;
+}
+
+.animate-signal-fade-in:nth-child(2) {
+  animation-delay: 100ms;
+}
+
+.animate-signal-fade-in:nth-child(3) {
+  animation-delay: 200ms;
+}
+
 /* Estilos para o card de sinais do Dashboard */
 .signals-card-container {
   position: relative;
@@ -554,7 +589,8 @@
   position: relative;
   transition: all 0.3s ease-out;
   background-color: rgba(0, 0, 0, 0.3);
-  backdrop-filter: blur(5px);
+  /* Removendo o embaçamento que estava afetando a legibilidade */
+  /* backdrop-filter: blur(5px); */
   border-bottom: 1px solid rgba(255, 255, 255, 0.05);
   z-index: 2;
 }
@@ -563,6 +599,16 @@
   transform: translateY(-2px);
   box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
   background-color: rgba(255, 255, 255, 0.04);
+}
+
+/* Ajustando os boxes internos para não embaçarem o conteúdo */
+.signal-item-hover .border.border-white\/10.rounded-lg.overflow-hidden.backdrop-blur-sm {
+  backdrop-filter: none;
+}
+
+/* Corrigindo o botão para manter a legibilidade */
+.signal-item-hover .relative.rounded-full.bg-black\/40.backdrop-blur-sm {
+  backdrop-filter: none;
 }
 
 /* Efeito de hover mais intenso para sinais de venda */
@@ -849,4 +895,382 @@
 
 .animate-shine {
   animation: shine 1.5s infinite;
+}
+
+/* Animações para a página de sinais - entrada suave e profissional */
+@keyframes signals-page-fade-in {
+  0% {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes signals-card-entrance {
+  0% {
+    opacity: 0;
+    transform: translateY(30px) scale(0.95);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes signals-background-glow {
+  0% {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+  100% {
+    opacity: 0.05;
+    transform: scale(1);
+  }
+}
+
+@keyframes signals-title-reveal {
+  0% {
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes signals-content-slide-up {
+  0% {
+    opacity: 0;
+    transform: translateY(40px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Classes para aplicar as animações */
+.signals-page-entrance {
+  animation: signals-page-fade-in 0.6s ease-out forwards;
+}
+
+.signals-card-entrance {
+  animation: signals-card-entrance 0.5s ease-out forwards;
+}
+
+.signals-background-entrance {
+  animation: signals-background-glow 1s ease-out forwards;
+}
+
+.signals-title-entrance {
+  animation: signals-title-reveal 0.6s ease-out forwards;
+}
+
+.signals-content-entrance {
+  animation: signals-content-slide-up 0.8s ease-out forwards;
+}
+
+/* Efeitos de hover sutis para manter o profissionalismo */
+.signal-card {
+  transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+.signal-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+}
+
+/* Animação sutil para elementos de loading */
+.signals-loading-pulse {
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+/* Efeito de respiração para elementos de fundo */
+@keyframes signals-breathe {
+  0%, 100% {
+    opacity: 0.03;
+  }
+  50% {
+    opacity: 0.08;
+  }
+}
+
+.signals-background-breathe {
+  animation: signals-breathe 4s ease-in-out infinite;
+}
+
+/* Transições suaves para mudanças de estado */
+.signals-smooth-transition {
+  transition: all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+/* Efeito de entrada escalonada para múltiplos elementos */
+.signals-stagger-entrance {
+  animation-fill-mode: both;
+}
+
+.signals-stagger-entrance:nth-child(1) { animation-delay: 0.1s; }
+.signals-stagger-entrance:nth-child(2) { animation-delay: 0.2s; }
+.signals-stagger-entrance:nth-child(3) { animation-delay: 0.3s; }
+.signals-stagger-entrance:nth-child(4) { animation-delay: 0.4s; }
+.signals-stagger-entrance:nth-child(5) { animation-delay: 0.5s; }
+.signals-stagger-entrance:nth-child(6) { animation-delay: 0.6s; }
+.signals-stagger-entrance:nth-child(7) { animation-delay: 0.7s; }
+.signals-stagger-entrance:nth-child(8) { animation-delay: 0.8s; }
+
+/* Estilos específicos para a página de sinais */
+.signals-page-dark-gradient {
+  background: linear-gradient(135deg, 
+    rgba(0, 0, 0, 0.95) 0%, 
+    rgba(10, 10, 10, 0.9) 25%, 
+    rgba(5, 5, 5, 0.95) 50%, 
+    rgba(0, 0, 0, 0.98) 75%, 
+    rgba(0, 0, 0, 1) 100%
+  );
+  position: relative;
+  overflow: hidden;
+}
+
+.signals-page-light-accent {
+  position: absolute;
+  width: 200px;
+  height: 200px;
+  border-radius: 50%;
+  background: radial-gradient(circle, 
+    rgba(255, 255, 255, 0.02) 0%, 
+    rgba(255, 255, 255, 0.01) 50%, 
+    transparent 100%
+  );
+  filter: blur(40px);
+  pointer-events: none;
+}
+
+/* Estilos para câmera flutuante otimizada */
+@keyframes floating-camera-pulse {
+  0% { 
+    box-shadow: 0 15px 35px rgba(0, 0, 0, 0.5), 0 5px 15px rgba(0, 0, 0, 0.3); 
+  }
+  50% { 
+    box-shadow: 0 20px 40px rgba(59, 130, 246, 0.2), 0 8px 20px rgba(0, 0, 0, 0.4); 
+  }
+  100% { 
+    box-shadow: 0 15px 35px rgba(0, 0, 0, 0.5), 0 5px 15px rgba(0, 0, 0, 0.3); 
+  }
+}
+
+/* Classe para câmera flutuante ultra-suave */
+.floating-camera-container {
+  /* Forçar nova camada de composição para performance */
+  transform: translateZ(0);
+  will-change: transform;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  
+  /* Suavização ultra-otimizada */
+  transition: all 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  
+  /* Isolamento completo */
+  isolation: isolate;
+  contain: layout style paint;
+  
+  /* Evitar conflitos com outros elementos */
+  pointer-events: auto;
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+}
+
+.floating-camera-container:hover {
+  animation: floating-camera-pulse 3s ease-in-out infinite;
+}
+
+/* Otimizações específicas para drag ultra-suave */
+.floating-camera-dragging {
+  transition: none !important;
+  will-change: transform, left, top;
+  transform: translateZ(0) scale(1.02);
+  cursor: grabbing !important;
+  
+  /* Forçar aceleração de hardware */
+  -webkit-transform: translateZ(0);
+  -webkit-backface-visibility: hidden;
+  -webkit-perspective: 1000;
+  
+  /* Sombra específica durante drag */
+  box-shadow: 0 25px 50px rgba(59, 130, 246, 0.4), 
+              0 10px 25px rgba(0, 0, 0, 0.6) !important;
+  
+  /* Anti-aliasing para movimento suave */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  
+  /* Forçar visibilidade absoluta */
+  visibility: visible !important;
+  display: block !important;
+  opacity: 1 !important;
+}
+
+.floating-camera-resizing {
+  transition: none !important;
+  will-change: width, height;
+  cursor: se-resize !important;
+}
+
+/* Garantir que o elemento sempre fique visível */
+.floating-camera-always-visible {
+  z-index: 2147483647 !important; /* Valor máximo de z-index */
+  position: fixed !important; /* Forçar position fixed para não depender de containers pais */
+  pointer-events: auto !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  
+  /* Forçar que nunca seja cortada por containers pais */
+  clip: unset !important;
+  clip-path: none !important;
+  contain: none !important;
+  
+  /* Garantir que seja renderizada em sua própria camada de composição */
+  isolation: isolate !important;
+  transform-style: preserve-3d !important;
+  
+  /* Evitar qualquer tipo de corte ou limitação */
+  overflow: visible !important;
+  max-width: none !important;
+  max-height: none !important;
+}
+
+.signals-page-color-accent {
+  position: absolute;
+  width: 150px;
+  height: 150px;
+  border-radius: 50%;
+  filter: blur(60px);
+  pointer-events: none;
+}
+
+.signals-page-card-glass {
+  background: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+
+/* Efeitos adicionais para melhorar a experiência visual */
+.signal-divider {
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+.signal-info-box {
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(8px);
+  transition: all 0.3s ease;
+}
+
+.signal-info-box:hover {
+  background: rgba(0, 0, 0, 0.7);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+/* Efeito de brilho sutil para botões dourados */
+.golden-button {
+  position: relative;
+  overflow: hidden;
+}
+
+.golden-button::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, 
+    transparent, 
+    rgba(255, 255, 255, 0.1), 
+    transparent
+  );
+  transition: left 0.5s ease;
+}
+
+.golden-button:hover::before {
+  left: 100%;
+}
+
+.golden-shadow {
+  box-shadow: 0 4px 15px rgba(245, 158, 11, 0.2);
+}
+
+.golden-shadow:hover {
+  box-shadow: 0 6px 20px rgba(245, 158, 11, 0.3);
+}
+
+/* Gradiente para texto */
+.gradient-text {
+  background: linear-gradient(135deg, 
+    rgba(255, 255, 255, 0.9) 0%, 
+    rgba(255, 255, 255, 0.7) 50%, 
+    rgba(255, 255, 255, 0.9) 100%
+  );
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Efeito shimmer para elementos destacados */
+.shimmer-effect {
+  position: relative;
+  overflow: hidden;
+}
+
+.shimmer-effect::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, 
+    transparent, 
+    rgba(255, 255, 255, 0.1), 
+    transparent
+  );
+  animation: shimmer 2s infinite;
+}
+
+@keyframes shimmer {
+  0% { left: -100%; }
+  100% { left: 100%; }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+@theme inline {
+  @keyframes marquee {
+  from {
+    transform: translateX(0);
+    }
+  to {
+    transform: translateX(calc(-100% - var(--gap)));
+    }
+  }
+  @keyframes marquee-vertical {
+  from {
+    transform: translateY(0);
+    }
+  to {
+    transform: translateY(calc(-100% - var(--gap)));
+    }
+  }
 }

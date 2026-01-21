@@ -1,7 +1,20 @@
-import { supabase } from "@/integrations/supabase/client";
+import { supabase } from "@/lib/supabase";
+import type { SupabaseClient } from '@supabase/supabase-js';
+import type { Database } from '@/types/supabase';
 import { API_KEYS } from "./apiKeys";
 import { fetchCompanyNews } from './finnhubApi';
 import { MarketNews } from './types';
+
+interface NewsArticle {
+  title: string;
+  content?: string;
+  description?: string;
+  source?: string | { name: string };
+  date?: Date;
+  url: string;
+  publishedAt: string;
+  sentiment?: number;
+}
 
 interface SentimentResult {
   score: number;  // -1 a 1, onde -1 é muito negativo, 0 é neutro e 1 é muito positivo
@@ -28,7 +41,7 @@ const sentimentCache: Record<string, {
 // Função para buscar notícias relacionadas a um ativo
 async function fetchNewsForAsset(symbol: string): Promise<{
   sentiment: number;
-  articles: any[];
+  articles: NewsArticle[];
 }> {
   try {
     // Adaptar símbolo para Finnhub
@@ -121,7 +134,7 @@ function calculateSentiment(text: string): number {
 // Função para fornecer notícias simuladas
 function getFallbackNewsForAsset(symbol: string): {
   sentiment: number;
-  articles: any[];
+  articles: NewsArticle[];
 } {
   const now = new Date();
   
@@ -139,7 +152,7 @@ function getFallbackNewsForAsset(symbol: string): {
     {
       title: `Perspectivas de mercado para ${symbol} no próximo trimestre`,
       content: `Especialistas apontam que ${symbol} pode apresentar valorização consistente no próximo trimestre, impulsionado por fatores macroeconômicos favoráveis.`,
-      source: "ProfEyes Research",
+              source: "Trending Research",
       date: new Date(now.getTime() - 1000 * 60 * 60 * 24), // 1 dia atrás
       description: `Especialistas apontam que ${symbol} pode apresentar valorização consistente no próximo trimestre.`,
       url: '#',
@@ -171,8 +184,7 @@ function getFallbackNewsForAsset(symbol: string): {
 async function fetchSocialMediaData(symbol: string): Promise<Array<{text: string; source: 'twitter' | 'reddit'; date: Date}>> {
   try {
     // Buscar dados sociais do Supabase
-    const { data: socialData, error } = await supabase
-      .from('social_mentions')
+    const { data: socialData, error } = await (supabase as SupabaseClient<Database>).from('social_mentions')
       .select('*')
       .filter('symbol', 'eq', symbol)
       .order('created_at', { ascending: false })
@@ -331,8 +343,7 @@ export async function analyzeAssetSentiment(symbol: string): Promise<SentimentRe
     console.log(`Analisando sentimento para ${symbol}...`);
     
     // Buscar dados do Supabase primeiro
-    const { data, error } = await supabase
-      .from('sentiment_analysis')
+    const { data, error } = await (supabase as SupabaseClient<Database>).from('sentiment_analysis')
       .select('*')
       .eq('symbol', symbol)
       .order('created_at', { ascending: false })
@@ -455,7 +466,7 @@ export async function analyzeAssetSentiment(symbol: string): Promise<SentimentRe
     
     // Salvar no Supabase
     try {
-      await supabase.from('sentiment_analysis').insert({
+      await (supabase as SupabaseClient<Database>).from('sentiment_analysis').insert({
         symbol,
         score: result.score,
         magnitude: result.magnitude,
@@ -521,11 +532,11 @@ export async function analyzeSentimentScore(text: string): Promise<number> {
     const lowerText = text.toLowerCase();
     
     // Contar ocorrências de palavras positivas e negativas
-    let positiveCount = positiveWords.reduce((count, word) => 
+    const positiveCount = positiveWords.reduce((count, word) => 
       count + (lowerText.split(word).length - 1), 0
     );
 
-    let negativeCount = negativeWords.reduce((count, word) => 
+    const negativeCount = negativeWords.reduce((count, word) => 
       count + (lowerText.split(word).length - 1), 0
     );
 
@@ -690,7 +701,7 @@ function calculateMagnitude(text: string): number {
 // Função para analisar sentimento de notícias para um ativo
 export async function analyzeNewsForAsset(symbol: string): Promise<{
   sentiment: number;
-  articles: any[];
+  articles: NewsArticle[];
 }> {
   try {
     // Adaptar símbolo para Finnhub
@@ -715,7 +726,7 @@ export async function analyzeNewsForAsset(symbol: string): Promise<{
         const articles = finnhubResults.slice(0, 20).map(item => {
           // Verificamos se o item possui a propriedade sentiment, se não, calculamos
           const itemSentiment = 'sentiment' in item ? 
-            (item as any).sentiment : 
+            (item as { sentiment: number }).sentiment : 
             calculateSentiment(item.headline + ' ' + item.summary);
             
           return {

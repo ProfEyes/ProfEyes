@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
+import type { SupabaseClient } from '@supabase/supabase-js';
+import type { Database } from '@/types/supabase';
 import { toast } from 'sonner';
 import {
   Table,
@@ -30,7 +32,17 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
-import { ReloadIcon, TrashIcon, PlusIcon, EyeIcon, SearchIcon, FilterIcon, ClockIcon, Video } from "@radix-ui/react-icons";
+import { 
+  Loader2, 
+  RefreshCw, 
+  Trash, 
+  Plus, 
+  Eye, 
+  Search, 
+  Filter, 
+  Clock, 
+  Video
+} from "lucide-react";
 import { UserData, checkAdminPermission, createUser, deleteUser, listUsers, getAdminLogs } from '@/lib/admin-api';
 import {
   Tabs,
@@ -45,7 +57,33 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Loader2 } from "lucide-react";
+
+// Interface para logs administrativos
+interface AdminLog {
+  id: string;
+  created_at: string;
+  action: 'create' | 'update' | 'delete' | 'reset_password';
+  target_user_id: string | null;
+  details: Record<string, unknown> | null;
+  admin: { email: string } | null;
+  admin_id: string;
+}
+
+// Interface para streamers/usuários com permissão de stream
+interface StreamerData {
+  id: string;
+  user_id: string;
+  can_stream: boolean;
+  created_at: string;
+  user_profiles?: {
+    display_name: string;
+    email: string;
+  } | null;
+  profiles?: {
+    display_name: string;
+    email: string;
+  } | null;
+}
 
 export default function Admin() {
   const { user, session } = useAuth();
@@ -60,7 +98,7 @@ export default function Admin() {
   const [isDetailsDialogOpen, setIsDetailsDialogOpen] = useState(false);
   const [isLogsDialogOpen, setIsLogsDialogOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<UserData | null>(null);
-  const [adminLogs, setAdminLogs] = useState<any[]>([]);
+  const [adminLogs, setAdminLogs] = useState<AdminLog[]>([]);
   const [logsLoading, setLogsLoading] = useState(false);
   const [newUserData, setNewUserData] = useState({
     email: '',
@@ -69,7 +107,7 @@ export default function Admin() {
     birthdate: ''
   });
   const [activeTab, setActiveTab] = useState("users");
-  const [streamers, setStreamers] = useState<any[]>([]);
+  const [streamers, setStreamers] = useState<StreamerData[]>([]);
   const [loadingStreamers, setLoadingStreamers] = useState<boolean>(true);
   const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
   const [isGranting, setIsGranting] = useState<boolean>(false);
@@ -109,11 +147,12 @@ export default function Admin() {
 
         setUsers(result.users);
         setTotalPages(Math.ceil(result.total / itemsPerPage));
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error('Erro ao buscar usuários:', err);
-        setError(err.message || 'Erro ao carregar usuários');
+        const errorMessage = err instanceof Error ? err.message : 'Erro ao carregar usuários';
+        setError(errorMessage);
         toast.error('Erro ao carregar lista de usuários', {
-          description: err.message
+          description: errorMessage
         });
       } finally {
         setLoading(false);
@@ -171,10 +210,11 @@ export default function Admin() {
         });
         setIsAddUserDialogOpen(false);
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Erro ao criar usuário:', err);
+      const errorMessage = err instanceof Error ? err.message : 'Erro ao criar usuário';
       toast.error('Erro ao adicionar usuário', {
-        description: err.message
+        description: errorMessage
       });
     } finally {
       setLoading(false);
@@ -200,10 +240,11 @@ export default function Admin() {
       
       // Atualizar lista de usuários
       setUsers(users.filter(user => user.id !== userId));
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Erro ao excluir usuário:', err);
+      const errorMessage = err instanceof Error ? err.message : 'Erro ao excluir usuário';
       toast.error('Erro ao excluir usuário', {
-        description: err.message
+        description: errorMessage
       });
     } finally {
       setLoading(false);
@@ -219,8 +260,12 @@ export default function Admin() {
   // Redefinir senha do usuário
   const handleResetPassword = async (email: string) => {
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/auth/reset-password`,
+      // URL padrão para todas as operações de redefinição de senha
+      const redirectUrl = `${window.location.origin}/auth/reset-password`;
+      console.log("URL de redirecionamento para redefinição:", redirectUrl);
+      
+      const { error } = await (supabase as SupabaseClient<Database>).auth.resetPasswordForEmail(email, {
+        redirectTo: redirectUrl,
       });
 
       if (error) throw new Error(error.message);
@@ -228,10 +273,11 @@ export default function Admin() {
       toast.success('Email de redefinição de senha enviado', {
         description: `Um email foi enviado para ${email} com instruções para redefinir a senha.`
       });
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Erro ao enviar email de redefinição:', err);
+      const errorMessage = err instanceof Error ? err.message : 'Erro ao enviar email de redefinição';
       toast.error('Erro ao enviar email de redefinição', {
-        description: err.message
+        description: errorMessage
       });
     }
   };
@@ -243,11 +289,12 @@ export default function Admin() {
     
     try {
       const logs = await getAdminLogs(50);
-      setAdminLogs(logs);
-    } catch (err: any) {
+      setAdminLogs(logs as unknown as AdminLog[]);
+    } catch (err: unknown) {
       console.error('Erro ao carregar logs:', err);
+      const errorMessage = err instanceof Error ? err.message : 'Erro ao carregar logs';
       toast.error('Erro ao carregar logs de atividade', {
-        description: err.message
+        description: errorMessage
       });
     } finally {
       setLogsLoading(false);
@@ -269,7 +316,7 @@ export default function Admin() {
   const loadStreamers = async () => {
     setLoadingStreamers(true);
     try {
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as SupabaseClient<Database>)
         .from('stream_permissions')
         .select('*, profiles:user_id(*)')
         .eq('can_stream', true);
@@ -306,7 +353,7 @@ export default function Admin() {
       }));
       
       // Inserir permissões
-      const { error } = await supabase
+      const { error } = await (supabase as SupabaseClient<Database>)
         .from('stream_permissions')
         .upsert(permissionsData, { onConflict: 'user_id' });
       
@@ -336,7 +383,7 @@ export default function Admin() {
     setIsRevoking(true);
     
     try {
-      const { error } = await supabase
+      const { error } = await (supabase as SupabaseClient<Database>)
         .from('stream_permissions')
         .delete()
         .eq('user_id', userId);
@@ -396,14 +443,14 @@ export default function Admin() {
             onClick={handleViewLogs}
             className="border-neutral-700"
           >
-            <ClockIcon className="mr-2 h-4 w-4" />
+            <Clock className="mr-2 h-4 w-4" />
             Logs de Atividade
           </Button>
           <Button 
             onClick={() => setIsAddUserDialogOpen(true)}
             className="bg-gradient-to-r from-green-800 to-green-700 hover:from-green-700 hover:to-green-600 text-white"
           >
-            <PlusIcon className="mr-2 h-4 w-4" />
+            <Plus className="mr-2 h-4 w-4" />
             Adicionar Usuário
           </Button>
         </div>
@@ -413,7 +460,7 @@ export default function Admin() {
         <CardContent className="p-4">
           <div className="flex flex-col sm:flex-row gap-4 items-center">
             <div className="relative flex-1">
-              <SearchIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 text-neutral-500 h-4 w-4" />
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-neutral-500 h-4 w-4" />
               <Input
                 type="search"
                 placeholder="Buscar por email ou nome..."
@@ -424,11 +471,11 @@ export default function Admin() {
             </div>
             <div className="flex gap-2">
               <Button variant="outline" className="border-neutral-700" onClick={() => setCurrentPage(1)}>
-                <ReloadIcon className="mr-2 h-4 w-4" />
+                <RefreshCw className="mr-2 h-4 w-4" />
                 Atualizar
               </Button>
               <Button variant="outline" className="border-neutral-700" disabled>
-                <FilterIcon className="mr-2 h-4 w-4" />
+                <Filter className="mr-2 h-4 w-4" />
                 Filtros
               </Button>
             </div>
@@ -438,7 +485,7 @@ export default function Admin() {
 
       {loading && (
         <div className="flex justify-center my-12">
-          <ReloadIcon className="h-10 w-10 animate-spin text-green-500" />
+          <RefreshCw className="h-10 w-10 animate-spin text-green-500" />
         </div>
       )}
 
@@ -502,7 +549,7 @@ export default function Admin() {
                             onClick={() => handleViewDetails(user)}
                             className="h-8 px-2 text-neutral-400 hover:text-neutral-100"
                           >
-                            <EyeIcon className="h-4 w-4" />
+                            <Eye className="h-4 w-4" />
                           </Button>
                           <Button
                             variant="ghost"
@@ -510,7 +557,7 @@ export default function Admin() {
                             onClick={() => handleDeleteUser(user.id)}
                             className="h-8 px-2 text-red-400 hover:text-red-300 hover:bg-red-950/30"
                           >
-                            <TrashIcon className="h-4 w-4" />
+                            <Trash className="h-4 w-4" />
                           </Button>
                         </div>
                       </TableCell>
@@ -551,65 +598,61 @@ export default function Admin() {
 
       {/* Diálogo para adicionar usuário */}
       <Dialog open={isAddUserDialogOpen} onOpenChange={setIsAddUserDialogOpen}>
-        <DialogContent className="bg-neutral-900 border-neutral-800 text-neutral-300 sm:max-w-md">
+        <DialogContent className="bg-neutral-900 border-neutral-800 text-neutral-300">
           <DialogHeader>
             <DialogTitle className="text-xl font-bold">Adicionar Novo Usuário</DialogTitle>
             <DialogDescription className="text-neutral-400">
-              Crie uma nova conta de usuário no sistema
+              Adicione um novo usuário ao sistema
             </DialogDescription>
           </DialogHeader>
           
-          <form onSubmit={handleAddUser} className="space-y-4 mt-4">
+          <form onSubmit={handleAddUser} className="space-y-4 mt-2">
             <div className="space-y-2">
-              <Label htmlFor="email">Email *</Label>
+              <Label htmlFor="email">Email</Label>
               <Input
                 id="email"
                 type="email"
-                required
-                placeholder="email@exemplo.com"
                 value={newUserData.email}
-                onChange={(e) => setNewUserData({...newUserData, email: e.target.value})}
-                className="bg-neutral-800 border-neutral-700"
+                onChange={(e) => setNewUserData(prev => ({ ...prev, email: e.target.value }))}
+                placeholder="email@exemplo.com"
+                className="bg-neutral-800 border-neutral-700 text-neutral-300"
+                required
               />
             </div>
             
             <div className="space-y-2">
-              <Label htmlFor="password">Senha *</Label>
+              <Label htmlFor="password">Senha</Label>
               <Input
                 id="password"
                 type="password"
-                required
-                placeholder="Senha forte"
                 value={newUserData.password}
-                onChange={(e) => setNewUserData({...newUserData, password: e.target.value})}
-                className="bg-neutral-800 border-neutral-700"
+                onChange={(e) => setNewUserData(prev => ({ ...prev, password: e.target.value }))}
+                placeholder="••••••••"
+                className="bg-neutral-800 border-neutral-700 text-neutral-300"
+                required
               />
-              <p className="text-neutral-500 text-xs">
-                A senha deve ter pelo menos 6 caracteres e incluir letras maiúsculas, minúsculas, números e caracteres especiais.
-              </p>
             </div>
             
             <div className="space-y-2">
-              <Label htmlFor="name">Nome</Label>
+              <Label htmlFor="name">Nome (opcional)</Label>
               <Input
                 id="name"
                 type="text"
-                placeholder="Nome completo"
                 value={newUserData.name}
-                onChange={(e) => setNewUserData({...newUserData, name: e.target.value})}
-                className="bg-neutral-800 border-neutral-700"
+                onChange={(e) => setNewUserData(prev => ({ ...prev, name: e.target.value }))}
+                placeholder="Nome do usuário"
+                className="bg-neutral-800 border-neutral-700 text-neutral-300"
               />
             </div>
             
             <div className="space-y-2">
-              <Label htmlFor="birthdate">Data de Nascimento</Label>
+              <Label htmlFor="birthdate">Data de Nascimento (opcional)</Label>
               <Input
                 id="birthdate"
                 type="date"
-                placeholder="DD/MM/AAAA"
                 value={newUserData.birthdate}
-                onChange={(e) => setNewUserData({...newUserData, birthdate: e.target.value})}
-                className="bg-neutral-800 border-neutral-700"
+                onChange={(e) => setNewUserData(prev => ({ ...prev, birthdate: e.target.value }))}
+                className="bg-neutral-800 border-neutral-700 text-neutral-300"
               />
             </div>
             
@@ -618,16 +661,16 @@ export default function Admin() {
                 type="button"
                 variant="outline"
                 onClick={() => setIsAddUserDialogOpen(false)}
-                className="border-neutral-700"
+                className="border-neutral-700 text-neutral-400"
               >
                 Cancelar
               </Button>
-              <Button 
+              <Button
                 type="submit"
-                className="bg-gradient-to-r from-green-800 to-green-700 hover:from-green-700 hover:to-green-600 text-white"
+                className="bg-green-800 hover:bg-green-700 text-white"
                 disabled={loading}
               >
-                {loading && <ReloadIcon className="mr-2 h-4 w-4 animate-spin" />}
+                {loading && <RefreshCw className="mr-2 h-4 w-4 animate-spin" />}
                 Adicionar Usuário
               </Button>
             </DialogFooter>
@@ -637,120 +680,90 @@ export default function Admin() {
 
       {/* Diálogo para detalhes do usuário */}
       <Dialog open={isDetailsDialogOpen} onOpenChange={setIsDetailsDialogOpen}>
-        <DialogContent className="bg-neutral-900 border-neutral-800 text-neutral-300 sm:max-w-lg">
+        <DialogContent className="bg-neutral-900 border-neutral-800 text-neutral-300">
           <DialogHeader>
             <DialogTitle className="text-xl font-bold">Detalhes do Usuário</DialogTitle>
-            <DialogDescription className="text-neutral-400">
-              Informações completas e opções de gerenciamento
-            </DialogDescription>
           </DialogHeader>
           
           {selectedUser && (
-            <div className="mt-4 space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <h3 className="text-sm font-medium text-neutral-500">Email</h3>
-                  <p className="mt-1 text-neutral-200">{selectedUser.email}</p>
-                </div>
-                
-                <div>
-                  <h3 className="text-sm font-medium text-neutral-500">ID</h3>
-                  <p className="mt-1 text-xs text-neutral-400 font-mono truncate">{selectedUser.id}</p>
-                </div>
-                
-                <div>
-                  <h3 className="text-sm font-medium text-neutral-500">Nome</h3>
-                  <p className="mt-1 text-neutral-200">{selectedUser.user_metadata?.name || '-'}</p>
-                </div>
-                
-                <div>
-                  <h3 className="text-sm font-medium text-neutral-500">Data de Nascimento</h3>
-                  <p className="mt-1 text-neutral-200">
-                    {selectedUser.user_metadata?.birthdate
-                      ? new Date(selectedUser.user_metadata.birthdate).toLocaleDateString('pt-BR')
-                      : '-'}
-                  </p>
-                </div>
-                
-                <div>
-                  <h3 className="text-sm font-medium text-neutral-500">Data de Registro</h3>
-                  <p className="mt-1 text-neutral-200">
-                    {new Date(selectedUser.created_at).toLocaleDateString('pt-BR', {
-                      day: '2-digit',
-                      month: '2-digit',
-                      year: 'numeric',
-                      hour: '2-digit',
-                      minute: '2-digit'
-                    })}
-                  </p>
-                </div>
-                
-                <div>
-                  <h3 className="text-sm font-medium text-neutral-500">Último Login</h3>
-                  <p className="mt-1 text-neutral-200">
-                    {selectedUser.last_sign_in_at
-                      ? new Date(selectedUser.last_sign_in_at).toLocaleDateString('pt-BR', {
-                          day: '2-digit',
-                          month: '2-digit',
-                          year: 'numeric',
-                          hour: '2-digit',
-                          minute: '2-digit'
-                        })
-                      : 'Nunca'}
-                  </p>
-                </div>
-                
-                <div>
-                  <h3 className="text-sm font-medium text-neutral-500">Status</h3>
-                  <div className="mt-1">
-                    {selectedUser.email_confirmed_at ? (
-                      <Badge className="bg-green-900/60 text-green-200">Email Verificado</Badge>
-                    ) : (
-                      <Badge className="bg-orange-900/60 text-orange-200">Email Não Verificado</Badge>
-                    )}
-                  </div>
-                </div>
-                
-                <div>
-                  <h3 className="text-sm font-medium text-neutral-500">Provedor</h3>
-                  <p className="mt-1 text-neutral-200 capitalize">
-                    {selectedUser.app_metadata?.provider || 'email'}
-                  </p>
-                </div>
+            <div className="space-y-4 mt-2">
+              <div className="border-t border-neutral-800 pt-4">
+                <h3 className="text-sm font-medium text-neutral-400">Email</h3>
+                <p className="text-lg font-medium">{selectedUser.email}</p>
               </div>
-              
-              <div className="pt-4 border-t border-neutral-800">
-                <h3 className="text-sm font-medium text-neutral-500 mb-3">Ações</h3>
-                <div className="flex flex-wrap gap-3">
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    onClick={() => handleResetPassword(selectedUser.email)}
-                    className="border-neutral-700 text-neutral-300"
-                  >
-                    Redefinir Senha
-                  </Button>
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    onClick={() => {
-                      setIsDetailsDialogOpen(false);
-                      handleDeleteUser(selectedUser.id);
-                    }}
-                    className="border-red-900/40 text-red-400 hover:bg-red-950/30 hover:text-red-300"
-                  >
-                    Excluir Conta
-                  </Button>
-                </div>
+              <div>
+                <h3 className="text-sm font-medium text-neutral-400">Nome</h3>
+                <p className="text-lg font-medium">{selectedUser.user_metadata?.name || '-'}</p>
+              </div>
+              <div>
+                <h3 className="text-sm font-medium text-neutral-400">ID do Usuário</h3>
+                <p className="text-xs font-mono text-neutral-400">{selectedUser.id}</p>
+              </div>
+              <div>
+                <h3 className="text-sm font-medium text-neutral-400">Data de Registro</h3>
+                <p>{new Date(selectedUser.created_at).toLocaleDateString('pt-BR', {
+                  day: '2-digit',
+                  month: '2-digit',
+                  year: 'numeric',
+                  hour: '2-digit',
+                  minute: '2-digit'
+                })}</p>
+              </div>
+              <div>
+                <h3 className="text-sm font-medium text-neutral-400">Último login</h3>
+                <p>{selectedUser.last_sign_in_at ? 
+                  new Date(selectedUser.last_sign_in_at).toLocaleDateString('pt-BR', {
+                    day: '2-digit',
+                    month: '2-digit',
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                  }) : 'Nunca'}</p>
+              </div>
+              <div>
+                <h3 className="text-sm font-medium text-neutral-400">Status da Conta</h3>
+                {selectedUser.email_confirmed_at ? (
+                  <div className="flex items-center mt-1">
+                    <Badge className="bg-green-900/60 text-green-200">Verificado</Badge>
+                    <span className="text-xs text-neutral-500 ml-2">
+                      {new Date(selectedUser.email_confirmed_at).toLocaleDateString('pt-BR')}
+                    </span>
+                  </div>
+                ) : (
+                  <Badge className="bg-orange-900/60 text-orange-200 mt-1">Não verificado</Badge>
+                )}
               </div>
             </div>
           )}
           
-          <DialogFooter className="mt-6">
+          <DialogFooter className="mt-6 gap-2">
             <Button
-              type="button"
+              variant="outline"
+              className="border-red-800 text-red-300 hover:bg-red-950/30 hover:text-red-200"
+              onClick={() => {
+                if (selectedUser) {
+                  handleDeleteUser(selectedUser.id);
+                  setIsDetailsDialogOpen(false);
+                }
+              }}
+            >
+              <Trash className="mr-2 h-4 w-4" />
+              Excluir Usuário
+            </Button>
+            <Button
+              variant="outline"
+              className="border-blue-800 text-blue-300 hover:bg-blue-950/30 hover:text-blue-200"
+              onClick={() => {
+                if (selectedUser) {
+                  handleResetPassword(selectedUser.email);
+                }
+              }}
+            >
+              Redefinir Senha
+            </Button>
+            <Button 
+              className="bg-neutral-800 hover:bg-neutral-700"
               onClick={() => setIsDetailsDialogOpen(false)}
-              className="bg-neutral-800 hover:bg-neutral-700 text-neutral-200"
             >
               Fechar
             </Button>
@@ -770,7 +783,7 @@ export default function Admin() {
           
           {logsLoading ? (
             <div className="flex justify-center items-center py-12">
-              <ReloadIcon className="h-8 w-8 animate-spin text-green-500" />
+              <RefreshCw className="h-8 w-8 animate-spin text-green-500" />
             </div>
           ) : (
             <div className="mt-4">
@@ -837,9 +850,9 @@ export default function Admin() {
 
       <Tabs defaultValue={activeTab} onValueChange={setActiveTab}>
         <TabsList className="grid w-full grid-cols-3">
-          <TabsTrigger value="users">{t('admin.tabs.users')}</TabsTrigger>
-          <TabsTrigger value="logs">{t('admin.tabs.logs')}</TabsTrigger>
-          <TabsTrigger value="streamers">{t('admin.tabs.streamers') || 'Transmissões'}</TabsTrigger>
+          <TabsTrigger value="users">Usuários</TabsTrigger>
+          <TabsTrigger value="logs">Logs</TabsTrigger>
+          <TabsTrigger value="streamers">Transmissões</TabsTrigger>
         </TabsList>
         <TabsContent value="users">
           {/* Conteúdo existente da aba de usuários */}
@@ -850,10 +863,9 @@ export default function Admin() {
         <TabsContent value="streamers">
           <Card>
             <CardHeader>
-              <CardTitle>{t('admin.streamers.title') || 'Gerenciar Transmissões ao Vivo'}</CardTitle>
+              <CardTitle>Gerenciar Transmissões ao Vivo</CardTitle>
               <CardDescription>
-                {t('admin.streamers.description') || 
-                 'Gerencie quais usuários têm permissão para iniciar transmissões ao vivo.'}
+                Gerencie quais usuários têm permissão para iniciar transmissões ao vivo.
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -861,23 +873,34 @@ export default function Admin() {
                 {/* Seleção de usuários para conceder permissão */}
                 <div className="p-4 border rounded-lg">
                   <h3 className="text-lg font-medium mb-4">
-                    {t('admin.streamers.grant_permission') || 'Conceder Permissão'}
+                    Conceder Permissão
                   </h3>
                   
-                  <Select 
-                    isMulti 
-                    options={users.filter(user => 
-                      !streamers.some(s => s.user_id === user.id)
-                    ).map(user => ({
-                      value: user.id,
-                      label: `${user.email} (${user.name || 'Sem nome'})`
-                    }))} 
-                    placeholder={t('admin.streamers.select_users') || 'Selecione usuários...'}
-                    onChange={(selected) => 
-                      setSelectedUsers(selected ? selected.map(option => option.value) : [])
-                    }
-                    className="mb-4"
-                  />
+                  <div className="mb-4">
+                    <Label htmlFor="user-selection-list" className="block mb-2">
+                      Selecione os usuários
+                    </Label>
+                    <select
+                      id="user-selection-list"
+                      multiple
+                      title="Selecione usuários para conceder permissão de transmissão"
+                      aria-label="Selecione usuários para conceder permissão de transmissão"
+                      className="w-full p-2 border rounded-md bg-neutral-800 border-neutral-700 text-neutral-200"
+                      onChange={(e) => {
+                        const selected = Array.from(e.target.selectedOptions, option => option.value);
+                        setSelectedUsers(selected);
+                      }}
+                    >
+                      {users
+                        .filter(user => !streamers.some(s => s.user_id === user.id))
+                        .map(user => (
+                          <option key={user.id} value={user.id}>
+                            {user.email} ({user.user_metadata?.name || 'Sem nome'})
+                          </option>
+                        ))
+                      }
+                    </select>
+                  </div>
                   
                   <Button 
                     onClick={grantStreamPermission} 
@@ -888,14 +911,14 @@ export default function Admin() {
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : 
                       <Video className="mr-2 h-4 w-4" />
                     }
-                    {t('admin.streamers.grant') || 'Conceder Permissão de Transmissão'}
+                    Conceder Permissão de Transmissão
                   </Button>
                 </div>
                 
                 {/* Lista de usuários com permissão */}
                 <div>
                   <h3 className="text-lg font-medium mb-4">
-                    {t('admin.streamers.current_streamers') || 'Usuários com Permissão'}
+                    Usuários com Permissão
                   </h3>
                   
                   {loadingStreamers ? (
@@ -904,27 +927,26 @@ export default function Admin() {
                     </div>
                   ) : streamers.length === 0 ? (
                     <div className="text-center py-8 text-muted-foreground">
-                      {t('admin.streamers.no_streamers') || 
-                       'Nenhum usuário com permissão para transmissão.'}
+                      Nenhum usuário com permissão para transmissão.
                     </div>
                   ) : (
                     <div className="border rounded-md">
                       <Table>
                         <TableHeader>
                           <TableRow>
-                            <TableHead>{t('admin.users.name') || 'Nome'}</TableHead>
-                            <TableHead>{t('admin.users.email') || 'Email'}</TableHead>
-                            <TableHead>{t('admin.streamers.permission_date') || 'Data'}</TableHead>
-                            <TableHead className="text-right">{t('admin.users.actions') || 'Ações'}</TableHead>
+                            <TableHead>Nome</TableHead>
+                            <TableHead>Email</TableHead>
+                            <TableHead>Data</TableHead>
+                            <TableHead className="text-right">Ações</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
                           {streamers.map((streamer) => (
                             <TableRow key={streamer.user_id}>
                               <TableCell className="font-medium">
-                                {streamer.profiles?.name || t('admin.users.unnamed')}
+                                {streamer.profiles?.display_name || streamer.user_profiles?.display_name || "Sem nome"}
                               </TableCell>
-                              <TableCell>{streamer.profiles?.email}</TableCell>
+                              <TableCell>{streamer.profiles?.email || streamer.user_profiles?.email}</TableCell>
                               <TableCell>
                                 {new Date(streamer.created_at).toLocaleDateString()}
                               </TableCell>
@@ -937,7 +959,7 @@ export default function Admin() {
                                 >
                                   {isRevoking ? 
                                     <Loader2 className="h-4 w-4 animate-spin" /> : 
-                                    t('admin.streamers.revoke') || 'Revogar'
+                                    "Revogar"
                                   }
                                 </Button>
                               </TableCell>

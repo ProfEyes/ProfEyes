@@ -1,7 +1,9 @@
-import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { Toaster } from '@/components/ui/toaster';
 import { useEffect, useState, useRef, useMemo } from 'react';
 import { toast } from 'sonner';
+import type { SupabaseClient } from '@supabase/supabase-js';
+import type { Database } from '@/types/supabase';
 import IndexPage from '@/pages/Index.tsx';
 import Signals from '@/pages/Signals';
 import Settings from '@/pages/Settings';
@@ -11,65 +13,64 @@ import NotFound from '@/pages/NotFound';
 import Auth from '@/pages/Auth';
 import SplashScreen from '@/pages/SplashScreen';
 import LanguageSelectPage from '@/pages/LanguageSelectPage';
-import { startSignalMonitoring } from '@/services/signalMonitor';
-import { useQueryClient, QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { UserProvider } from '@/contexts/UserContext';
-import { NotificationProvider, useNotifications } from '@/contexts/NotificationContext';
-import { AuthProvider, useAuth } from '@/contexts/AuthContext';
+import ResetPassword from '@/pages/ResetPassword';
+// signalMonitor removido - funcionalidade obsoleta
+import { useQueryClient } from '@tanstack/react-query';
+import { useUser } from '@/contexts/UserContext';
+import { TrendingNotificationProvider } from '@/contexts/TrendingNotificationContext';
+import { useAuth } from '@/contexts/AuthContext';
 import { AuthGuard } from '@/components/AuthGuard';
 import { LoadingScreen } from '@/components/ui/loading-screen';
 import { Toaster as HotToaster } from 'react-hot-toast';
 import Instructions from '@/pages/Instructions';
-import { persistQueryClient } from '@tanstack/react-query-persist-client';
-import { createSyncStoragePersister } from '@tanstack/query-sync-storage-persister';
+
+// Importações das novas páginas
+import MediaHub from '@/pages/MediaHub';
+import VideoPlayerPage from '@/pages/VideoPlayerPage';
+import ShortsPlayer from '@/pages/ShortsPlayer';
+import UploadPage from '@/pages/UploadPage';
+import { VideoProvider } from '@/contexts/VideoContext';
+
 import { initSoundSystem } from '@/utils/sounds';
 import { SoundProvider } from '@/contexts/SoundContext';
-import { LanguageProvider, useLanguage } from '@/contexts/LanguageContext';
+import { useLanguage, Language } from '@/contexts/LanguageContext';
 import Support from '@/pages/Support';
 import LivePage from '@/pages/LivePage';
 import { LiveStreamProvider } from '@/contexts/LiveStreamContext';
 import { LiveStreamPermissionProvider } from '@/components/LiveStreamPermissionProvider';
 import MeetingRoom from '@/pages/MeetingRoom';
+import StreamerDashboard from '@/pages/StreamerDashboard';
+import StreamViewer from '@/pages/StreamViewer';
+import { AvatarPersistence } from '@/components/AvatarPersistence';
+import { loadUserSettings, checkPendingSyncOnLoad } from '@/utils/userPersistence';
+
+import { useUserPreferences } from '@/hooks/useUserPreferences';
+import FreeStreaming from '@/pages/FreeStreaming';
+import { FreeWebRTCProvider } from '@/contexts/FreeWebRTCContext';
+import LiveKitStreaming from '@/pages/LiveKitStreaming';
+import { LiveKitProvider } from '@/contexts/LiveKitContext';
 
 // Duração do cache (10 minutos)
 const CACHE_DURATION = 10 * 60 * 1000;
 
-// Persister para dados do React Query
-const localStoragePersister = createSyncStoragePersister({
-  storage: window.localStorage,
-  key: 'profeyes-query-cache', // Chave usada no localStorage
-  throttleTime: 1000, // Salvar no máximo a cada 1 segundo
-});
+// Componente para gerenciar persistência de perfil do usuário
+const UserProfilePersistence = () => {
+  const { user } = useAuth();
+  
+  // Hook para carregar automaticamente todas as preferências do usuário
+  useUserPreferences();
 
-// Criar o cliente de query
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      // Configurações padrão para todas as consultas
-      refetchOnWindowFocus: false,  // Não atualizar quando a janela ganha foco
-      refetchOnReconnect: false,    // Não atualizar quando reconecta à internet
-      refetchOnMount: false,        // Não atualizar quando o componente monta
-      staleTime: CACHE_DURATION,    // 10 minutos (mesmo tempo do cache)
-      gcTime: CACHE_DURATION * 2,   // 20 minutos de cache (antigamente era cacheTime)
-      retry: 1,                     // Apenas uma tentativa de retry
-    },
-  },
-});
+  useEffect(() => {
+    // Verificar se há dados pendentes para sincronizar
+    if (user) {
+      checkPendingSyncOnLoad().catch(error => {
+        console.warn("Erro ao verificar sincronização de perfil:", error);
+      });
+    }
+  }, [user]);
 
-// Configurar persistência do cache do React Query
-persistQueryClient({
-  queryClient,
-  persister: localStoragePersister,
-  maxAge: CACHE_DURATION, // 10 minutos
-  // Importante: tratar errors causados por deserialização de dados
-  dehydrateOptions: {
-    shouldDehydrateQuery: query => {
-      // Só persiste queries que não são de tempo real (como sinais)
-      return query.queryKey[0] === 'dashboardSignals' || 
-             query.queryKey[0] === 'tradingSignals';
-    },
-  },
-});
+  return null; // Componente sem renderização visual
+};
 
 // Componente interno que usa os hooks para gerenciar rotas protegidas e públicas
 const AppRouter = () => {
@@ -78,157 +79,329 @@ const AppRouter = () => {
   const location = useLocation();
   const isPublicRoute = location.pathname === '/splash' || location.pathname === '/auth';
   const [loadingProgress, setLoadingProgress] = useState(0);
-  // Garante que a tela de carregamento nunca será exibida em rotas públicas
-  const [showLoadingScreen, setShowLoadingScreen] = useState(false);
-  // Verificar se o usuário escolheu permanecer conectado
+  const [showLoadingScreen, setShowLoadingScreen] = useState(true);
   const [rememberUser] = useState(() => localStorage.getItem('remember-user') === 'true');
+  const [redirectingFromLanguage, setRedirectingFromLanguage] = useState(false);
+  const [isPageRefresh] = useState(() => {
+    return window.performance && performance.getEntriesByType('navigation').length > 0 && 
+           (performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming).type === 'reload';
+  });
 
-  // Verificar se o usuário já selecionou um idioma após o login
   const [hasSelectedLanguage, setHasSelectedLanguage] = useState(() => {
-    // Se não houver usuário, não precisamos verificar
     if (!user) return false;
     
-    // Verificar primeiro no sessionStorage (tem prioridade porque é mais recente)
     const sessionLanguage = sessionStorage.getItem('user-selected-language');
     if (sessionLanguage) {
       console.log('Idioma encontrado no sessionStorage:', sessionLanguage);
       return true;
     }
     
-    // Verificar se existe um idioma associado à conta do usuário
     const userLanguage = localStorage.getItem(`user-language-${user.id}`);
     if (userLanguage) return true;
     
-    // Se não tiver idioma específico do usuário, verificar idioma global
     const appLanguage = localStorage.getItem('app-language');
     if (appLanguage) return true;
     
-    // Nenhum idioma encontrado
     return false;
   });
 
-  // Verificar se estamos sendo redirecionados da página de idioma
+  const hasSelectedLanguageRef = useRef(hasSelectedLanguage);
+  
   useEffect(() => {
-    // Verificar flags apenas uma vez no mount do componente para evitar loops
-    const redirectingFromLanguage = sessionStorage.getItem('redirecting-from-language-select');
-    const languageSelectionCompleted = sessionStorage.getItem('language-selection-completed');
+    hasSelectedLanguageRef.current = hasSelectedLanguage;
+  }, [hasSelectedLanguage]);
+
+  useEffect(() => {
+    const isRedirectingFromLanguage = sessionStorage.getItem('redirecting-from-language-select') === 'true';
+    const languageSelectionCompleted = sessionStorage.getItem('language-selection-completed') === 'true';
     
-    // Se temos o flag de redirecionamento da página de idioma
-    if (redirectingFromLanguage === 'true' || languageSelectionCompleted === 'true') {
-      // Limpar os flags de redirecionamento
+    if (isRedirectingFromLanguage || languageSelectionCompleted) {
+      setRedirectingFromLanguage(true);
       sessionStorage.removeItem('redirecting-from-language-select');
+      sessionStorage.removeItem('language-selection-completed');
       
-      // Forçar o estado para indicar que o idioma foi selecionado
       setHasSelectedLanguage(true);
       
-      // Se temos um idioma no sessionStorage, usar ele para atualizar o usuário
+      setShowLoadingScreen(false);
+      setLoadingProgress(100);
+      
       const sessionLanguage = sessionStorage.getItem('user-selected-language');
       if (sessionLanguage && user?.id) {
-        updateUserLanguage(user.id, sessionLanguage as any);
+        updateUserLanguage(user.id, sessionLanguage as Language);
         
-        // Garantir que o idioma esteja definido no localStorage também
         localStorage.setItem(`user-language-${user.id}`, sessionLanguage);
         localStorage.setItem('app-language', sessionLanguage);
         
         console.log('Idioma atualizado após redirecionamento:', sessionLanguage);
       }
     }
-  // Executar apenas uma vez na montagem do componente para evitar loops!
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [location.pathname, user, updateUserLanguage]);
 
-  // Quando o usuário mudar, atualizar o estado de verificação de idioma
-  // Adicionamos uma verificação para evitar loops infinitos
   const userIdRef = useRef(user?.id);
   const hasHandledLanguageCheck = useRef(false);
 
-  // Simplificar o efeito para executar apenas quando o usuário realmente mudar
   useEffect(() => {
-    // Se já verificamos para este usuário, não fazer nada
     if (user?.id === userIdRef.current && hasHandledLanguageCheck.current) {
       return;
     }
     
-    // Atualizar a referência para a próxima comparação
+    if (redirectingFromLanguage) {
+      return;
+    }
+    
     userIdRef.current = user?.id;
     
     if (user) {
-      // Marcar que já fizemos a verificação
       hasHandledLanguageCheck.current = true;
       
-      // Verificar primeiro no sessionStorage
       const sessionLanguage = sessionStorage.getItem('user-selected-language');
       if (sessionLanguage) {
         setHasSelectedLanguage(true);
-        updateUserLanguage(user.id, sessionLanguage as any);
+        const existingLanguage = localStorage.getItem(`user-language-${user.id}`);
+        if (existingLanguage !== sessionLanguage) {
+        updateUserLanguage(user.id, sessionLanguage as Language);
+        }
         return;
       }
       
-      // Verificar se existe um idioma associado à conta do usuário
       const userLanguage = localStorage.getItem(`user-language-${user.id}`);
       
       if (userLanguage) {
-        // Se já existe um idioma salvo para este usuário, usá-lo
         setHasSelectedLanguage(true);
       } else {
-        // Se o usuário não tem idioma associado, verificar idioma global
         const appLanguage = localStorage.getItem('app-language');
         if (appLanguage) {
-          // Associar o idioma atual ao usuário
-          updateUserLanguage(user.id, appLanguage as any);
+          const existingLanguage = localStorage.getItem(`user-language-${user.id}`);
+          if (existingLanguage !== appLanguage) {
+          updateUserLanguage(user.id, appLanguage as Language);
+          }
           setHasSelectedLanguage(true);
         } else {
-          // Não tem idioma salvo para o usuário nem para o app
           setHasSelectedLanguage(false);
         }
       }
     } else {
-      // Se não há usuário logado, resetar o estado
       setHasSelectedLanguage(false);
       hasHandledLanguageCheck.current = false;
     }
-  // Dependências são apenas id do usuário e a função de atualização
-  }, [user?.id, updateUserLanguage]);
+  }, [user, user?.id, updateUserLanguage, redirectingFromLanguage]);
 
-  // Monitorar mudanças no estado de carregamento
   useEffect(() => {
+    if (isPageRefresh) {
+      setShowLoadingScreen(false);
+      setLoadingProgress(100);
+      return;
+    }
+
     if (!loading) {
-      // Quando o carregamento termina, definir o progresso como 100%
       setLoadingProgress(100);
       
-      // Após um breve delay, esconder a tela de carregamento
       const timer = setTimeout(() => {
         setShowLoadingScreen(false);
       }, 300);
       
       return () => clearTimeout(timer);
     } else if (!isPublicRoute && user) {
-      // Só mostrar a tela de carregamento em rotas protegidas (depois da autenticação)
-      // E apenas quando o usuário já estiver autenticado
       setShowLoadingScreen(true);
     }
-  }, [loading, isPublicRoute, user]);
+  }, [loading, isPublicRoute, user, isPageRefresh]);
   
-  // Simular progresso de carregamento quando estiver carregando
   useEffect(() => {
+    const isFromLanguageSelect = 
+      sessionStorage.getItem('redirecting-from-language-select') === 'true' ||
+      sessionStorage.getItem('language-selection-completed') === 'true';
+    
+    if (isFromLanguageSelect) {
+      console.log('Detectado redirecionamento da página de idioma, forçando fim do carregamento');
+      setLoadingProgress(100);
+      setShowLoadingScreen(false);
+      
+      setRedirectingFromLanguage(true);
+      
+      sessionStorage.removeItem('redirecting-from-language-select');
+      sessionStorage.removeItem('language-selection-completed');
+    }
+  }, [location.pathname]);
+  
+  useEffect(() => {
+    if (redirectingFromLanguage) {
+      setLoadingProgress(100);
+      setShowLoadingScreen(false);
+      return;
+    }
+    
     if (loading && !isPublicRoute) {
-      // Iniciar com 20% pois algumas coisas já carregaram
       setLoadingProgress(20);
       
-      // Simular progresso incremental até 90% (os últimos 10% serão quando realmente completar)
       const interval = setInterval(() => {
         setLoadingProgress(prev => {
-          // Acelerar no começo, desacelerar no fim para parecer mais natural
           const increment = prev < 30 ? 10 : prev < 60 ? 5 : prev < 80 ? 2 : 1;
           return Math.min(prev + increment, 90);
         });
-      }, 300); // Reduzido de 500ms para 300ms para parecer mais rápido
+      }, 300);
       
-      return () => clearInterval(interval);
+      const safetyTimeout = setTimeout(() => {
+        console.warn('Timeout de segurança ativado: forçando fim do carregamento');
+        setLoadingProgress(100);
+        setShowLoadingScreen(false);
+      }, 10000);
+      
+      return () => {
+        clearInterval(interval);
+        clearTimeout(safetyTimeout);
+      };
     }
-  }, [loading, isPublicRoute]);
+  }, [loading, isPublicRoute, redirectingFromLanguage]);
   
-  // Renderizar o spinner apenas se estiver carregando e não estiver em rota pública
+  const homePathElement = useMemo(() => {
+    if (!user) {
+      return <Navigate to="/splash" replace />;
+    }
+
+    // Definir português como idioma padrão se não houver nenhum
+    if (!localStorage.getItem('app-language')) {
+      localStorage.setItem('app-language', 'pt');
+    }
+
+    // Sempre marcar que o idioma foi selecionado
+    sessionStorage.setItem('language-selection-completed', 'true');
+
+    // Ir direto para a página inicial
+    return <AuthGuard checkOnly={true}><IndexPage /></AuthGuard>;
+  }, [user]);
+
+  const splashPathElement = useMemo(() => {
+    if (user || rememberUser) {
+      return <Navigate to="/" replace />;
+    }
+    return <SplashScreen />;
+  }, [user, rememberUser]);
+
+  const authPathElement = useMemo(() => {
+    const languageSelectionCompleted = sessionStorage.getItem('language-selection-completed') === 'true';
+    
+    // ULTRA-CRÍTICO: VERIFICAÇÕES MÁXIMAS para garantir tela de cadastro concluído
+    const justRegistered = sessionStorage.getItem('just-registered') === 'true';
+    const preventAuthRedirect = sessionStorage.getItem('prevent_auth_redirect') === 'true';
+    const preventDashboardRedirect = localStorage.getItem('prevent_dashboard_redirect') === 'true';
+    
+    // Verificar expiração da flag prevent_dashboard_redirect
+    let preventDashboardRedirectValid = preventDashboardRedirect;
+    if (preventDashboardRedirect) {
+      const expirationTime = localStorage.getItem('prevent_dashboard_redirect_expiration');
+      if (expirationTime && parseInt(expirationTime) < Date.now()) {
+        console.log('🕒 Flag prevent_dashboard_redirect expirada, removendo...');
+        localStorage.removeItem('prevent_dashboard_redirect');
+        localStorage.removeItem('prevent_dashboard_redirect_expiration');
+        preventDashboardRedirectValid = false;
+      }
+    }
+    
+    const cadastroConcluido = justRegistered || preventAuthRedirect || preventDashboardRedirectValid;
+    
+    // Log detalhado para debug
+    console.log('🔍 [App.tsx authPathElement] Estado:', {
+      user: !!user,
+      rememberUser,
+      justRegistered,
+      preventAuthRedirect,
+      preventDashboardRedirect: preventDashboardRedirectValid,
+      cadastroConcluido,
+      hasSelectedLanguage,
+      languageSelectionCompleted
+    });
+    
+    // ULTRA-CRÍTICO: Se acabou de se cadastrar, SEMPRE mostrar Auth (tela de sucesso)
+    // Esta verificação tem PRIORIDADE ABSOLUTA MÁXIMA sobre todas as outras
+    if (cadastroConcluido) {
+      console.log('🔒 PROTEÇÃO MÁXIMA: Proteções anti-redirecionamento ativadas, mantendo tela de cadastro');
+      console.log('🔒 Proteções ativas:', { justRegistered, preventAuthRedirect, preventDashboardRedirect: preventDashboardRedirectValid });
+      
+      // Forçar logout para garantir que não haverá redirecionamento automático
+      if (user) {
+        console.log('🔒 Usuário autenticado detectado durante cadastro concluído, forçando logout...');
+        setTimeout(() => {
+          try {
+            import('@/lib/supabase').then(({ getSupabase }) => {
+              (getSupabase() as SupabaseClient<Database>).auth.signOut();
+              console.log('🔒 Logout forçado realizado com sucesso');
+            });
+          } catch (e) {
+            console.warn('Erro ao forçar logout:', e);
+          }
+        }, 100);
+      }
+      
+      return <Auth />;
+    }
+    
+    // Só processar outros redirecionamentos se NÃO acabou de se cadastrar
+    if (!cadastroConcluido) {
+      // CORREÇÃO: Só redirecionar se rememberUser E tiver usuário
+      if (rememberUser && user) {
+        console.log('🔄 RememberUser ativo com usuário: redirecionando para dashboard');
+        return <Navigate to="/" replace />;
+      }
+      
+      if (user) {
+        if (hasSelectedLanguage || languageSelectionCompleted) {
+          console.log('🔄 Usuário logado com idioma selecionado: redirecionando para dashboard');
+          return <Navigate to="/" replace />;
+        }
+        console.log('🔄 Usuário logado sem idioma: redirecionando para seleção de idioma');
+        return <Navigate to="/language-select" replace />;
+      }
+    }
+    
+    // Se não tem usuário ou outros casos, mostrar Auth
+    console.log('📱 Mostrando tela Auth (login/cadastro)');
+    return <Auth />;
+  }, [user, rememberUser, hasSelectedLanguage]);
+
+  const languageSelectPathElement = useMemo(() => {
+    if (!user) {
+      return <Navigate to="/auth" replace />;
+    }
+    return <LanguageSelectPage />;
+  }, [user]);
+
+  const memoizedRoutes = useMemo(() => (
+    <Routes>
+      <Route path="/" element={homePathElement} />
+      <Route path="/splash" element={splashPathElement} />
+      <Route path="/auth" element={authPathElement} />
+      <Route path="/auth/reset-password" element={<ResetPassword />} />
+      <Route path="/reset-password" element={<ResetPassword />} />
+      
+      <Route path="/language-select" element={languageSelectPathElement} />
+      
+      <Route path="/signals" element={<AuthGuard checkOnly={true}><Signals /></AuthGuard>} />
+      <Route path="/settings" element={<AuthGuard checkOnly={true}><Settings /></AuthGuard>} />
+      <Route path="/news" element={<AuthGuard checkOnly={true}><News /></AuthGuard>} />
+      <Route path="/notifications" element={<AuthGuard checkOnly={true}><NotificationsPage /></AuthGuard>} />
+      <Route path="/instructions" element={<AuthGuard checkOnly={true}><Instructions /></AuthGuard>} />
+      <Route path="/support" element={<AuthGuard checkOnly={true}><Support /></AuthGuard>} />
+      
+      {/* Novas rotas para o sistema de mídia */}
+      <Route path="/media" element={<AuthGuard checkOnly={true}><MediaHub /></AuthGuard>} />
+      <Route path="/video/:id" element={<AuthGuard checkOnly={true}><VideoPlayerPage /></AuthGuard>} />
+      <Route path="/shorts" element={<AuthGuard checkOnly={true}><ShortsPlayer /></AuthGuard>} />
+      <Route path="/shorts/:id" element={<AuthGuard checkOnly={true}><ShortsPlayer /></AuthGuard>} />
+      <Route path="/upload" element={<AuthGuard checkOnly={true}><UploadPage /></AuthGuard>} />
+      
+      {/* Rotas existentes de streaming */}
+      <Route path="/live" element={<AuthGuard checkOnly={true}><LivePage /></AuthGuard>} />
+      <Route path="/live/:streamId" element={<AuthGuard checkOnly={true}><MeetingRoom /></AuthGuard>} />
+      <Route path="/streamer/:streamId" element={<AuthGuard checkOnly={true}><StreamerDashboard /></AuthGuard>} />
+      <Route path="/watch/:streamId" element={<AuthGuard checkOnly={true}><StreamViewer /></AuthGuard>} />
+      <Route path="/streaming" element={<AuthGuard checkOnly={true}><FreeStreaming /></AuthGuard>} />
+      <Route path="/livekit-streaming" element={<AuthGuard checkOnly={true}><LiveKitStreaming /></AuthGuard>} />
+      <Route path="/livekit-streaming/:roomId" element={<AuthGuard checkOnly={true}><LiveKitStreaming /></AuthGuard>} />
+      
+      <Route path="*" element={<NotFound />} />
+    </Routes>
+  ), [homePathElement, splashPathElement, authPathElement, languageSelectPathElement]);
+  
   if (showLoadingScreen) {
     return (
       <div className="fixed inset-0 w-full h-full flex flex-col items-center justify-center bg-black z-50">
@@ -250,162 +423,35 @@ const AppRouter = () => {
     );
   }
 
-  // Memoizar a decisão de redirecionamento da rota principal para evitar renderizações em cascata
-  const homePathElement = useMemo(() => {
-    const languageSelectionCompleted = sessionStorage.getItem('language-selection-completed') === 'true';
-    
-    if (!user) {
-      return <Navigate to="/splash" replace />;
-    }
-    
-    if (!hasSelectedLanguage && !languageSelectionCompleted) {
-      return <Navigate to="/language-select" replace />;
-    }
-    
-    return <AuthGuard checkOnly={true}><IndexPage /></AuthGuard>;
-  }, [user, hasSelectedLanguage]);
-
-  // Memoizar a decisão para a rota de splash - implementação mais simples
-  const splashPathElement = useMemo(() => {
-    if (user || rememberUser) {
-      return <Navigate to="/" replace />;
-    }
-    return <SplashScreen />;
-  }, [user, rememberUser]);
-
-  // Memoizar a decisão para a rota de autenticação com lógica mais clara
-  const authPathElement = useMemo(() => {
-    const languageSelectionCompleted = sessionStorage.getItem('language-selection-completed') === 'true';
-    
-    if (rememberUser) {
-      return <Navigate to="/" replace />;
-    }
-    
-    if (user) {
-      if (hasSelectedLanguage || languageSelectionCompleted) {
-        return <Navigate to="/" replace />;
-      }
-      return <Navigate to="/language-select" replace />;
-    }
-    
-    return <Auth />;
-  }, [user, hasSelectedLanguage, rememberUser]);
-
-  // Memoizar decisão para a rota de seleção de idioma - simplificada
-  const languageSelectPathElement = useMemo(() => {
-    if (!user) {
-      return <Navigate to="/auth" replace />;
-    }
-    return <LanguageSelectPage />;
-  }, [user]);
-
-  return (
-    <Routes>
-      {/* Rotas públicas */}
-      <Route path="/" element={homePathElement} />
-      <Route path="/splash" element={splashPathElement} />
-      <Route path="/auth" element={authPathElement} />
-      
-      {/* Rota de seleção de idioma - agora protegida, exige autenticação */}
-      <Route path="/language-select" element={languageSelectPathElement} />
-      
-      {/* Rotas protegidas que exigem autenticação */}
-      <Route path="/signals" element={<AuthGuard checkOnly={true}><Signals /></AuthGuard>} />
-      <Route path="/settings" element={<AuthGuard checkOnly={true}><Settings /></AuthGuard>} />
-      <Route path="/news" element={<AuthGuard checkOnly={true}><News /></AuthGuard>} />
-      <Route path="/notifications" element={<AuthGuard checkOnly={true}><NotificationsPage /></AuthGuard>} />
-      <Route path="/instructions" element={<AuthGuard checkOnly={true}><Instructions /></AuthGuard>} />
-      <Route path="/support" element={<AuthGuard checkOnly={true}><Support /></AuthGuard>} />
-      <Route path="/live" element={<AuthGuard checkOnly={true}><LivePage /></AuthGuard>} />
-      <Route path="/live/:streamId" element={<AuthGuard checkOnly={true}><MeetingRoom /></AuthGuard>} />
-      
-      {/* Rota de fallback */}
-      <Route path="*" element={<NotFound />} />
-    </Routes>
-  );
+  return memoizedRoutes;
 };
 
-// Componente intermediário que faz a conexão entre Auth e Language providers
-const AuthenticatedApp = () => {
-  const { user } = useAuth();
+
+
+const App = () => {
+  const [didPreload, setDidPreload] = useState(false);
   const queryClient = useQueryClient();
-  const notificationContext = useNotifications();
   
-  // Inicializar sistema de sons ao montar o componente
+  // Inicialização de sistemas críticos
   useEffect(() => {
-    // Inicializa o sistema de sons
     initSoundSystem();
     console.log('Sistema de sons inicializado');
   }, []);
-
-  // Efeito para monitoramento de sinais
-  useEffect(() => {
-    // Apenas inicia o monitoramento se o usuário estiver autenticado
-    if (!user) return;
-    
-    // Configurar o monitor de sinais com callbacks para notificações
-    const monitor = startSignalMonitoring(
-      undefined, // callbacks não são necessários aqui
-      undefined, // intervalo padrão
-      notificationContext // passando o contexto de notificações
-    );
-    console.log('Monitoramento de sinais iniciado');
-    
-    // Limpar o monitoramento ao desmontar
-    return () => {
-      monitor.stop();
-      console.log('Monitoramento de sinais parado');
-    };
-  }, [user, notificationContext]);
   
-  // Quando o usuário é autenticado, salvar dados no localStorage para uso no LanguageContext
   useEffect(() => {
-    if (user) {
-      try {
-        localStorage.setItem('user-data', JSON.stringify({
-          id: user.id,
-          email: user.email
-        }));
-      } catch (error) {
-        console.error('Erro ao salvar dados do usuário:', error);
-      }
-    } else {
-      localStorage.removeItem('user-data');
-    }
-  }, [user]);
-  
-  return (
-    <div className="bg-black min-h-screen">
-      <HotToaster position="bottom-center" />
-      <AppRouter />
-      <Toaster />
-    </div>
-  );
-};
-
-// Componente principal que envolve a aplicação com o provider do React Query
-const App = () => {
-  const [didPreload, setDidPreload] = useState(false);
-  
-  // Pré-carregar dados essenciais quando o aplicativo monta
-  useEffect(() => {
-    // Usar um ID único para identificar esta instância de preload nos logs
     const preloadId = Math.random().toString(36).substring(2, 9);
     
     const preloadData = async () => {
       console.log(`Iniciando pré-carregamento de dados [${preloadId}]...`);
       
       try {
-        // Usar Promise.allSettled para garantir que erros em um recurso não bloqueiem os outros
         await Promise.allSettled([
-          // Pré-carrega os dados do dashboard (não espera pelo resultado)
           queryClient.prefetchQuery({
             queryKey: ['dashboardSignals'],
             queryFn: () => Promise.resolve([]),
-            staleTime: 0, // Permitir atualização imediata quando houver dados reais
+            staleTime: 0,
           }),
           
-          // Pré-carregar imagens críticas em paralelo
           (async () => {
             const criticalImages = [
               '/profeyes-logo-removebg-preview.png', 
@@ -418,7 +464,6 @@ const App = () => {
             console.log(`Imagens críticas pré-carregadas [${preloadId}]`);
           })(),
           
-          // Pré-verifica disponibilidade de assets de vídeo (sem carregar o conteúdo completo)
           (async () => {
             try {
               const response = await fetch('/TUTORIAL PORTUGUES - TRENDING -FIX.mp4', { 
@@ -432,48 +477,54 @@ const App = () => {
           })(),
         ]);
         
-        // Marca como pré-carregado
         setDidPreload(true);
         console.log(`Pré-carregamento concluído com sucesso [${preloadId}]`);
       } catch (error) {
         console.error(`Erro no pré-carregamento [${preloadId}]:`, error);
-        // Continua mesmo com erro
         setDidPreload(true);
       }
     };
     
     preloadData();
-  }, []);
+  }, [queryClient]);
   
-  // Função auxiliar para pré-carregar imagens
+  // Removido useEffect duplicado que chamava initSoundSystem()
+
+  useEffect(() => {
+    const savedAvatar = localStorage.getItem('user-avatar');
+    if (savedAvatar) {
+      preloadImage(savedAvatar);
+    }
+    
+    preloadImage('/profeyes-logo-removebg-preview.png');
+    preloadImage('/placeholder.svg');
+    
+    preloadImage('/user-avatar.png');
+  }, []);
+
   const preloadImage = (src: string) => {
     return new Promise((resolve, reject) => {
-      // Verificar se a imagem já foi pré-carregada anteriormente
       const imageCache = localStorage.getItem('image-cache') || '{}';
       const cachedImages = JSON.parse(imageCache);
       
-      // Se a imagem já foi carregada anteriormente, não tente novamente
       if (cachedImages[src] === true) {
         console.log(`Imagem ${src} já foi carregada anteriormente, pulando...`);
         return resolve(src);
       }
       
-      // Alguns navegadores não suportam carregar favicon via Image
       if (src.includes('favicon.ico')) {
         console.log('Pulando pré-carregamento de favicon.ico pois está disponível por padrão');
         
-        // Verificar se o favicon existe com uma requisição HEAD
         fetch(src, { method: 'HEAD', cache: 'force-cache' })
           .then(response => {
             if (response.ok) {
-              // Marcar como carregado no cache
               cachedImages[src] = true;
               localStorage.setItem('image-cache', JSON.stringify(cachedImages));
               console.log(`Favicon verificado com sucesso: ${src}`);
             } else {
               console.warn(`Favicon não encontrado: ${src}. Tentando caminho alternativo...`);
             }
-            resolve(src); // Resolvemos de qualquer forma para não bloquear outras operações
+            resolve(src);
           })
           .catch(error => {
             console.warn(`Erro ao verificar favicon: ${error}`);
@@ -484,7 +535,6 @@ const App = () => {
       
       const img = new Image();
       img.onload = () => {
-        // Marcar como carregado no cache
         cachedImages[src] = true;
         localStorage.setItem('image-cache', JSON.stringify(cachedImages));
         resolve(src);
@@ -492,9 +542,8 @@ const App = () => {
       img.onerror = () => {
         console.warn(`Falha ao pré-carregar: ${src}. Tentando caminho alternativo...`);
         
-        // Tentar caminho alternativo se a imagem não foi encontrada
         if (src.startsWith('/')) {
-          const alternativePath = src.substring(1); // Remover a barra inicial
+          const alternativePath = src.substring(1);
           console.log(`Tentando caminho alternativo: ${alternativePath}`);
           
           const altImg = new Image();
@@ -505,54 +554,74 @@ const App = () => {
           };
           altImg.onerror = () => {
             console.warn(`Também falhou com caminho alternativo: ${alternativePath}`);
-            resolve(null); // Resolve mesmo com erro para não bloquear outros carregamentos
+            resolve(null);
           };
           altImg.src = alternativePath;
         } else {
-          resolve(null); // Resolve mesmo com erro para não bloquear outros carregamentos
+          resolve(null);
         }
       };
       img.src = src;
     });
   };
-  
+
+  const [loadingProgress, setLoadingProgress] = useState(0);
+  const [showLoadingScreen, setShowLoadingScreen] = useState(false);
+
+  useEffect(() => {
+    // Handler para quando o app volta do background
+    const handleBackgroundResume = () => {
+      // Não mostrar nenhum indicador visual de carregamento
+      setShowLoadingScreen(false);
+      setLoadingProgress(100);
+    };
+
+    window.addEventListener('background-resume', handleBackgroundResume);
+    
+    return () => {
+      window.removeEventListener('background-resume', handleBackgroundResume);
+    };
+  }, []);
+
+  // Forçar que o usuário sempre tenha um idioma selecionado para evitar redirecionamento
+  useEffect(() => {
+    // Se não há idioma definido, definir português como padrão
+    if (!localStorage.getItem('app-language')) {
+      localStorage.setItem('app-language', 'pt');
+    }
+    
+    // Se o usuário está logado, garantir que tenha idioma associado
+    const user = JSON.parse(localStorage.getItem('supabase.auth.token') || '{}')?.user;
+    if (user?.id && !localStorage.getItem(`user-language-${user.id}`)) {
+      localStorage.setItem(`user-language-${user.id}`, 'pt');
+    }
+
+    // Marcar que o idioma foi selecionado para evitar redirecionamento
+    sessionStorage.setItem('language-selection-completed', 'true');
+  }, []);
+
   return (
-    <QueryClientProvider client={queryClient}>
-      <BrowserRouter>
-        <AuthProvider>
-          <NotificationProvider>
-            <UserProvider>
-              <SoundProvider>
-                <LanguageProvider>
-                  <LiveStreamProvider>
-                    <LiveStreamPermissionProvider>
-                      <AuthenticatedApp />
-                    </LiveStreamPermissionProvider>
-                  </LiveStreamProvider>
-                </LanguageProvider>
-              </SoundProvider>
-            </UserProvider>
-          </NotificationProvider>
-        </AuthProvider>
-        <Toaster />
-        <HotToaster
-          position="top-right"
-          toastOptions={{
-            // Estilo para os toasts
-            style: {
-              background: 'rgb(var(--bg-card))',
-              color: 'rgb(var(--text-primary))',
-              border: '1px solid rgb(var(--border))',
-              padding: '12px 16px',
-              borderRadius: '8px',
-              boxShadow: '0 4px 12px rgba(0, 0, 0, 0.25)',
-            },
-            // Duração padrão
-            duration: 5000,
-          }}
-        />
-      </BrowserRouter>
-    </QueryClientProvider>
+    <TrendingNotificationProvider>
+      <SoundProvider>
+        <VideoProvider>
+          <LiveStreamProvider>
+            <FreeWebRTCProvider>
+              <LiveKitProvider>
+                <LiveStreamPermissionProvider>
+                  <AvatarPersistence />
+                  <UserProfilePersistence />
+                  <div className="bg-black min-h-screen">
+                    <HotToaster position="bottom-center" />
+                    <AppRouter />
+                    <Toaster />
+                  </div>
+                </LiveStreamPermissionProvider>
+              </LiveKitProvider>
+            </FreeWebRTCProvider>
+          </LiveStreamProvider>
+        </VideoProvider>
+      </SoundProvider>
+    </TrendingNotificationProvider>
   );
 };
 

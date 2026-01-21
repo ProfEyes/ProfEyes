@@ -209,7 +209,7 @@ export async function getMarketNews(symbols: string[]): Promise<MarketNews[]> {
     const newsUrl = `https://newsapi.org/v2/everything?q=${symbols.join(' OR ')}&apiKey=${NEWS_API_KEY}&language=pt&sortBy=relevancy`;
     const response = await axios.get(newsUrl);
     
-    return response.data.articles.map((article: any) => ({
+    return response.data.articles.map((article: Record<string, unknown>) => ({
       title: article.title,
       sentiment: analyzeSentiment(article.title + ' ' + article.description),
       impact: calculateNewsImpact(article),
@@ -241,13 +241,13 @@ export async function getTechnicalIndicators(symbol: string): Promise<TechnicalI
     const smaUrl = `https://www.alphavantage.co/query?function=SMA&symbol=${symbol}&interval=daily&time_period=20&series_type=close&apikey=${ALPHA_VANTAGE_KEY}`;
     const smaResponse = await axios.get(smaUrl);
     const smaData = smaResponse.data['Technical Analysis: SMA'];
-    const smaValues = Object.values(smaData).slice(0, 5).map((value: any) => Number(value.SMA));
+    const smaValues = Object.values(smaData).slice(0, 5).map((value: Record<string, unknown>) => Number(value.SMA));
 
     // EMA
     const emaUrl = `https://www.alphavantage.co/query?function=EMA&symbol=${symbol}&interval=daily&time_period=20&series_type=close&apikey=${ALPHA_VANTAGE_KEY}`;
     const emaResponse = await axios.get(emaUrl);
     const emaData = emaResponse.data['Technical Analysis: EMA'];
-    const emaValues = Object.values(emaData).slice(0, 5).map((value: any) => Number(value.EMA));
+    const emaValues = Object.values(emaData).slice(0, 5).map((value: Record<string, unknown>) => Number(value.EMA));
 
     // Bollinger Bands
     const bbandsUrl = `https://www.alphavantage.co/query?function=BBANDS&symbol=${symbol}&interval=daily&time_period=20&series_type=close&nbdevup=2&nbdevdn=2&apikey=${ALPHA_VANTAGE_KEY}`;
@@ -276,7 +276,7 @@ export async function getTechnicalIndicators(symbol: string): Promise<TechnicalI
   }
 }
 
-function calculateTechnicalSignal(data: any): string {
+function calculateTechnicalSignal(data: Record<string, unknown>): string {
   // Implementar lógica de sinal técnico baseado nos dados
   const price = data.c;
   const previousClose = data.pc;
@@ -311,7 +311,7 @@ function analyzeSentiment(text: string): 'positive' | 'negative' | 'neutral' {
   return 'neutral';
 }
 
-function calculateNewsImpact(article: any): number {
+function calculateNewsImpact(article: Record<string, unknown>): number {
   const publishedDate = new Date(article.publishedAt);
   const hoursSincePublished = (Date.now() - publishedDate.getTime()) / (1000 * 60 * 60);
   

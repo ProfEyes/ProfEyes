@@ -41,8 +41,18 @@ interface NotificationType {
   channels: string[];
 }
 
+// Tipo para os dados de configuração de notificações
+interface NotificationSettingsData {
+  types: NotificationType[];
+  channels: NotificationChannel[];
+  volume: number;
+  quietHoursEnabled: boolean;
+  quietHoursStart: string;
+  quietHoursEnd: string;
+}
+
 interface NotificationSettingsProps {
-  onSettingsChange?: (settings: any) => void;
+  onSettingsChange?: (settings: NotificationSettingsData) => void;
   onNotificationTestSent?: () => void;
   onPermissionChange?: (granted: boolean) => void;
 }
@@ -101,47 +111,20 @@ export function NotificationSettings({
   const [notificationTypes, setNotificationTypes] = useState<NotificationType[]>([
     {
       id: "signals",
-      name: "Sinais de Trading",
-      description: "Notificações sobre sinais de trading gerados pelo sistema",
+      name: "Trades",
+      description: "Notificações sobre trades de compra e venda",
       enabled: true,
       priority: "high",
       sound: true,
       channels: ["browser", "email", "mobile"]
     },
     {
-      id: "news",
-      name: "Notícias Importantes",
-      description: "Notificações sobre notícias de mercado relevantes",
+      id: "live",
+      name: "Transmissões ao Vivo",
+      description: "Notificações quando uma transmissão ao vivo é iniciada",
       enabled: true,
       priority: "medium",
-      sound: false,
-      channels: ["browser", "email"]
-    },
-    {
-      id: "alerts",
-      name: "Alertas de Preço",
-      description: "Notificações quando ativos atingem preços específicos",
-      enabled: true,
-      priority: "high",
       sound: true,
-      channels: ["browser", "email", "mobile", "telegram"]
-    },
-    {
-      id: "market_updates",
-      name: "Atualizações de Mercado",
-      description: "Atualizações regulares sobre o mercado",
-      enabled: false,
-      priority: "low",
-      sound: false,
-      channels: ["email"]
-    },
-    {
-      id: "portfolio",
-      name: "Mudanças no Portfólio",
-      description: "Notificações sobre mudanças significativas no seu portfólio",
-      enabled: true,
-      priority: "medium",
-      sound: false,
       channels: ["browser", "email"]
     }
   ]);
@@ -269,9 +252,7 @@ export function NotificationSettings({
   // Função para solicitar permissão de notificação
   const requestPermission = async () => {
     if (!isNotificationSupported()) {
-      toast.error("Seu navegador não suporta notificações", {
-        description: "Tente usar um navegador mais moderno"
-      });
+      // Toast removido conforme solicitado
       return;
     }
 
@@ -281,23 +262,19 @@ export function NotificationSettings({
       setBrowserPermission(permissionGranted ? "granted" : "denied");
       
       if (permissionGranted) {
-        toast.success("Permissão de notificação concedida", {
-          description: "Você receberá notificações no navegador"
-        });
+        // Toast removido conforme solicitado
         // Atualize o canal do navegador para ativado
         updateChannel("browser", true);
         onPermissionChange?.(true);
       } else {
-        toast.error("Permissão de notificação negada", {
-          description: "Você não receberá notificações no navegador"
-        });
+        // Toast removido conforme solicitado
         // Desative o canal do navegador
         updateChannel("browser", false);
         onPermissionChange?.(false);
       }
     } catch (error) {
       console.error("Erro ao solicitar permissão de notificação:", error);
-      toast.error("Erro ao solicitar permissão");
+      // Toast removido conforme solicitado
       onPermissionChange?.(false);
     }
   };
@@ -305,9 +282,7 @@ export function NotificationSettings({
   // Função para enviar notificação de teste atualizada
   const handleTestNotification = () => {
     if (!hasPermission) {
-      toast.error("Permissão de notificação não concedida", {
-        description: "Conceda permissão primeiro para receber notificações"
-      });
+      // Toast removido conforme solicitado
       return;
     }
 
@@ -338,9 +313,7 @@ export function NotificationSettings({
       );
     }
     
-    toast.success(`Canal ${enabled ? 'ativado' : 'desativado'}`, {
-      description: `Notificações via ${channels.find(c => c.id === channelId)?.name.toLowerCase()} foram ${enabled ? 'ativadas' : 'desativadas'}`
-    });
+    // Toast removido conforme solicitado
   };
   
   // Atualizar o status de um tipo de notificação
@@ -351,9 +324,7 @@ export function NotificationSettings({
       )
     );
     
-    toast.success(`Notificações ${enabled ? 'ativadas' : 'desativadas'}`, {
-      description: `Notificações de ${notificationTypes.find(t => t.id === typeId)?.name.toLowerCase()} foram ${enabled ? 'ativadas' : 'desativadas'}`
-    });
+    // Toast removido conforme solicitado
   };
   
   // Atualizar a prioridade de um tipo de notificação
@@ -451,7 +422,7 @@ export function NotificationSettings({
   
   // Função para limpar todas as notificações
   const clearAllNotifications = () => {
-    toast.success("Notificações limpas");
+    // Toast removido conforme solicitado
     // Em uma implementação real, você integraria com o sistema de notificações
   };
   
@@ -519,10 +490,7 @@ export function NotificationSettings({
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
                           {type.id === "signals" && <Zap className="h-4 w-4 text-blue-400" />}
-                          {type.id === "news" && <Globe className="h-4 w-4 text-amber-400" />}
-                          {type.id === "alerts" && <Activity className="h-4 w-4 text-rose-400" />}
-                          {type.id === "market_updates" && <Info className="h-4 w-4 text-teal-400" />}
-                          {type.id === "portfolio" && <Mail className="h-4 w-4 text-purple-400" />}
+                          {type.id === "live" && <Globe className="h-4 w-4 text-green-400" />}
                           <Label className="text-base font-medium cursor-pointer" htmlFor={`switch-${type.id}`}>
                             {type.name}
                           </Label>
@@ -534,10 +502,7 @@ export function NotificationSettings({
                           className={cn(
                             "data-[state=checked]:bg-purple-500",
                             type.id === "signals" && "data-[state=checked]:bg-blue-500",
-                            type.id === "news" && "data-[state=checked]:bg-amber-500",
-                            type.id === "alerts" && "data-[state=checked]:bg-rose-500",
-                            type.id === "market_updates" && "data-[state=checked]:bg-teal-500",
-                            type.id === "portfolio" && "data-[state=checked]:bg-purple-500"
+                            type.id === "live" && "data-[state=checked]:bg-green-500"
                           )}
                         />
                       </div>

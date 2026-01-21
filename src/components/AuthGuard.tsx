@@ -13,6 +13,7 @@ export function AuthGuard({ children, checkOnly = false }: AuthGuardProps) {
   const { user, loading } = useAuth();
   const location = useLocation();
   const [isVerifying, setIsVerifying] = useState(true);
+  const [forceRedirect, setForceRedirect] = useState(false);
 
   // Efeito para dar um tempo reduzido para verificação de autenticação
   useEffect(() => {
@@ -24,6 +25,25 @@ export function AuthGuard({ children, checkOnly = false }: AuthGuardProps) {
       clearTimeout(timer);
     };
   }, []);
+
+  // Timeout de segurança: se após 3 segundos ainda estiver loading sem usuário, redirecionar
+  useEffect(() => {
+    const safetyTimer = setTimeout(() => {
+      if (loading && !user) {
+        console.warn('⚠️ AuthGuard: Timeout de segurança - forçando redirecionamento para /auth');
+        setForceRedirect(true);
+      }
+    }, 3000); // 3 segundos de timeout
+
+    return () => {
+      clearTimeout(safetyTimer);
+    };
+  }, [loading, user]);
+
+  // Se o timeout foi atingido, redirecionar imediatamente
+  if (forceRedirect && !user) {
+    return <Navigate to="/auth" state={{ from: location }} replace />;
+  }
 
   // Mostra um indicador de carregamento simples enquanto verifica a autenticação
   if (loading || isVerifying) {

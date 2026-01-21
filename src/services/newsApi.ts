@@ -34,7 +34,7 @@ function getRandomImage(): string {
 
 // Função para buscar notícias financeiras - versão simulada
 export async function fetchFinancialNews(
-  query: string = 'finance OR investing OR stock market OR economy',
+  query: string = 'finance OR investing OR stock market OR economy OR macroeconomics OR "monetary policy" OR commodities OR cryptocurrency OR blockchain OR technology OR AI OR sustainability OR ESG OR "renewable energy" OR "real estate" OR fintech OR geopolitics OR e-commerce OR healthcare OR biotech OR startup OR regulation',
   from: string = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
   to: string = new Date().toISOString(),
   language: string = 'pt',
@@ -67,7 +67,7 @@ export async function fetchFinancialNews(
       content: `Conteúdo completo simulado para o artigo "${title}" com informações relevantes sobre o mercado financeiro global.`,
       url: "#",
       imageUrl: getRandomImage(),
-      source: ["Bloomberg", "Financial Times", "Reuters", "ProfEyes Analytics", "Wall Street Journal"][Math.floor(Math.random() * 5)],
+              source: ["Bloomberg", "Financial Times", "Reuters", "Trending Analytics", "Wall Street Journal"][Math.floor(Math.random() * 5)],
       publishedAt: new Date(Date.now() - (daysAgo * 24 * 60 * 60 * 1000) - (hoursAgo * 60 * 60 * 1000)).toISOString(),
       author: ["João Silva", "Maria Santos", "Carlos Oliveira", "Ana Ferreira", "Pedro Costa"][Math.floor(Math.random() * 5)],
       relatedSymbols: [["BTC", "ETH"], ["AAPL", "MSFT"], ["GOOGL", "AMZN"], ["TSLA", "NVDA"]][Math.floor(Math.random() * 4)],
@@ -108,7 +108,7 @@ export async function fetchCompanyNews(
         content: `Conteúdo completo da análise detalhada sobre ${symbol}, incluindo dados técnicos, fundamentos e perspectivas de mercado.`,
         url: "#",
         imageUrl: getRandomImage(),
-        source: ["Market Analysis", "ProfEyes Research", "Financial Insights", "Investment Journal", "Market Trends"][Math.floor(Math.random() * 5)],
+        source: ["Market Analysis", "Trending Research", "Financial Insights", "Investment Journal", "Market Trends"][Math.floor(Math.random() * 5)],
         publishedAt: new Date(Date.now() - (daysAgo * 24 * 60 * 60 * 1000) - (hoursAgo * 60 * 60 * 1000)).toISOString(),
         author: ["Analista Financeiro", "Especialista em Mercado", "Economista Sênior"][Math.floor(Math.random() * 3)],
         relatedSymbols: [symbol],
@@ -147,7 +147,7 @@ function getFallbackNews(symbol: string): NewsArticle[] {
       content: 'Devido à volatilidade recente, nossos especialistas estão realizando uma análise aprofundada das condições de mercado atuais. Fique atento para atualizações importantes.',
       url: '#',
       imageUrl: 'https://placehold.co/600x400?text=Market+Analysis',
-      source: 'ProfEyes Analytics',
+              source: 'Trending Analytics',
       publishedAt: timestamp,
       relatedSymbols: [symbolString],
       sentiment: 0
@@ -159,7 +159,7 @@ function getFallbackNews(symbol: string): NewsArticle[] {
       content: 'Nossa equipe compilou projeções de longo prazo baseadas em indicadores técnicos e fundamentais. Os dados sugerem uma tendência de estabilização nos próximos meses.',
       url: '#',
       imageUrl: 'https://placehold.co/600x400?text=Future+Outlook',
-      source: 'ProfEyes Research',
+              source: 'Trending Research',
       publishedAt: new Date(Date.now() - 86400000).toISOString(), // 1 dia atrás
       relatedSymbols: [symbolString],
       sentiment: 0.2
@@ -224,7 +224,7 @@ export async function fetchNewsHeadlines(
       content: `Conteúdo completo da notícia "${titles[i]}" com análises aprofundadas sobre o tema.`,
       url: "#",
       imageUrl: getRandomImage(),
-      source: ["ProfEyes News", "Financial Digest", "Market Insights", "Economic Times", "Finance Today"][Math.floor(Math.random() * 5)],
+              source: ["Trending News", "Financial Digest", "Market Insights", "Economic Times", "Finance Today"][Math.floor(Math.random() * 5)],
       publishedAt: new Date(Date.now() - (hoursAgo * 60 * 60 * 1000)).toISOString(),
       author: ["João Silva", "Maria Santos", "Carlos Oliveira", "Ana Ferreira", "Pedro Costa"][Math.floor(Math.random() * 5)],
       relatedSymbols: extractStockSymbols(titles[i]),

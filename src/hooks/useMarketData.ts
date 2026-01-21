@@ -3,9 +3,11 @@ import { TechnicalIndicators, PriceData, getTechnicalIndicators, getPriceData } 
 import { CandlestickPattern, detectPatterns } from '@/services/candlestickPatterns';
 import { getOrderBook } from '@/services/marketAnalysis';
 
+type Timeframe = '1m' | '3m' | '5m' | '15m' | '30m' | '1h' | '2h' | '4h' | '6h' | '8h' | '12h' | '1d' | '3d' | '1w' | '1M';
+
 interface UseMarketDataProps {
   symbol: string;
-  timeframe: string;
+  timeframe: Timeframe;
   updateInterval?: number;
   historyLimit?: number;
 }
@@ -55,8 +57,8 @@ export function useMarketData({
           technicalData,
           orderbook
         ] = await Promise.all([
-          getPriceData(symbol, timeframe as any, historyLimit),
-          getTechnicalIndicators(symbol, timeframe as any),
+          getPriceData(symbol, timeframe, historyLimit),
+          getTechnicalIndicators(symbol, timeframe),
           getOrderBook(symbol)
         ]);
         

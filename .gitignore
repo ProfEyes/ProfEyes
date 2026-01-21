@@ -29,3 +29,8 @@ dist-ssr
 *.mov
 *.mkv
 public/videos/
+
+.vercel
+
+# Electron builds
+release/

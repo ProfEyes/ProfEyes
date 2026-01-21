@@ -4,12 +4,46 @@ import Layout from "@/components/Layout";
 import { Card, CardContent } from "@/components/ui/card";
 import { format, formatDistance } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { useEffect, useState, useMemo, useRef } from "react";
+import { useEffect, useState, useMemo, useRef, useCallback } from "react";
 import { Button } from "@/components/ui/button";
-import { Newspaper, RefreshCw, AlertTriangle, Check, Clock } from "lucide-react";
+import { Newspaper, RefreshCw, AlertTriangle, Check, Clock, Filter } from "lucide-react";
 import { MarketNews as BaseMarketNews } from "@/services/types";
 import { cn } from "@/lib/utils";
 import { useLanguage } from "@/contexts/LanguageContext";
+
+// Definir categorias de filtro agrupadas com traduções - função auxiliar
+const getNewsCategories = (t: (key: string) => string) => [
+  {
+    id: 'all',
+    label: t('news.filter.all') || 'Todas',
+    keywords: []
+  },
+  {
+    id: 'markets',
+    label: t('news.filter.markets') || 'Mercados & Trading',
+    keywords: ['stock', 'market', 'trading', 'investment', 'investor', 'finance', 'financial', 'earnings', 'revenue', 'profit', 'loss', 'ipo', 'dividend', 'portfolio', 'fund', 'etf', 'bond', 'yield', 'nasdaq', 'dow jones', 's&p', 'wall street', 'nyse', 'mercado', 'financeiro', 'investimento', 'negócios', 'ações', 'bolsa', 'bovespa', 'ação', 'fundo', 'dividendo', 'lucro', 'receita', 'prejuízo', 'carteira', 'rendimento', 'stocks', 'acciones', 'inversión', 'bolsa de valores', 'mercados financieros']
+  },
+  {
+    id: 'economy',
+    label: t('news.filter.economy') || 'Economia & Política',
+    keywords: ['economy', 'economic', 'gdp', 'inflation', 'recession', 'growth', 'bank', 'banking', 'federal reserve', 'fed', 'interest rate', 'macroeconomics', 'macroeconomia', 'macro', 'pib', 'juros', 'selic', 'monetary policy', 'política monetária', 'central bank', 'banco central', 'economia', 'econômico', 'regulation', 'regulamentação', 'compliance', 'legislation', 'lei', 'inflação', 'recessão', 'crescimento', 'banco', 'bancário', 'taxa de juros', 'legislação', 'economía', 'inflación', 'recesión', 'crecimiento', 'política económica']
+  },
+  {
+    id: 'tech',
+    label: t('news.filter.tech') || 'Tecnologia & Inovação',
+    keywords: ['ai', 'artificial intelligence', 'cloud', 'nuvem', 'cybersecurity', 'cyber', 'segurança cibernética', 'technology', 'tech', 'fintech', 'digital bank', 'banco digital', 'open banking', 'startup', 'start-up', 'venture capital', 'vc', 'fundraising', 'inteligência artificial', 'tecnologia', 'segurança digital', 'banco aberto', 'capital de risco', 'captação de recursos', 'inovação', 'software', 'aplicativo', 'plataforma digital', 'tecnología', 'innovación', 'inteligencia artificial', 'tecnología digital', 'ciberseguridad']
+  },
+  {
+    id: 'commodities',
+    label: t('news.filter.commodities') || 'Commodities & ESG',
+    keywords: ['commodities', 'commodity', 'oil', 'petróleo', 'gold', 'ouro', 'agricultural', 'soja', 'corn', 'milho', 'sustainability', 'sustentabilidade', 'esg', 'environmental', 'social', 'governance', 'carbon', 'emission', 'renewable', 'energia renovável', 'solar', 'wind', 'eólica', 'energy transition', 'transition', 'real estate', 'imobiliário', 'construction', 'construção', 'meio ambiente', 'ambiental', 'governança', 'carbono', 'emissão', 'renovável', 'transição energética', 'mercado imobiliário', 'materias primas', 'sostenibilidad', 'energía renovable', 'transición energética']
+  },
+  {
+    id: 'global',
+    label: t('news.filter.global') || 'Global & Geopolítica',
+    keywords: ['war', 'conflict', 'military', 'sanctions', 'trade war', 'geopolitical', 'geopolitics', 'geopolítica', 'ukraine', 'russia', 'china', 'taiwan', 'supply chain', 'guerra', 'conflito', 'sanções', 'export', 'import', 'trade', 'tariff', 'currency', 'dollar', 'euro', 'yen', 'pound', 'exportação', 'importação', 'comércio', 'moeda', 'healthcare', 'health', 'biotech', 'biotecnologia', 'pharma', 'pharmaceutical', 'e-commerce', 'commerce', 'consumption', 'consumo', 'militar', 'guerra comercial', 'cadeia de suprimentos', 'tarifa', 'dólar', 'saúde', 'farmacêutico', 'comércio eletrônico', 'geopolítica', 'conflicto', 'sanciones', 'guerra comercial', 'cadena de suministro']
+  }
+];
 
 // Definir uma interface para o formato dos dados retornados pela API Finnhub
 interface FinnhubNewsItem {
@@ -83,6 +117,21 @@ const newsLoadingStyles = `
     font-weight: 500;
     text-align: center;
   }
+  
+  @keyframes fade-in {
+    from { 
+      opacity: 0; 
+      transform: translateY(10px);
+    }
+    to { 
+      opacity: 1; 
+      transform: translateY(0);
+    }
+  }
+  
+  .animate-fade-in {
+    animation: fade-in 0.4s ease-out;
+  }
 `;
 
 // Função para calcular o tempo relativo da publicação
@@ -137,12 +186,111 @@ const News = () => {
   const [refreshButtonState, setRefreshButtonState] = useState<'default' | 'success' | 'error'>('default');
   // Referência para armazenar o timestamp da última atualização bem-sucedida
   const lastSuccessfulUpdate = useRef<number>(Date.now());
-  const { language } = useLanguage();
+  const { language, t } = useLanguage();
   
-  // Buscar notícias com React Query
+  // Estado para filtro de categoria
+  const [selectedCategory, setSelectedCategory] = useState<string>('all');
+
+  // Definir categorias de filtro agrupadas com traduções
+  const NEWS_CATEGORIES = getNewsCategories(t);
+  
+  // Função para verificar se uma notícia pertence a uma categoria
+  const newsMatchesCategory = (newsItem: MarketNews, categoryId: string): boolean => {
+    if (categoryId === 'all') return true;
+    
+    const category = NEWS_CATEGORIES.find(cat => cat.id === categoryId);
+    if (!category || category.keywords.length === 0) return true;
+    
+    // Combinar todos os textos da notícia para busca mais abrangente
+    const title = (newsItem.title || '').toLowerCase();
+    const summary = (newsItem.summary || '').toLowerCase();
+    const content = (newsItem.content || '').toLowerCase();
+    const source = (newsItem.source || '').toLowerCase();
+    const relatedSymbols = (newsItem.relatedSymbols || []).join(' ').toLowerCase();
+    
+    // Verificar primeiro se o título contém palavras proibidas - REDUZIR RESTRIÇÕES
+    const strictTitleBanWords = [
+      'celebrity gossip', 'dating rumors', 'wedding photos', 'breakup news',
+      'vacation spots', 'travel tips', 'restaurant review', 'movie review',
+      'sports game', 'weather forecast', 'horoscope', 'zodiac'
+    ];
+    
+    // Rejeitar apenas se o título contiver palavras muito específicas de exclusão
+    for (const banWord of strictTitleBanWords) {
+      if (title.includes(banWord)) {
+        return false;
+      }
+    }
+    
+    // Texto combinado para busca
+    const searchText = `${title} ${summary} ${content} ${source} ${relatedSymbols}`;
+    
+    // Verificar se alguma palavra-chave da categoria está presente
+    const matches = category.keywords.some(keyword => {
+      const keywordLower = keyword.toLowerCase().trim();
+      // Buscar por palavra exata ou como parte de palavra (para siglas como BTC, ETH)
+      const exactMatch = searchText.includes(keywordLower);
+      // Para siglas de 3-4 caracteres, também verificar como palavra isolada
+      const wordMatch = keywordLower.length <= 4 ? 
+        new RegExp(`\\b${keywordLower}\\b`, 'i').test(searchText) : false;
+      
+      return exactMatch || wordMatch;
+    });
+    
+    // REDUZIR palavras-chave de exclusão para ser menos restritivo
+    const excludeKeywords = [
+      'celebrity gossip', 'dating rumors', 'wedding photos', 'movie review',
+      'sports score', 'weather report', 'horoscope', 'zodiac sign'
+    ];
+    
+    const containsExcludeKeyword = excludeKeywords.some(keyword => 
+      searchText.includes(keyword.toLowerCase())
+    );
+    
+    // Se contém palavras de exclusão mas tem correspondência com a categoria, aceitar
+    if (containsExcludeKeyword && matches) {
+      return true; // Priorizar matches da categoria sobre exclusões
+    }
+    
+    // Se não contém palavras de exclusão e tem match, aceitar
+    if (!containsExcludeKeyword && matches) {
+      return true;
+    }
+    
+    // Log para debug (apenas em desenvolvimento)
+    if (import.meta.env.DEV && matches) {
+      console.log(`[CATEGORY FILTER] Categoria: ${categoryId}, Notícia: "${title}"`, {
+        source: newsItem.source,
+        matches,
+        searchText: searchText.substring(0, 100) + '...',
+        foundKeywords: category.keywords.filter(k => searchText.includes(k.toLowerCase()))
+      });
+    }
+    
+    return matches && !containsExcludeKeyword;
+  };
+  
+  // Filtrar notícias baseado na categoria selecionada
+  const filteredNews = useMemo(() => {
+    if (!newsWithImages || newsWithImages.length === 0) return [];
+    const filtered = newsWithImages.filter(newsItem => newsMatchesCategory(newsItem, selectedCategory));
+    
+    // Log para debug da filtragem
+    if (import.meta.env.DEV) {
+      console.log(`[FILTER DEBUG] Categoria: ${selectedCategory}`, {
+        totalNews: newsWithImages.length,
+        filteredNews: filtered.length,
+        categoryLabel: NEWS_CATEGORIES.find(cat => cat.id === selectedCategory)?.label
+      });
+    }
+    
+    return filtered;
+  }, [newsWithImages, selectedCategory, NEWS_CATEGORIES, newsMatchesCategory]);
+  
+  // Buscar notícias com React Query - Aumentando limite para mais notícias
   const { data: news, isLoading, error, refetch, isFetching } = useQuery({
     queryKey: ['allMarketNews', language],
-    queryFn: () => fetchMarketNews({ language }), // Passar o idioma atual para a API
+    queryFn: () => fetchMarketNews({ language, limit: 100 }), // Aumentar limite para 100 notícias
     refetchInterval: 1800000, // Atualiza a cada 30 minutos (1800000 ms)
     staleTime: 1800000, // Considera os dados obsoletos após 30 minutos
     // Usar cache já existente imediatamente
@@ -162,55 +310,118 @@ const News = () => {
     };
   }, []);
 
-  // Efeito para processar as imagens das notícias com otimização
+  // Função para classificar automaticamente uma notícia
+  const classifyNews = (newsItem: MarketNews): string => {
+    const title = (newsItem.title || '').toLowerCase();
+    const summary = (newsItem.summary || '').toLowerCase();
+    const content = (newsItem.content || '').toLowerCase();
+    const source = (newsItem.source || '').toLowerCase();
+    const relatedSymbols = (newsItem.relatedSymbols || []).join(' ').toLowerCase();
+    const searchText = `${title} ${summary} ${content} ${source} ${relatedSymbols}`;
+    
+    // Verificar categoria baseada na API Finnhub
+    if (newsItem.category) {
+      if (newsItem.category === 'crypto') return 'tech';
+      if (newsItem.category === 'forex') return 'global';
+      if (newsItem.category === 'merger') return 'markets';
+      if (newsItem.category === 'general') {
+        // Para categoria geral, verificar keywords
+        for (const category of NEWS_CATEGORIES.slice(1)) {
+          const matches = category.keywords.some(keyword => {
+            const keywordLower = keyword.toLowerCase().trim();
+            const exactMatch = searchText.includes(keywordLower);
+            const wordMatch = keywordLower.length <= 4 ? 
+              new RegExp(`\\b${keywordLower}\\b`, 'i').test(searchText) : false;
+            return exactMatch || wordMatch;
+          });
+          
+          if (matches) {
+            return category.id;
+          }
+        }
+      }
+    }
+    
+    // Verificar cada categoria (exceto 'all') e retornar a primeira que fizer match
+    for (const category of NEWS_CATEGORIES.slice(1)) { // slice(1) para pular 'all'
+      const matches = category.keywords.some(keyword => {
+        const keywordLower = keyword.toLowerCase().trim();
+        const exactMatch = searchText.includes(keywordLower);
+        const wordMatch = keywordLower.length <= 4 ? 
+          new RegExp(`\\b${keywordLower}\\b`, 'i').test(searchText) : false;
+        return exactMatch || wordMatch;
+      });
+      
+      if (matches) {
+        return category.id;
+      }
+    }
+    
+    // Se não encontrou categoria específica, classificar como 'global'
+    return 'global';
+  };
+
+  // Efeito para processar as notícias recebidas da API Finnhub
   useEffect(() => {
     if (news && Array.isArray(news) && news.length > 0) {
-      // Converter dados da API para o formato MarketNews
-      const processedNews = news.map((item: FinnhubNewsItem) => {
-        // Processar o timestamp das notícias para garantir que está em formato correto
-        let processedDatetime = item.datetime || item.publishedAt || Date.now();
+      // As notícias já vêm processadas do serviço news.ts
+      const processedNews = news.map((item: Record<string, unknown>) => {
+        // Garantir que o timestamp está em formato correto
+        const publishedAt = item.published_at || item.publishedAt;
+        const processedDatetime = Number(item.datetime) || (publishedAt ? new Date(String(publishedAt)).getTime() : Date.now());
         
-        // Se o timestamp estiver em segundos (formato Finnhub), converter para milissegundos
-        if (typeof processedDatetime === 'number' && processedDatetime < 10000000000) {
-          processedDatetime *= 1000;
+        // Garantir que temos um objeto completo de notícia
+        const newsItem: MarketNews = {
+          id: item.id ? String(item.id) : String(Date.now()),
+          title: item.title ? String(item.title) : '',
+          published_at: publishedAt ? String(publishedAt) : new Date(processedDatetime).toISOString(),
+          content: item.content ? String(item.content) : (item.summary ? String(item.summary) : ''),
+          summary: item.summary ? String(item.summary) : '',
+          source: item.source ? String(item.source) : '',
+          url: item.url ? String(item.url) : '',
+          imageUrl: item.imageUrl ? String(item.imageUrl) : (item.image ? String(item.image) : ''),
+          sentiment: 0,
+          symbols: Array.isArray(item.symbols) ? (item.symbols as string[]) : [],
+          datetime: processedDatetime,
+          relatedSymbols: Array.isArray(item.relatedSymbols) ? (item.relatedSymbols as string[]) : [],
+          category: item.category ? String(item.category) : '' // Pode já vir classificado pela API
+        };
+        
+        // Classificar automaticamente se não tiver categoria
+        if (!newsItem.category || newsItem.category === 'business') {
+          newsItem.category = classifyNews(newsItem);
         }
         
-        const newsItem: MarketNews = {
-          id: String(item.id || Date.now()),
-          title: item.title || item.headline || '',
-          content: item.content || item.summary || '',
-          summary: item.summary || item.description || '',
-          source: item.source || '',
-          url: item.url || '',
-          imageUrl: (item.imageUrl || item.image || ''),
-          published_at: new Date(processedDatetime).toISOString(),
-          sentiment: 0,
-          symbols: item.relatedSymbols || [],
-          datetime: processedDatetime,
-          relatedSymbols: item.relatedSymbols || [],
-          category: item.source === 'CNBC' ? 'CNBC' : undefined
-        };
         return newsItem;
       });
       
-      // Filtrar APENAS notícias com imagens
-      const newsWithImagesOnly = processedNews.filter(item => item.imageUrl && item.imageUrl.trim() !== '');
+      // Filtrar apenas notícias com imagens
+      const newsWithImagesOnly = processedNews.filter(item => 
+        item.imageUrl && item.imageUrl.trim() !== ''
+      );
       
-      // Separar notícias da CNBC e de outras fontes
-      const cnbcNews = newsWithImagesOnly.filter(item => item.source === 'CNBC');
-      const otherNews = newsWithImagesOnly.filter(item => item.source !== 'CNBC');
+      // Ordenar por data (mais recentes primeiro)
+      newsWithImagesOnly.sort((a, b) => {
+        const dateA = new Date(a.published_at).getTime();
+        const dateB = new Date(b.published_at).getTime();
+        return dateB - dateA;
+      });
       
-      // Combinar colocando notícias da CNBC primeiro
-      setNewsWithImages([...cnbcNews, ...otherNews]);
+      // Log da classificação para debug
+      if (import.meta.env.DEV) {
+        const categoryCount = newsWithImagesOnly.reduce((acc, item) => {
+          acc[item.category || 'undefined'] = (acc[item.category || 'undefined'] || 0) + 1;
+          return acc;
+        }, {} as Record<string, number>);
+        console.log('[AUTO CLASSIFICATION] Distribuição por categoria:', categoryCount);
+      }
+      
+      setNewsWithImages(newsWithImagesOnly);
       setIsLoadingImages(false);
     }
   }, [news]);
 
-  // Garantir que as notícias tenham formato adequado
-  const uniqueNewsWithImages = useMemo(() => {
-    if (!newsWithImages || newsWithImages.length === 0) return [];
-    return newsWithImages;
-  }, [newsWithImages]);
+  // Garantir que as notícias tenham formato adequado (removido - usando filteredNews)
 
   useEffect(() => {
     if (error) {
@@ -227,95 +438,32 @@ const News = () => {
     return () => clearInterval(intervalId);
   }, [error, refetch]);
 
-  // Função de refetch modificada para não usar imagens de fallback
-  const handleRefetch = () => {
-    // Verificar se as notícias já foram atualizadas recentemente (nos últimos 30 segundos)
+  // Função de refetch simplificada
+  const handleRefetch = async () => {
     const now = Date.now();
     const timeSinceLastUpdate = now - lastSuccessfulUpdate.current;
     const isRecentlyUpdated = timeSinceLastUpdate < 30000; // 30 segundos
     
-    if (isRecentlyUpdated && news && news.length > 0) {
+    if (isRecentlyUpdated && newsWithImages.length > 0) {
       // Se já estiver atualizado recentemente, mostrar animação de sucesso
       setRefreshButtonState('success');
+      setTimeout(() => setRefreshButtonState('default'), 2000);
+      return;
+    }
+    
+    try {
+      setRefreshButtonState('default');
+      // Usar a função de refetch do React Query
+      await refetch();
       
-      // Retornar ao estado normal após 2 segundos com uma transição mais suave
-      setTimeout(() => {
-        setRefreshButtonState('default');
-      }, 2000);
-    } else {
-      // Se não for atualização recente, proceder com a atualização personalizada
-      // Armazenar as notícias atuais
-      const currentNews = newsWithImages || [];
+      lastSuccessfulUpdate.current = now;
+      setRefreshButtonState('success');
+      setTimeout(() => setRefreshButtonState('default'), 2000);
       
-      // Buscar novas notícias diretamente da API
-      fetchMarketNews({ language }).then(newNews => {
-        if (newNews && Array.isArray(newNews) && newNews.length > 0) {
-          // Processar as notícias para usar apenas imagens da API
-          const processedNews = newNews.map((item: FinnhubNewsItem) => {
-            // Processar o timestamp das notícias para garantir que está em formato correto
-            let processedDatetime = item.datetime || item.publishedAt || Date.now();
-            
-            // Se o timestamp estiver em segundos (formato Finnhub), converter para milissegundos
-            if (typeof processedDatetime === 'number' && processedDatetime < 10000000000) {
-              processedDatetime *= 1000;
-            }
-            
-            const newsItem: MarketNews = {
-              id: String(item.id || Date.now()),
-              title: item.title || item.headline || '',
-              content: item.content || item.summary || '',
-              summary: item.summary || item.description || '',
-              source: item.source || '',
-              url: item.url || '',
-              imageUrl: (item.imageUrl || item.image || ''),
-              published_at: new Date(processedDatetime).toISOString(),
-              sentiment: 0,
-              symbols: item.relatedSymbols || [],
-              datetime: processedDatetime,
-              relatedSymbols: item.relatedSymbols || [],
-              category: item.source === 'CNBC' ? 'CNBC' : undefined
-            };
-            return newsItem;
-          });
-          
-          // Filtrar APENAS notícias com imagens
-          const newsWithImagesOnly = processedNews.filter(item => item.imageUrl && item.imageUrl.trim() !== '');
-          
-          // Separar notícias da CNBC e de outras fontes
-          const cnbcNews = newsWithImagesOnly.filter(item => item.source === 'CNBC');
-          const otherNews = newsWithImagesOnly.filter(item => item.source !== 'CNBC');
-          
-          // Combinar colocando notícias da CNBC primeiro
-          setNewsWithImages([...cnbcNews, ...otherNews]);
-          setIsLoadingImages(false);
-          
-          // Atualizar o timestamp da última atualização
-          lastSuccessfulUpdate.current = now;
-          
-          // Mostrar animação de sucesso
-          setRefreshButtonState('success');
-          setTimeout(() => {
-            setRefreshButtonState('default');
-          }, 2000);
-        } else {
-          // Se não conseguimos buscar novas notícias, usar o refetch padrão
-          refetch().then((result) => {
-            if (result.data) {
-              lastSuccessfulUpdate.current = now;
-              setRefreshButtonState('success');
-              setTimeout(() => {
-                setRefreshButtonState('default');
-              }, 2000);
-            }
-          });
-        }
-      }).catch(err => {
-        console.error("Erro ao atualizar notícias:", err);
-        setRefreshButtonState('error');
-        setTimeout(() => {
-          setRefreshButtonState('default');
-        }, 2000);
-      });
+    } catch (err) {
+      console.error("Erro ao atualizar notícias:", err);
+      setRefreshButtonState('error');
+      setTimeout(() => setRefreshButtonState('default'), 2000);
     }
   };
 
@@ -324,9 +472,9 @@ const News = () => {
       <div className="space-y-8">
         <div className="flex justify-between items-center">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">Notícias do Mercado</h1>
+            <h1 className="text-3xl font-bold tracking-tight">{t('nav.news.title')}</h1>
             <p className="text-muted-foreground">
-              Acompanhe as últimas notícias do mercado de criptomoedas e finanças
+              {t('news.subtitle')}
             </p>
           </div>
           <div className="relative min-w-[120px] h-9 flex items-center justify-end">
@@ -349,7 +497,7 @@ const News = () => {
                 tabIndex={refreshButtonState === 'success' ? 0 : -1}
               >
                 <Check className="h-4 w-4 text-green-400 mr-1.5" />
-                <span className="text-green-400 text-xs font-normal">Atualizado!</span>
+                <span className="text-green-400 text-xs font-normal">{t('news.updated')}</span>
               </Button>
             </div>
             
@@ -370,21 +518,73 @@ const News = () => {
                 className="flex items-center gap-2"
               >
                 <RefreshCw className={cn("h-4 w-4", (isFetching || isLoading) && "animate-spin")} />
-                Atualizar
+                {t('news.refresh')}
               </Button>
             </div>
           </div>
         </div>
 
-        <div className="grid gap-6">
+        {/* Filtros de categoria - Design ultra transparente preto */}
+        <div className="flex flex-wrap gap-3 items-center p-5 bg-black/20 backdrop-blur-xl rounded-xl border border-white/5 shadow-2xl shadow-black/40">
+          <div className="flex items-center gap-2 mr-4">
+            <Filter className="h-4 w-4 text-white/60" />
+            <span className="text-sm font-medium text-white/70">{t('news.filter.label')}</span>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {NEWS_CATEGORIES.map((category, index) => {
+              const colors = [
+                'from-black/60 to-gray-900/60 border-white/20 text-white/90', // Todas
+                'from-emerald-500/20 to-emerald-600/20 border-emerald-400/30 text-emerald-200', // Mercados
+                'from-blue-500/20 to-blue-600/20 border-blue-400/30 text-blue-200', // Economia
+                'from-orange-500/20 to-orange-600/20 border-orange-400/30 text-orange-200', // Crypto
+                'from-purple-500/20 to-purple-600/20 border-purple-400/30 text-purple-200', // Tech
+                'from-green-500/20 to-green-600/20 border-green-400/30 text-green-200', // Commodities
+                'from-red-500/20 to-red-600/20 border-red-400/30 text-red-200' // Global
+              ];
+              
+              const isActive = selectedCategory === category.id;
+              const colorClass = colors[index] || colors[0];
+              
+              return (
+                <Button
+                  key={category.id}
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setSelectedCategory(category.id)}
+                  className={cn(
+                    "relative px-4 py-2.5 rounded-lg transition-all duration-200 ease-out backdrop-blur-md",
+                    isActive 
+                      ? `bg-gradient-to-r ${colorClass} shadow-lg shadow-black/30 font-semibold` 
+                      : "bg-black/10 text-white/60 hover:bg-black/20 hover:text-white/80"
+                  )}
+                >
+                  <span className="relative z-10 text-xs font-medium">
+                    {category.label}
+                  </span>
+                  {isActive && (
+                    <>
+                      <div className="absolute inset-0 bg-gradient-to-r from-white/5 to-transparent rounded-lg"></div>
+                      <span className="ml-2 text-xs opacity-70 font-normal">
+                        ({filteredNews.length})
+                      </span>
+                    </>
+                  )}
+                </Button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Grid de notícias */}
+        <div className="grid gap-6" key={selectedCategory}>
           {isLoading ? (
-            <Card>
+            <Card className="animate-pulse">
               <CardContent className="p-6">
                 <div className="news-loading-container">
                   <div className="news-loading-icon">
                     <Newspaper size={32} />
                   </div>
-                  <p className="news-loading-text">Buscando as últimas notícias do mercado...</p>
+                  <p className="news-loading-text">{t('news.loading')}</p>
                 </div>
               </CardContent>
             </Card>
@@ -393,40 +593,54 @@ const News = () => {
               <CardContent className="p-6">
                 <div className="flex flex-col items-center text-center">
                   <AlertTriangle className="h-12 w-12 text-red-500 mb-4" />
-                  <p className="text-lg font-medium">Erro ao carregar notícias</p>
-                  <p className="text-muted-foreground mb-4">Tente novamente mais tarde.</p>
+                  <p className="text-lg font-medium">{t('news.error.loading')}</p>
+                  <p className="text-muted-foreground mb-4">{t('news.error.tryAgain')}</p>
                   <p className="text-sm text-red-500 mt-2 max-w-full overflow-hidden text-ellipsis">{String(error)}</p>
                   <Button 
                     variant="outline" 
                     onClick={handleRefetch}
                     className="mt-4"
                   >
-                    Tentar novamente
+                    {t('news.tryAgain')}
                   </Button>
                 </div>
               </CardContent>
             </Card>
-          ) : !uniqueNewsWithImages || uniqueNewsWithImages.length === 0 ? (
-            <Card>
-              <CardContent className="p-6">
-                <div className="flex flex-col items-center text-center">
-                  <Newspaper className="h-12 w-12 text-muted-foreground mb-4" />
-                  <p>Nenhuma notícia disponível no momento.</p>
-                  <Button 
-                    variant="outline" 
-                    onClick={handleRefetch}
-                    className="mt-4"
-                  >
-                    Tentar novamente
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
+          ) : !filteredNews || filteredNews.length === 0 ? (
+                          <Card>
+                <CardContent className="p-6">
+                  <div className="flex flex-col items-center text-center">
+                    <Newspaper className="h-12 w-12 text-muted-foreground mb-4" />
+                    <p>
+                      {selectedCategory === 'all' 
+                        ? t('news.none') 
+                        : `${t('news.filter.noResults')} "${NEWS_CATEGORIES.find(cat => cat.id === selectedCategory)?.label}".`
+                      }
+                    </p>
+                    {selectedCategory !== 'all' && (
+                      <p className="text-sm text-muted-foreground mt-2">
+                        {t('news.filter.totalAvailable')} {newsWithImages.length} {t('news.filter.news')}
+                      </p>
+                    )}
+                                          <Button 
+                        variant="outline" 
+                        onClick={() => setSelectedCategory('all')}
+                        className="mt-4"
+                      >
+                        {selectedCategory === 'all' ? t('news.tryAgain') : t('news.filter.viewAll')}
+                      </Button>
+                  </div>
+                </CardContent>
+              </Card>
           ) :
-            uniqueNewsWithImages?.map((item) => (
+            filteredNews?.map((item, index) => (
               <Card 
                 key={item.id} 
-                className="hover:bg-white/5 transition-colors cursor-pointer"
+                className="hover:bg-white/5 transition-all duration-200 cursor-pointer animate-fade-in opacity-0"
+                style={{
+                  animationDelay: `${index * 50}ms`,
+                  animationFillMode: 'forwards'
+                }}
                 onClick={() => window.open(item.url, '_blank')}
               >
                 <CardContent className="p-6">

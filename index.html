@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="pt-BR">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -7,6 +7,7 @@
     <meta name="description" content="Plataforma avançada de análise de mercado com inteligência artificial" />
     <meta name="author" content="Trending" />
     <meta property="og:image" content="/og-image.png" />
+    <link rel="icon" href="/favicon.ico" type="image/x-icon" />
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
@@ -16,6 +17,7 @@
         src: url('/fonts/Mollen Personal Use-Light.otf') format('opentype');
         font-weight: 300;
         font-style: normal;
+        font-display: swap;
       }
       
       @font-face {
@@ -23,6 +25,7 @@
         src: url('/fonts/Mollen Personal Use-Regular.otf') format('opentype');
         font-weight: normal;
         font-style: normal;
+        font-display: swap;
       }
       
       @font-face {
@@ -30,18 +33,39 @@
         src: url('/fonts/Mollen Personal Use-Bold.otf') format('opentype');
         font-weight: bold;
         font-style: normal;
+        font-display: swap;
+      }
+      
+      * {
+        box-sizing: border-box;
       }
       
       body {
         font-family: 'Inter', sans-serif;
+        margin: 0;
+        padding: 0;
+        background-color: #000000;
+        color: white;
+        overflow-x: hidden;
+      }
+      
+      #root {
+        min-height: 100vh;
+        width: 100%;
+      }
+
+      /* Estilos básicos para a página de sinais - para garantir visibilidade */
+      .signals-page-dark-gradient {
+        background-color: #060609 !important;
+        color: white !important;
       }
     </style>
   </head>
 
   <body>
     <div id="root"></div>
-    <!-- IMPORTANT: DO NOT REMOVE THIS SCRIPT TAG OR THIS VERY COMMENT! -->
-    <script src="https://cdn.gpteng.co/gptengineer.js" type="module"></script>
+    <!-- Scripts necessários para a aplicação -->
+    <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

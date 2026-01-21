@@ -1,11 +1,20 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
+interface Notification {
+  id: string;
+  type?: 'info' | 'success' | 'warning' | 'error';
+  title?: string;
+  message: string;
+  timestamp?: number;
+  read?: boolean;
+}
+
 interface NotificationStore {
   hasNotifications: boolean;
-  notifications: any[];
+  notifications: Notification[];
   toggleNotifications: () => void;
-  addNotification: (notification: any) => void;
+  addNotification: (notification: Notification) => void;
   clearNotifications: () => void;
 }
 

@@ -1,4 +1,6 @@
-import { supabase } from "@/integrations/supabase/client";
+import { supabase } from "@/lib/supabase";
+import type { SupabaseClient } from '@supabase/supabase-js';
+import type { Database } from '@/types/supabase';
 import { extractImageFromUrl, isValidImageUrl } from "@/utils/imageExtractor";
 
 // Cache para armazenar URLs de imagens já extraídas
@@ -18,8 +20,7 @@ export async function getNewsImage(newsUrl: string, newsId: string): Promise<str
   
   // Verificar se já temos a imagem no banco de dados
   try {
-    const { data, error } = await supabase
-      .from('news_images')
+    const { data, error } = await (supabase as SupabaseClient<Database>).from('news_images')
       .select('image_url')
       .eq('news_id', newsId)
       .single();
@@ -47,7 +48,7 @@ export async function getNewsImage(newsUrl: string, newsId: string): Promise<str
         
         // Salvar no banco de dados para uso futuro
         try {
-          await supabase.from('news_images').insert({
+          await (supabase as SupabaseClient<Database>).from('news_images').insert({
             news_id: newsId,
             image_url: imageUrl,
             created_at: new Date().toISOString()
@@ -72,7 +73,7 @@ export async function getNewsImage(newsUrl: string, newsId: string): Promise<str
  * @param news Array de notícias
  * @returns Array de notícias com imagens atualizadas
  */
-export async function updateNewsImages(news: any[]): Promise<any[]> {
+export async function updateNewsImages(news: Record<string, unknown>[]): Promise<any[]> {
   // Processar em lotes para não sobrecarregar o servidor
   const batchSize = 3;
   const newsWithImages = [...news];
@@ -84,19 +85,19 @@ export async function updateNewsImages(news: any[]): Promise<any[]> {
     await Promise.all(
       batch.map(async (item, index) => {
         // Pular se já tiver uma imagem válida
-        if (item.imageUrl && await isValidImageUrl(item.imageUrl)) {
+        if (item.imageUrl && await isValidImageUrl(String(item.imageUrl))) {
           return;
         }
         
         // Extrair imagem da URL da notícia
-        const imageUrl = await getNewsImage(item.url, item.id);
+        const imageUrl = await getNewsImage(String(item.url), String(item.id));
         
         if (imageUrl) {
           newsWithImages[i + index].imageUrl = imageUrl;
           
           // Atualizar a imagem no banco de dados
           try {
-            await supabase
+            await (supabase as SupabaseClient<Database>)
               .from('market_news')
               .update({ image_url: imageUrl })
               .eq('id', item.id);

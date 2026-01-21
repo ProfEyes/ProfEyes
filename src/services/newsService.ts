@@ -1,6 +1,64 @@
-import { supabase } from "@/integrations/supabase/client";
+import { supabase } from "@/lib/supabase";
 import { MarketNews } from "./types";
 import { API_KEYS } from "./apiKeys";
+
+// Função para verificar se a notícia é relevante para mercado financeiro, business, guerras e economia
+function isRelevantFinancialNews(item: Record<string, unknown>): boolean {
+  const title = (item.headline || item.title || '').toLowerCase();
+  const summary = (item.summary || item.description || '').toLowerCase();
+  const text = `${title} ${summary}`;
+  
+  // Palavras-chave para mercado financeiro e business
+  const financialKeywords = [
+    'stock', 'market', 'trading', 'investment', 'investor', 'finance', 'financial',
+    'economy', 'economic', 'gdp', 'inflation', 'recession', 'growth',
+    'earnings', 'revenue', 'profit', 'loss', 'merger', 'acquisition',
+    'ipo', 'dividend', 'portfolio', 'fund', 'etf', 'bond', 'yield',
+    'cryptocurrency', 'bitcoin', 'crypto', 'blockchain', 'ethereum', 'btc', 'eth', 'bnb', 'binance', 'solana', 'sol', 'cardano', 'ada', 'polkadot', 'dot', 'avalanche', 'avax', 'polygon', 'matic', 'chainlink', 'link', 'dogecoin', 'doge', 'shiba', 'shib', 'uniswap', 'uni', 'litecoin', 'ltc', 'ripple', 'xrp', 'defi', 'nft', 'token', 'altcoin', 'stablecoin', 'usdt', 'usdc', 'mining', 'miners', 'wallet', 'exchange', 'coinbase', 'kraken', 'metamask', 'web3', 'smart contract', 'dao', 'yield farming', 'staking', 'hodl', 'satoshi', 'halving', 'fork', 'consensus', 'proof of stake', 'proof of work',
+    'bank', 'banking', 'federal reserve', 'fed', 'interest rate',
+    'business', 'company', 'corporate', 'ceo', 'quarterly',
+    'nasdaq', 'dow jones', 's&p', 'wall street', 'nyse',
+    'mercado', 'financeiro', 'economia', 'econômico', 'investimento',
+    'negócios', 'empresa', 'ações', 'bolsa', 'bovespa',
+    // Tópicos adicionais
+    'macroeconomics', 'macroeconomia', 'macro', 'pib', 'juros', 'selic', 'monetary policy', 'política monetária', 'central bank', 'banco central',
+    'commodities', 'commodity', 'oil', 'petróleo', 'gold', 'ouro', 'agricultural', 'soja', 'corn', 'milho',
+    'ai', 'artificial intelligence', 'cloud', 'nuvem', 'cybersecurity', 'cyber', 'segurança cibernética',
+    'sustainability', 'sustentabilidade', 'esg', 'environmental', 'social', 'governance', 'carbon', 'emission',
+    'renewable', 'energia renovável', 'solar', 'wind', 'eólica', 'energy transition', 'transition',
+    'real estate', 'imobiliário', 'construction', 'construção',
+    'fintech', 'digital bank', 'banco digital', 'open banking',
+    'geopolitics', 'geopolítica',
+    'e-commerce', 'commerce', 'consumption', 'consumo',
+    'healthcare', 'health', 'biotech', 'biotecnologia', 'pharma', 'pharmaceutical',
+    'startup', 'start-up', 'venture capital', 'vc', 'fundraising',
+    'regulation', 'regulamentação', 'compliance', 'legislation', 'lei'
+  ];
+  
+  // Palavras-chave para guerras e conflitos que afetam economia
+  const warKeywords = [
+    'war', 'conflict', 'military', 'sanctions', 'trade war',
+    'geopolitical', 'ukraine', 'russia', 'china', 'taiwan',
+    'oil', 'energy', 'commodity', 'supply chain',
+    'guerra', 'conflito', 'sanções', 'geopolítico',
+    'petróleo', 'energia', 'commodities'
+  ];
+  
+  // Palavras-chave para economia global
+  const economyKeywords = [
+    'unemployment', 'jobs', 'employment', 'housing', 'real estate',
+    'consumer', 'retail', 'manufacturing', 'industrial',
+    'export', 'import', 'trade', 'tariff', 'currency',
+    'dollar', 'euro', 'yen', 'pound',
+    'emprego', 'desemprego', 'consumidor', 'varejo',
+    'exportação', 'importação', 'comércio', 'moeda'
+  ];
+  
+  const allKeywords = [...financialKeywords, ...warKeywords, ...economyKeywords];
+  
+  // Verificar se pelo menos uma palavra-chave está presente
+  return allKeywords.some(keyword => text.includes(keyword));
+}
 
 // Adicionar controle de taxa para Finnhub
 const FINNHUB_RATE_LIMIT = 60; // 60 requisições por minuto
@@ -156,7 +214,7 @@ export { symbolToCompanyName };
 export async function fetchMarketNews(options: { 
   limit?: number; 
   symbols?: string[]; 
-  category?: 'general' | 'forex' | 'crypto' | 'merger';
+  category?: 'business' | 'forex' | 'merger' | 'general';
   minId?: number;
   language?: string;
 } = {}): Promise<MarketNews[]> {
@@ -164,7 +222,7 @@ export async function fetchMarketNews(options: {
     console.log('Buscando notícias de mercado via Finnhub (prioridade CNBC)...');
     const limit = options.limit || 10;
     const symbols = options.symbols || [];
-    const category = options.category || 'general';
+    const category = options.category || 'business';
     const minId = options.minId || 0;
     const language = options.language || 'en';
     
@@ -262,11 +320,12 @@ export async function fetchMarketNews(options: {
           const data = await response.json();
           
           if (Array.isArray(data) && data.length > 0) {
-            // Filtrar para excluir SeekingAlpha
+            // Filtrar para excluir SeekingAlpha e incluir apenas tópicos relevantes
             const filteredData = data.filter(item => 
               item.source !== 'SeekingAlpha' && 
               item.source !== 'Yahoo' && 
-              !item.source.includes('Yahoo')
+              !item.source.includes('Yahoo') &&
+              isRelevantFinancialNews(item)
             );
             
             // Primeiro buscar notícias da CNBC com imagens
@@ -372,11 +431,12 @@ export async function fetchMarketNews(options: {
       const data = await response.json();
       
       if (Array.isArray(data) && data.length > 0) {
-        // Filtrar para excluir SeekingAlpha
+        // Filtrar para excluir SeekingAlpha e incluir apenas tópicos relevantes
         const filteredData = data.filter(item => 
           item.source !== 'SeekingAlpha' && 
           item.source !== 'Yahoo' && 
-          !item.source.includes('Yahoo')
+          !item.source.includes('Yahoo') &&
+          isRelevantFinancialNews(item)
         );
         
         // Primeiro buscar notícias da CNBC com imagens
@@ -469,14 +529,14 @@ export async function fetchMarketNews(options: {
 async function refreshNewsInBackground(options: { 
   limit?: number; 
   symbols?: string[];
-  category?: 'general' | 'forex' | 'crypto' | 'merger';
+  category?: 'business' | 'forex' | 'merger' | 'general';
   minId?: number;
   language?: string;
 } = {}) {
   try {
     const limit = options.limit || 10;
     const symbols = options.symbols || [];
-    const category = options.category || 'general';
+    const category = options.category || 'business';
     const minId = options.minId || 0;
     const language = options.language || 'en';
     
@@ -532,11 +592,18 @@ async function refreshNewsInBackground(options: {
           const data = await response.json();
           
           if (Array.isArray(data) && data.length > 0) {
-            // Filtrar notícias com imagens
-            const newsWithImages = data.filter(item => item.image && item.image.trim() !== '');
+            // Filtrar notícias relevantes com imagens
+            const relevantNews = data.filter(item => 
+              item.source !== 'SeekingAlpha' && 
+              item.source !== 'Yahoo' && 
+              !item.source.includes('Yahoo') &&
+              isRelevantFinancialNews(item)
+            );
+            
+            const newsWithImages = relevantNews.filter(item => item.image && item.image.trim() !== '');
             
             // Preferir notícias com imagens
-            let newsData = newsWithImages.length > 0 ? newsWithImages : data;
+            let newsData = newsWithImages.length > 0 ? newsWithImages : relevantNews;
             
             // Preferir notícias da CNBC se disponíveis
             const cnbcNews = newsData.filter(item => item.source === 'CNBC');
@@ -649,11 +716,19 @@ export async function fetchCompanyNews(options: {
       return [];
     }
     
+    // Filtrar notícias relevantes primeiro
+    const relevantNews = data.filter(item => 
+      item.source !== 'SeekingAlpha' && 
+      item.source !== 'Yahoo' && 
+      !item.source.includes('Yahoo') &&
+      isRelevantFinancialNews(item)
+    );
+    
     // Filtrar notícias com imagens
-    const newsWithImages = data.filter(item => item.image && item.image.trim() !== '');
+    const newsWithImages = relevantNews.filter(item => item.image && item.image.trim() !== '');
     
     // Priorizar notícias com imagens, mas incluir todas se necessário
-    let filteredNews = newsWithImages.length > 0 ? newsWithImages : data;
+    const filteredNews = newsWithImages.length > 0 ? newsWithImages : relevantNews;
     
     // Dar preferência a notícias da CNBC, mas não limitar apenas a elas
     const cnbcNews = filteredNews.filter(item => item.source === 'CNBC');

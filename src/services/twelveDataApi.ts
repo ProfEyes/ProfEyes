@@ -2,6 +2,15 @@ import { apiKeyManager } from './apiKeyManager';
 
 const BASE_URL = 'https://api.twelvedata.com';
 
+interface TwelveDataTimeSeriesItem {
+  datetime: string;
+  open: string;
+  high: string;
+  low: string;
+  close: string;
+  volume: string;
+}
+
 async function getApiKey(): Promise<string> {
   return await apiKeyManager.getApiKey('twelvedata');
 }
@@ -41,7 +50,7 @@ export async function getTwelveDataTimeSeries(symbol: string, interval: string =
       throw new Error(data.message);
     }
 
-    return data.values.map((item: any) => ({
+    return data.values.map((item: TwelveDataTimeSeriesItem) => ({
       datetime: new Date(item.datetime).getTime(),
       open: parseFloat(item.open),
       high: parseFloat(item.high),
@@ -55,7 +64,7 @@ export async function getTwelveDataTimeSeries(symbol: string, interval: string =
   }
 }
 
-export async function getTwelveDataIndicators(symbol: string, indicator: string, interval: string = '1day', params: any = {}) {
+export async function getTwelveDataIndicators(symbol: string, indicator: string, interval: string = '1day', params: Record<string, string | number> = {}) {
   try {
     const apiKey = await getApiKey();
     const queryParams = new URLSearchParams({

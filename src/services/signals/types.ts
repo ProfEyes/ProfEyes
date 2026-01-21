@@ -7,13 +7,15 @@ export enum SignalType {
   CORRELATION = 'CORRELATION',
   SENTIMENT = 'SENTIMENT',
   VOLUME = 'VOLUME',
-  PATTERN = 'PATTERN'
+  PATTERN = 'PATTERN',
+  SIMULATED = 'SIMULATED'
 }
 
 export enum SignalStrength {
   WEAK = 'WEAK',
   MODERATE = 'MODERATE',
-  STRONG = 'STRONG'
+  STRONG = 'STRONG',
+  VERY_STRONG = 'VERY_STRONG'
 }
 
 export enum TimeFrame {
@@ -68,7 +70,7 @@ export interface TradingSignal {
   risk_reward: string;
   status: 'active' | 'completed' | 'cancelled' | 'expired';
   related_asset?: string; // Para sinais de correlação
-  metadata?: Record<string, any>; // Dados adicionais específicos do tipo de sinal
+  metadata?: Record<string, unknown>; // Dados adicionais específicos do tipo de sinal
 }
 
 export interface MarketNews {
@@ -90,17 +92,17 @@ export interface SignalGeneratorConfig {
   enabled: boolean;
   weight: number;
   timeframes: TimeFrame[];
-  options?: Record<string, any>;
+  options?: Record<string, unknown>;
 }
 
 export interface SignalGeneratorResult {
   signals: TradingSignal[];
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 }
 
 export interface SignalGenerator {
   type: SignalType;
-  generateSignals(marketData: MarketData, options?: any): Promise<SignalGeneratorResult>;
+  generateSignals(marketData: MarketData, options?: Record<string, unknown>): Promise<SignalGeneratorResult>;
 }
 
 export interface SignalAggregatorConfig {

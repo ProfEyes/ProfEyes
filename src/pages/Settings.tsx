@@ -15,6 +15,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { ProfileSettings } from "@/components/settings/ProfileSettings";
 import { AccountLoginSection } from "@/components/settings/AccountLoginSection";
+import TraderSupportSettings from "@/components/settings/TraderSupportSettings";
+
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   Settings as SettingsIcon, 
@@ -51,6 +53,8 @@ import { LanguageSelector } from "@/components/ui/language-selector";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { SettingsSection } from "@/components/settings/SettingsSection";
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "@/contexts/AuthContext";
 
 // Animação para cada seção
 const tabVariants = {
@@ -95,16 +99,18 @@ const tabColors = {
 };
 
 const Settings = () => {
+  const navigate = useNavigate();
+  const { t } = useLanguage();
+  const { user } = useAuth();
   const [activeTab, setActiveTab] = useState("perfil");
-  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
-  const [autoBackup, setAutoBackup] = useState(true);
-  const [dataExport, setDataExport] = useState(true);
-  const [twoFactorAuth, setTwoFactorAuth] = useState(false);
-  const [emailAuth, setEmailAuth] = useState(true);
-  const [priceAlerts, setPriceAlerts] = useState(true);
   const [showTermsModal, setShowTermsModal] = useState(false);
   
-  const { t } = useLanguage();
+  // Configurações gerais
+  const [autoBackup, setAutoBackup] = useState<boolean>(false);
+  const [dataExport, setDataExport] = useState<boolean>(false);
+  const [twoFactorAuth, setTwoFactorAuth] = useState<boolean>(false);
+  const [emailAuth, setEmailAuth] = useState<boolean>(false);
+  const [priceAlerts, setPriceAlerts] = useState<boolean>(false);
   
   // Carregar configurações salvas
   useEffect(() => {
@@ -127,45 +133,45 @@ const Settings = () => {
     }
   }, []);
   
-  // Função de salvar ampliada para incluir todas as configurações
-  const saveSettings = () => {
-    setSaveStatus("saving");
-    
+  // Função para salvar configurações automaticamente quando alteradas
+  const handleSettingChange = (setting: string, value: boolean) => {
     try {
-      // Criar objeto com todas as configurações
+      // Atualizar o estado correspondente
+      switch(setting) {
+        case 'autoBackup':
+          setAutoBackup(value);
+          break;
+        case 'dataExport':
+          setDataExport(value);
+          break;
+        case 'twoFactorAuth':
+          setTwoFactorAuth(value);
+          break;
+        case 'emailAuth':
+          setEmailAuth(value);
+          break;
+        case 'priceAlerts':
+          setPriceAlerts(value);
+          break;
+      }
+      
+      // Criar objeto com todas as configurações atualizadas
       const settings = {
-        autoBackup,
-        dataExport,
-        twoFactorAuth,
-        emailAuth,
-        priceAlerts
+        autoBackup: setting === 'autoBackup' ? value : autoBackup,
+        dataExport: setting === 'dataExport' ? value : dataExport,
+        twoFactorAuth: setting === 'twoFactorAuth' ? value : twoFactorAuth,
+        emailAuth: setting === 'emailAuth' ? value : emailAuth,
+        priceAlerts: setting === 'priceAlerts' ? value : priceAlerts
       };
       
       // Salvar no localStorage
       localStorage.setItem('app-settings', JSON.stringify(settings));
-    
-    // Simulação de salvamento
-    setTimeout(() => {
-      setSaveStatus("saved");
-        toast.success(t('settings.saveSuccessMessage') || "Configurações salvas com sucesso", {
-          description: t('settings.saveSuccessDescription') || "Todas as suas preferências foram atualizadas."
-      });
-      
-      // Resetar para o estado inicial após um tempo
-      setTimeout(() => {
-        setSaveStatus("idle");
-      }, 2000);
-      }, 800);
     } catch (error) {
       console.error("Erro ao salvar configurações:", error);
-      toast.error(t('settings.saveErrorMessage') || "Erro ao salvar configurações");
-      setSaveStatus("idle");
     }
   };
-
-  // Adicionando função de mudança de aba com log de depuração
+  
   const handleTabChange = (tabValue: string) => {
-    console.log(`Mudando para a aba: ${tabValue} (anterior: ${activeTab})`);
     setActiveTab(tabValue);
   };
 
@@ -286,10 +292,13 @@ const Settings = () => {
                 >
                   <ProfileSettings />
                   
+                  {/* Notificações do Trending */}
+  
+                  
                   {/* Seletor de idioma com design minimalista */}
                   <SettingsSection
-                    title={t('settings.language') || "Idioma"}
-                    description={t('settings.language.description') || "Escolha o idioma de exibição da plataforma"}
+                    title={t('settings.language')}
+                    description={t('settings.language.description')}
                     icon={<Globe className="h-4 w-4 text-white/60" />}
                     minimal={true}
                   >
@@ -297,29 +306,13 @@ const Settings = () => {
                       <LanguageSelector />
                     </div>
                   </SettingsSection>
+                  
+                  {/* Apoio ao Trader Favorito */}
+                  <TraderSupportSettings />
+                
                 </motion.div>
               </TabsContent>
             </AnimatePresence>
-
-            {/* Botão de salvar fixo na parte inferior */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.5, duration: 0.5 }}
-              className="flex justify-end sticky bottom-4 pt-4"
-            >
-              <Button
-                onClick={saveSettings}
-                className="bg-black/40 hover:bg-black/60 text-white border border-white/5 shadow-md backdrop-blur-sm rounded-md transition-all duration-300"
-              >
-                {saveStatus === "saving" && <Sliders className="h-4 w-4 mr-2 animate-spin" />}
-                {saveStatus === "saved" && <CheckCircle className="h-4 w-4 mr-2 text-green-500" />}
-                {saveStatus === "idle" && <CheckCircle className="h-4 w-4 mr-2" />}
-                {saveStatus === "saving" ? t('settings.saving') || "Salvando..." : 
-                 saveStatus === "saved" ? t('settings.saved') || "Salvo!" : 
-                 t('settings.save') || "Salvar Configurações"}
-              </Button>
-            </motion.div>
           </Tabs>
           </div>
       </div>
@@ -351,6 +344,10 @@ const Settings = () => {
               <h4 className="text-white/90 font-medium text-base mt-6 mb-2">{t('settings.terms.section2.title') || "2. Privacidade e Proteção de Dados"}</h4>
               <p>
                 {t('settings.terms.section2.content') || "Nossa Política de Privacidade explica como coletamos, usamos e protegemos as informações que você fornece ao usar nosso Serviço. Ao usar nosso Serviço, você concorda com a coleta e uso de informações de acordo com esta política."}
+              </p>
+              <h4 className="text-white/90 font-medium text-base mt-6 mb-2">{t('settings.terms.section2_5.title') || "2.5. Isenção de Responsabilidade"}</h4>
+              <p>
+                {t('settings.terms.section2_5.content') || "Trending fornece seus serviços exclusivamente nos territórios em que é licenciada. Trending não está autorizada pela Comissão de Valores Mobiliários (CVM) a oferecer diretamente serviços de distribuição de valores mobiliários a investidores residentes, domiciliados ou incorporados na República Federativa do Brasil. Nada neste site deve ser entendido como uma oferta direta de serviços endereçados a esses investidores."}
               </p>
               <h4 className="text-white/90 font-medium text-base mt-6 mb-2">{t('settings.terms.section3.title') || "3. Segurança"}</h4>
               <p>

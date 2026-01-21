@@ -1,15 +1,25 @@
-import { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { User, UserPlus, KeyRound, Loader2, CheckCircle2, LogIn, AlertCircle, Mail, CheckCheck, Eye, EyeOff, ExternalLink, ArrowLeft } from "lucide-react";
+import { User, UserPlus, KeyRound, Loader2, CheckCircle2, LogIn, AlertCircle, Mail, CheckCheck, Eye, EyeOff, ExternalLink, ArrowLeft, Heart, Link as LinkIcon } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "@/contexts/AuthContext";
-import { toast } from "sonner";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+
+
 import { useNavigate } from "react-router-dom";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { supabase } from "@/lib/supabase";
+import type { SupabaseClient } from '@supabase/supabase-js';
+import type { Database } from '@/types/supabase';
+import { InvestorTypeSelector } from "@/components/ui/investor-type-selector";
+import { useLanguage, Language } from "@/contexts/LanguageContext";
+import { termsAndConditionsService, type TermsAndConditions } from "@/services/termsAndConditionsService";
+import { LanguageSelector } from "@/components/ui/language-selector";
+import { getAuthTranslations } from "@/utils/authTranslations";
 
 // Estilo global para barras de rolagem elegantes
 const GlobalScrollbarStyle = () => (
@@ -101,12 +111,208 @@ const GlobalScrollbarStyle = () => (
   `}} />
 );
 
+// Componente ErrorMessage movido para fora para evitar re-criação a cada render
+const ErrorMessage = ({ message }: { message: string }) => (
+  <motion.div 
+    initial={{ opacity: 0, height: 0 }}
+    animate={{ opacity: 1, height: 'auto' }}
+    exit={{ opacity: 0, height: 0 }}
+    transition={{ duration: 0.2 }}
+    className="flex items-center text-rose-400/80 text-xs mt-1.5"
+  >
+    <AlertCircle className="h-3 w-3 mr-1.5 flex-shrink-0" />
+    <span>{message}</span>
+  </motion.div>
+);
+
+// Função de debounce para melhorar a fluidez da digitação
+const debounce = <T extends unknown[]>(func: (...args: T) => void, delay: number) => {
+  let timer: NodeJS.Timeout;
+  return (...args: T) => {
+    clearTimeout(timer);
+    timer = setTimeout(() => {
+      func(...args);
+    }, delay);
+  };
+};
+
+// Utilitário cn do shadcn-ui
+const cn = (...classes: (string | boolean | undefined | null)[]) => {
+  return classes.filter(Boolean).join(' ');
+};
+
+
+
 export default function Auth() {
+  const { t, language, changeLanguage } = useLanguage();
+  
+  // Obter traduções específicas para autenticação
+  const authT = getAuthTranslations(language);
+  
+  // Estado para os termos e condições específicos por país
+  const [termsAndConditions, setTermsAndConditions] = useState<TermsAndConditions | null>(null);
+  
+  // Estado para controle das abas
+  const [activeTab, setActiveTab] = useState("login");
+  
+  // Estado para signupSuccess - DEVE ser declarado antes dos useEffects que o utilizam
+  const [signupSuccess, setSignupSuccess] = useState(() => {
+    // Verificar se acabou de se cadastrar ao inicializar o estado
+    const justRegistered = sessionStorage.getItem('just-registered') === 'true';
+    if (justRegistered) {
+      console.log('🎯 Inicializando Auth.tsx com signupSuccess=true devido à flag just-registered');
+    }
+    return justRegistered;
+  });
+
+  // Função para carregar termos específicos do país e idioma
+  const loadTermsForCountry = useCallback(async (targetLanguage?: string) => {
+    try {
+      console.log('🏛️ [Auth] Carregando termos para idioma:', targetLanguage);
+      const terms = await termsAndConditionsService.getTermsForUserCountry(targetLanguage as 'pt' | 'en' | 'es');
+      console.log('🏛️ [Auth] Termos carregados:', terms.language, terms.country);
+      setTermsAndConditions(terms);
+    } catch (error) {
+      console.error('🏛️ [Auth] Erro ao carregar termos:', error);
+    }
+  }, []);
+
+  // Carregar termos e condições específicos do país e idioma atual
+  useEffect(() => {
+    console.log('🏛️ [Auth] useEffect carregando termos com idioma atual:', language);
+    loadTermsForCountry(language);
+  }, [loadTermsForCountry, language]);
+    
+  // Monitorar flag just-registered para garantir que tela de sucesso seja mantida
+  useEffect(() => {
+    const checkJustRegistered = () => {
+      const justRegistered = sessionStorage.getItem('just-registered') === 'true';
+      const preventAuthRedirect = sessionStorage.getItem('prevent_auth_redirect') === 'true';
+      const preventDashboardRedirect = localStorage.getItem('prevent_dashboard_redirect') === 'true';
+      const registeredEmail = sessionStorage.getItem('registered-email');
+      
+      // Verificar expiração da flag prevent_dashboard_redirect
+      let preventDashboardRedirectValid = preventDashboardRedirect;
+      if (preventDashboardRedirect) {
+        const expirationTime = localStorage.getItem('prevent_dashboard_redirect_expiration');
+        if (expirationTime && parseInt(expirationTime) < Date.now()) {
+          console.log('🕒 Flag prevent_dashboard_redirect expirada, removendo...');
+          localStorage.removeItem('prevent_dashboard_redirect');
+          localStorage.removeItem('prevent_dashboard_redirect_expiration');
+          preventDashboardRedirectValid = false;
+        }
+      }
+      
+      const cadastroConcluido = justRegistered || preventAuthRedirect || preventDashboardRedirectValid;
+      
+      if (cadastroConcluido && !signupSuccess) {
+        console.log('🔄 Flags de proteção encontradas: ativando tela de sucesso');
+        console.log('🔒 Proteções ativas:', { 
+          justRegistered, 
+          preventAuthRedirect, 
+          preventDashboardRedirect: preventDashboardRedirectValid 
+        });
+        
+        setSignupSuccess(true);
+        
+        // Se temos o email armazenado, usar ele
+        if (registeredEmail) {
+          setRegisteredEmail(registeredEmail);
+          setVerifyEmailAddress(registeredEmail);
+        }
+      }
+    };
+    
+    // Verificar imediatamente
+    checkJustRegistered();
+    
+    // Verificar periodicamente (caso a flag seja definida depois)
+    const interval = setInterval(checkJustRegistered, 500);
+    
+    return () => clearInterval(interval);
+  }, [signupSuccess]);
+
+  // Escutar mudanças de idioma e recarregar termos
+  useEffect(() => {
+    const handleLanguageChange = (event: CustomEvent) => {
+      const { language: newLanguage } = event.detail;
+      console.log('🌐 [Auth] Evento de mudança de idioma recebido:', newLanguage);
+      
+      // Recarregar termos para o novo idioma
+      loadTermsForCountry(newLanguage);
+    };
+
+    // Adicionar listener para evento de mudança de idioma
+    window.addEventListener('languageChanged', handleLanguageChange as EventListener);
+
+    // Cleanup: remover listener quando componente desmontar
+    return () => {
+      window.removeEventListener('languageChanged', handleLanguageChange as EventListener);
+    };
+  }, [loadTermsForCountry]);
+
   // Adicione este estilo global para corrigir o preenchimento automático
   useEffect(() => {
     // Criar um estilo global para corrigir o preenchimento automático
     const style = document.createElement('style');
     style.textContent = `
+      /* SOLUÇÃO ULTRA-AGRESSIVA PARA REMOVER CONTORNOS ADICIONAIS */
+      input[type="email"],
+      input[type="password"], 
+      input[type="text"] {
+        /* Reset completo de todas as propriedades relacionadas a rings/outlines */
+        outline: none !important;
+        box-shadow: none !important;
+        --tw-ring-offset-shadow: 0 0 #0000 !important;
+        --tw-ring-shadow: 0 0 #0000 !important;
+        --tw-ring-inset: initial !important;
+        --tw-ring-offset-width: 0px !important;
+        --tw-ring-offset-color: transparent !important;
+        --tw-ring-color: transparent !important;
+        --tw-ring-opacity: 0 !important;
+        border-style: solid !important;
+      }
+      
+      /* Estado normal */
+      input[type="email"]:not(:focus),
+      input[type="password"]:not(:focus),
+      input[type="text"]:not(:focus) {
+        border-width: 0.5px !important;
+        box-shadow: none !important;
+        outline: none !important;
+      }
+      
+      /* Estado de focus - APENAS mudança de cor da borda */
+      input[type="email"]:focus,
+      input[type="password"]:focus,
+      input[type="text"]:focus {
+        border-color: rgba(255, 255, 255, 0.1) !important;
+        background-color: rgba(0, 0, 0, 0.25) !important;
+        border-width: 0.5px !important;
+        outline: none !important;
+        box-shadow: none !important;
+        --tw-ring-offset-shadow: 0 0 #0000 !important;
+        --tw-ring-shadow: 0 0 #0000 !important;
+      }
+      
+      /* Remover TODOS os tipos de ring/outline possíveis */
+      input[type="email"]:focus-visible,
+      input[type="password"]:focus-visible,
+      input[type="text"]:focus-visible,
+      input[type="email"]:focus-within,
+      input[type="password"]:focus-within,
+      input[type="text"]:focus-within,
+      input[type="email"]:active,
+      input[type="password"]:active,
+      input[type="text"]:active {
+        outline: none !important;
+        box-shadow: none !important;
+        --tw-ring-offset-shadow: 0 0 #0000 !important;
+        --tw-ring-shadow: 0 0 #0000 !important;
+        border-width: 0.5px !important;
+      }
+      
+      /* Sobrescrever autofill */
       input:-webkit-autofill,
       input:-webkit-autofill:hover,
       input:-webkit-autofill:focus,
@@ -116,18 +322,221 @@ export default function Auth() {
         caret-color: rgba(255, 255, 255, 0.7) !important;
         transition: background-color 5000s ease-in-out 0s;
         background-color: rgba(0, 0, 0, 0.2) !important;
+        outline: none !important;
+        box-shadow: 0 0 0 30px rgba(0, 0, 0, 0.2) inset !important;
       }
       
+      /* Seleção de texto */
       input::selection {
         background-color: rgba(255, 255, 255, 0.1) !important;
+      }
+      
+      /* Força remoção global de qualquer ring/outline via CSS */
+      * {
+        --tw-ring-offset-shadow: 0 0 #0000 !important;
+        --tw-ring-shadow: 0 0 #0000 !important;
       }
     `;
     document.head.appendChild(style);
     
-    // Limpar o estilo quando o componente for desmontado
+    // Aplicar CSS diretamente via JavaScript para garantir funcionamento
+    const applyInputStyles = () => {
+      const inputs = document.querySelectorAll('input[type="email"], input[type="password"], input[type="text"]');
+      inputs.forEach((input) => {
+        const el = input as HTMLInputElement;
+        // Verificar se já foi processado para evitar múltiplos listeners
+        if (el.hasAttribute('data-styled')) return;
+        el.setAttribute('data-styled', 'true');
+        
+        // Aplicar estilos base
+        el.style.outline = 'none';
+        el.style.boxShadow = 'none';
+        el.style.setProperty('--tw-ring-offset-shadow', '0 0 #0000', 'important');
+        el.style.setProperty('--tw-ring-shadow', '0 0 #0000', 'important');
+        
+        // Event listeners para focus e blur
+        const handleFocus = (e: FocusEvent) => {
+          const target = e.target as HTMLInputElement;
+          target.style.outline = 'none';
+          target.style.boxShadow = 'none';
+          target.style.borderWidth = '0.5px';
+          target.style.borderColor = 'rgba(255, 255, 255, 0.1)';
+          target.style.backgroundColor = 'rgba(0, 0, 0, 0.25)';
+        };
+        
+        const handleBlur = (e: FocusEvent) => {
+          const target = e.target as HTMLInputElement;
+          target.style.outline = 'none';
+          target.style.boxShadow = 'none';
+          target.style.borderWidth = '0.5px';
+          target.style.borderColor = 'rgba(255, 255, 255, 0.03)';
+          target.style.backgroundColor = 'rgba(0, 0, 0, 0.2)';
+        };
+        
+        // Adicionar listeners sem interferir com os existentes
+        el.addEventListener('focus', handleFocus, { passive: true });
+        el.addEventListener('blur', handleBlur, { passive: true });
+        
+        // Garantir que clicks fora desselecionem
+        document.addEventListener('click', (e: MouseEvent) => {
+          const target = e.target as Node;
+          if (!el.contains(target) && target !== el) {
+            el.blur();
+          }
+        }, { passive: true });
+      });
+    };
+    
+    // Aplicar estilos imediatamente e após mudanças no DOM
+    applyInputStyles();
+    const observer = new MutationObserver(applyInputStyles);
+    observer.observe(document.body, { childList: true, subtree: true });
+    
+    // Limpar quando o componente for desmontado
     return () => {
       document.head.removeChild(style);
+      observer.disconnect();
     };
+  }, []);
+
+  // Verificar se o usuário chegou via link de redefinição de senha
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    const type = url.searchParams.get('type');
+    const code = url.searchParams.get('code');
+    const forgot = url.searchParams.get('forgot');
+    const urlPath = window.location.pathname;
+    
+    console.log("Verificando URL para redefinição de senha:", window.location.href);
+    console.log("Pathname:", urlPath);
+    
+    // Se o parâmetro forgot=true, ativar o estado de esqueci a senha
+    if (forgot === 'true') {
+      console.log("Ativando tela de recuperação de senha via parâmetro forgot");
+      setForgotPasswordState(true);
+      // Limpar a URL dos parâmetros
+      const cleanUrl = `${window.location.origin}/auth`;
+      window.history.replaceState({}, document.title, cleanUrl);
+      return;
+    }
+    
+    // Verificar se o código está na URL como parte do caminho (/:code)
+    const pathMatch = urlPath.match(/\/reset-password\/(.+)$/) || urlPath.match(/\/auth\/reset-password\/(.+)$/);
+    const pathCode = pathMatch ? pathMatch[1] : null;
+    
+    // Se tivermos um código em qualquer lugar (parâmetro ou caminho), processar a redefinição
+    const resetCode = code || pathCode;
+    
+    console.log("Código de redefinição detectado:", resetCode);
+    
+    // Se tiver o código de recuperação na URL, mostrar o formulário de redefinição
+    if (resetCode) {
+      // Ativar o estado de "esqueci a senha"
+      setForgotPasswordState(true);
+      
+      // Capturar o email da URL, se estiver presente
+      const recoveryEmail = url.searchParams.get('email');
+      if (recoveryEmail) {
+        console.log("Email de recuperação encontrado:", recoveryEmail);
+        setForgotPasswordEmail(recoveryEmail);
+        setEmail(recoveryEmail);
+      }
+      
+      // Armazenar o código para uso posterior
+      localStorage.setItem('passwordResetCode', resetCode);
+      
+      console.log("Código de redefinição de senha armazenado:", resetCode);
+    }
+    // Se for redefinição de senha pelo tipo recovery, mostrar o formulário apropriado
+    else if (type === 'recovery') {
+      console.log("Tipo de redefinição 'recovery' detectado");
+      setForgotPasswordState(true);
+      
+      // Capturar o email da URL, se estiver presente
+      const recoveryEmail = url.searchParams.get('email');
+      if (recoveryEmail) {
+        console.log("Email de recuperação encontrado:", recoveryEmail);
+        setForgotPasswordEmail(recoveryEmail);
+        setEmail(recoveryEmail);
+      }
+    }
+  }, []);
+
+  // Verificar se o usuário chegou via callback de confirmação de email
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    const type = url.searchParams.get('type');
+    const accessToken = url.searchParams.get('access_token');
+    const refreshToken = url.searchParams.get('refresh_token');
+    const urlPath = window.location.pathname;
+    
+    console.log("Verificando callback de confirmação:", {
+      pathname: urlPath,
+      type,
+      hasAccessToken: !!accessToken,
+      hasRefreshToken: !!refreshToken
+    });
+    
+    // Se for um callback de confirmação de email (rota /auth/callback ou parâmetros específicos)
+    if ((urlPath.includes('/auth/callback') || type === 'signup') && accessToken && refreshToken) {
+      console.log("Callback de confirmação de email detectado");
+      
+      // Processar o callback automaticamente
+      (supabase as SupabaseClient<Database>).auth.getSession().then(({ data: sessionData, error: sessionError }) => {
+        if (sessionError) {
+          console.error("Erro ao obter sessão após callback:", sessionError);
+          console.error('Erro ao confirmar email: Houve um problema ao processar a confirmação.');
+          return;
+        }
+        
+        if (sessionData?.session?.user) {
+          console.log("Sessão obtida com sucesso após callback");
+          
+          // Mostrar mensagem de sucesso
+          setEmailVerified(true);
+          
+          // Limpar a URL dos parâmetros
+          const cleanUrl = `${window.location.origin}/auth`;
+          window.history.replaceState({}, document.title, cleanUrl);
+          
+          // Email confirmado com sucesso
+          console.log('Email confirmado com sucesso! Sua conta foi ativada.');
+          
+          // Redirecionar para a aba de login após 3 segundos
+          setTimeout(() => {
+            setEmailVerified(false);
+            // Se estivermos em uma aba diferente, mudar para login
+            const loginTab = document.querySelector('[data-value="login"]') as HTMLElement;
+            if (loginTab) {
+              loginTab.click();
+            }
+          }, 3000);
+        } else {
+          console.log("Nenhuma sessão encontrada após callback");
+          // Mesmo sem sessão, mostrar sucesso pois o email foi confirmado
+          setEmailVerified(true);
+          
+          // Limpar a URL dos parâmetros
+          const cleanUrl = `${window.location.origin}/auth`;
+          window.history.replaceState({}, document.title, cleanUrl);
+          
+          console.log('Email confirmado com sucesso! Sua conta foi ativada.');
+          
+          setTimeout(() => {
+            setEmailVerified(false);
+            const loginTab = document.querySelector('[data-value="login"]') as HTMLElement;
+            if (loginTab) {
+              loginTab.click();
+            }
+          }, 3000);
+        }
+      });
+    }
+    // Verificar outros tipos de callback
+    else if (type === 'recovery' && accessToken) {
+      console.log("Callback de recuperação de senha detectado");
+      // Lógica para recuperação de senha já existe no useEffect anterior
+    }
   }, []);
 
   const { signInWithEmail, signUp, verifyEmail, isStrongPassword, resetPassword, loading: authLoading } = useAuth();
@@ -137,7 +546,8 @@ export default function Auth() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [birthdate, setBirthdate] = useState("");
   const [birthdateError, setBirthdateError] = useState<string | null>(null);
-  const [signupSuccess, setSignupSuccess] = useState(false);
+  const [displayName, setDisplayName] = useState("");
+  const [displayNameError, setDisplayNameError] = useState<string | null>(null);
   const [loginSuccess, setLoginSuccess] = useState(false);
   const [verifyEmailState, setVerifyEmailState] = useState(false);
   const [verifyEmailAddress, setVerifyEmailAddress] = useState("");
@@ -145,7 +555,7 @@ export default function Auth() {
   const [loggedInEmail, setLoggedInEmail] = useState("");
   const [error, setError] = useState<{field: string, message: string} | null>(null);
   const [passwordStrength, setPasswordStrength] = useState<{isStrong: boolean, message: string} | null>(null);
-  const [showPasswordValidation, setShowPasswordValidation] = useState(false);
+
   const [showPasswordMatch, setShowPasswordMatch] = useState(false);
   const [passwordsMatch, setPasswordsMatch] = useState<{isMatch: boolean, message: string} | null>(null);
   const [showPassword, setShowPassword] = useState(false);
@@ -164,12 +574,59 @@ export default function Auth() {
   const confirmPasswordRef = useRef<HTMLInputElement>(null);
   const verifyEmailRef = useRef<HTMLInputElement>(null);
   const birthdateRef = useRef<HTMLInputElement>(null);
+  const displayNameRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
-  const [rememberMe, setRememberMe] = useState(false);
+  // Adicionar estado para tipo de investidor
+  const [investorType, setInvestorType] = useState("");
+
+  // Novos estados para trader favorito
+  const [showTraderSupport, setShowTraderSupport] = useState<boolean>(false);
+  const [preferredTraderLink, setPreferredTraderLink] = useState<string>("");
+ 
+  const traderLinkRef = useRef<HTMLInputElement>(null);
 
   // Limpar erro quando o usuário digita em qualquer campo
   const clearError = () => {
     if (error) setError(null);
+    if (displayNameError) setDisplayNameError(null);
+  };
+
+  // Validar nome de exibição
+  const validateDisplayName = (name: string): boolean => {
+    // Se o campo estiver vazio, não é válido para cadastro
+    if (name.trim() === '') {
+      setDisplayNameError('Nome de exibição é obrigatório');
+      return false;
+    }
+    
+    // Validação de mínimo de 2 caracteres
+    if (name.trim().length < 2) {
+      setDisplayNameError('Nome deve ter pelo menos 2 caracteres');
+      return false;
+    }
+    
+    if (name.trim().length > 30) {
+      setDisplayNameError('Nome deve ter no máximo 30 caracteres');
+      return false;
+    }
+    
+    // Verificar se contém apenas letras, números, espaços e alguns caracteres especiais
+    const nameRegex = /^[a-zA-ZÀ-ÿ0-9\s\-_.]*$/;
+    if (!nameRegex.test(name.trim())) {
+      setDisplayNameError('Nome contém caracteres inválidos');
+      return false;
+    }
+    
+    setDisplayNameError(null);
+    return true;
+  };
+
+  // Função para lidar com o blur do campo de nome de exibição
+  const handleDisplayNameBlur = () => {
+    // Apenas limpar erro se houver um, mas não validar durante navegação entre campos
+    if (displayNameError) {
+      setDisplayNameError(null);
+    }
   };
 
   // Validar campos de login
@@ -209,7 +666,7 @@ export default function Auth() {
     // Verificar se o ano é muito antigo (limite realista para idade humana)
     const minRealisticYear = currentYear - 120; // Assumindo 120 anos como idade máxima realista
     if (year < minRealisticYear) {
-      setBirthdateError(`Ano de nascimento inválido. O ano informado (${year}) é muito antigo. A idade máxima permitida é de 120 anos.`);
+      setBirthdateError(authT.yearValidation);
       return false;
     }
     
@@ -252,7 +709,7 @@ export default function Auth() {
     }
     
     if (age < 18) {
-      setBirthdateError("Você deve ter pelo menos 18 anos para se cadastrar.");
+      setBirthdateError(authT.ageRestriction);
       return false;
     }
     
@@ -377,12 +834,12 @@ export default function Auth() {
     if (isLogin) {
       // Validação para login
       if (!email) {
-        setError({ field: 'email', message: 'Por favor, informe seu email.' });
+        setError({ field: 'email', message: authT.emailRequired });
         return false;
       }
       
       if (!password) {
-        setError({ field: 'password', message: 'Por favor, informe sua senha.' });
+        setError({ field: 'password', message: authT.passwordRequired });
         return false;
       }
       
@@ -390,12 +847,22 @@ export default function Auth() {
     } else {
       // Validação para cadastro
       if (!email) {
-        setError({ field: 'email', message: 'Por favor, informe seu email.' });
+        setError({ field: 'email', message: authT.emailRequired });
+        return false;
+      }
+      
+      if (!displayName.trim()) {
+        setError({ field: 'displayName', message: authT.displayNameRequired });
+        return false;
+      }
+      
+      if (!validateDisplayName(displayName)) {
+        setError({ field: 'displayName', message: displayNameError || authT.displayNameTooShort });
         return false;
       }
       
       if (!birthdate || birthdate.length < 10) {
-        setError({ field: 'birthdate', message: 'Por favor, informe sua data de nascimento completa.' });
+        setError({ field: 'birthdate', message: authT.birthdateIncomplete });
         return false;
       }
       
@@ -407,22 +874,22 @@ export default function Auth() {
           if (birthdateError) {
             setError({ field: 'birthdate', message: birthdateError });
           } else {
-            setError({ field: 'birthdate', message: 'Data de nascimento inválida.' });
+            setError({ field: 'birthdate', message: authT.birthdateInvalid });
           }
           return false;
         }
       } else {
-        setError({ field: 'birthdate', message: 'Por favor, informe sua data de nascimento completa.' });
+        setError({ field: 'birthdate', message: authT.birthdateIncomplete });
         return false;
       }
       
       if (!password) {
-        setError({ field: 'password', message: 'Por favor, informe sua senha.' });
+        setError({ field: 'password', message: authT.passwordRequired });
         return false;
       }
       
       if (password !== confirmPassword) {
-        setError({ field: 'confirmPassword', message: 'As senhas não coincidem.' });
+        setError({ field: 'confirmPassword', message: authT.passwordsNotMatch });
         return false;
       }
       
@@ -449,9 +916,9 @@ export default function Auth() {
   const validatePasswordMatch = () => {
     if (password && confirmPassword) {
       if (password === confirmPassword) {
-        setPasswordsMatch({ isMatch: true, message: "Senhas correspondem" });
+        setPasswordsMatch({ isMatch: true, message: authT.passwordsMatch });
       } else {
-        setPasswordsMatch({ isMatch: false, message: "Senhas não correspondem" });
+        setPasswordsMatch({ isMatch: false, message: authT.passwordsNoMatch });
       }
     } else {
       setPasswordsMatch(null);
@@ -470,14 +937,23 @@ export default function Auth() {
     setLoadingAction('login');
     
     try {
-      const { error } = await signInWithEmail(email, password);
+      const { error } = await signInWithEmail(email, password, true);
       
       if (error) {
         console.error('Erro no login:', error);
+        
+        // Verificar se é uma chave de tradução
+        if ('isTranslationKey' in error && (error as Record<string, unknown>).isTranslationKey) {
+          setError({
+            field: 'email',
+            message: authT[error.message as keyof typeof authT] || error.message
+          });
+        } else {
         setError({
           field: 'email',
           message: error.message || 'Erro ao fazer login. Tente novamente.'
         });
+        }
       }
     } catch (error) {
       console.error('Erro não tratado no login:', error);
@@ -494,144 +970,187 @@ export default function Auth() {
   const handleSignUp = async () => {
     setError(null);
     
-    // Verificar se todos os campos necessários foram preenchidos
+    // 1. Verificar se todos os campos necessários foram preenchidos
     if (!email) {
-      setError({ field: 'email', message: 'Por favor, informe seu email' });
+      setError({ field: 'email', message: authT.emailRequired });
       emailRef.current?.focus();
       return;
     }
 
+    // 2. Validar formato do email
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      setError({ field: 'email', message: authT.emailInvalid });
+      emailRef.current?.focus();
+      return;
+    }
+
+    if (!displayName.trim()) {
+      setError({ field: 'displayName', message: authT.displayNameRequired });
+      displayNameRef.current?.focus();
+      return;
+    }
+
+    if (!validateDisplayName(displayName)) {
+      setError({ field: 'displayName', message: displayNameError || authT.displayNameTooShort });
+      displayNameRef.current?.focus();
+      return;
+    }
+
+    if (!investorType) {
+      setError({ field: 'investorType', message: authT.investorTypeRequired });
+      return;
+    }
+
     if (!birthdate) {
-      setError({ field: 'birthdate', message: 'Por favor, informe sua data de nascimento' });
+      setError({ field: 'birthdate', message: authT.birthdateRequired });
+      birthdateRef.current?.focus();
+      return;
+    }
+
+    // 3. Validar data de nascimento e idade
+    const birthdateNumbers = birthdate.replace(/\D/g, '');
+    if (birthdateNumbers.length !== 8) {
+      setError({ field: 'birthdate', message: authT.birthdateIncomplete });
+      birthdateRef.current?.focus();
+      return;
+    }
+
+    if (!validateAge(birthdateNumbers)) {
+      setError({ field: 'birthdate', message: birthdateError || authT.birthdateInvalid });
       birthdateRef.current?.focus();
       return;
     }
     
     if (!password) {
-      setError({ field: 'password', message: 'Por favor, informe sua senha' });
+      setError({ field: 'password', message: authT.passwordRequired });
+      passwordRef.current?.focus();
+      return;
+    }
+
+    // 4. Validar força da senha
+    const passwordValidation = isStrongPassword(password);
+    if (!passwordValidation.isStrong) {
+      setError({ field: 'password', message: passwordValidation.message });
       passwordRef.current?.focus();
       return;
     }
     
     if (password !== confirmPassword) {
-      setError({ field: 'confirmPassword', message: 'As senhas não coincidem' });
+      setError({ field: 'confirmPassword', message: authT.passwordsNotMatch });
       confirmPasswordRef.current?.focus();
       return;
     }
     
     if (!termsAccepted) {
-      setError({ field: 'terms', message: 'Você precisa aceitar os termos de uso' });
+      setError({ field: 'terms', message: authT.termsRequired });
+      return;
+    }
+    
+    // Validar URL do trader favorito, se preenchido
+    if (preferredTraderLink && !validateUrl(preferredTraderLink)) {
+      setError({ field: 'preferredTraderLink', message: 'Por favor, informe um link válido' });
+      traderLinkRef.current?.focus();
       return;
     }
     
     // Iniciar indicador de carregamento
     setLoadingAction('signup');
     
-    // Mostrar o toast de processamento
-    const signupToast = toast.loading('Processando cadastro...', {
-      description: 'Verificando disponibilidade do email'
-    });
+    // Processando cadastro
+    console.log('Iniciando processo de cadastro...');
     
     try {
       // Realizar o cadastro através do contexto de autenticação
       console.log('Iniciando processo de cadastro para:', email);
       
-      const { error: authError } = await signUp(email, password, birthdate);
+      const signUpResult = await signUp(
+        email, 
+        password, 
+        birthdate, 
+        displayName.trim(), 
+        investorType
+      );
+      
+      // Verificação de segurança para garantir que signUpResult existe
+      if (!signUpResult) {
+        console.error('ERRO CRÍTICO: signUp retornou undefined');
+        setError({ field: 'email', message: 'Erro interno do sistema. Tente novamente.' });
+        emailRef.current?.focus();
+        animateErrorField();
+        return;
+      }
+      
+      const { error: authError } = signUpResult;
       
       if (authError) {
-        console.error('Erro retornado pelo signUp:', authError);
+        console.error('Erro no cadastro:', authError);
         
-        // Atualizar o toast para indicar erro
-        toast.error('Falha no cadastro', {
-          id: signupToast,
-          description: authError.message
-        });
-        
-        // Se o erro for de email já cadastrado
-        if (authError.name === 'UserExists' || 
-            authError.message.includes('já está cadastrado') || 
-            authError.message.includes('already registered') ||
-            authError.message.includes('already exists')) {
-          
-          console.log('Email já cadastrado detectado na interface:', email);
-          setError({ field: 'email', message: authError.message });
-          emailRef.current?.focus();
-          
-          toast.error('Email já cadastrado', { 
-            id: signupToast,
-            description: 'Este email já possui uma conta. Tente fazer login.'
+        // Verificar se é uma chave de tradução
+        if ('isTranslationKey' in authError && (authError as Record<string, unknown>).isTranslationKey) {
+          setError({
+            field: 'email',
+            message: authT[authError.message as keyof typeof authT] || authError.message
           });
-          
-          animateErrorField();
-          return;
-        } 
-        // Erro relacionado a senha
-        else if (authError.message.includes('A senha deve') || 
-                authError.name === 'WeakPassword') {
-          setError({ field: 'password', message: authError.message });
-          passwordRef.current?.focus();
-          
-          toast.error('Senha inválida', {
-            id: signupToast,
-            description: authError.message
-          });
-        } 
-        // Outros erros
-        else {
-          setError({ field: 'email', message: authError.message });
-          emailRef.current?.focus();
-          
-          toast.error('Erro no cadastro', {
-            id: signupToast,
-            description: authError.message
+        } else {
+          setError({
+            field: 'email',
+            message: authError.message || 'Ocorreu um erro durante o cadastro. Tente novamente.'
           });
         }
         
-        throw authError;
+          emailRef.current?.focus();
+          animateErrorField();
+          return;
       }
       
       console.log('Cadastro processado com sucesso');
       
       // Cadastro bem-sucedido
-      toast.success('Cadastro realizado!', {
-        id: signupToast,
-        description: 'Verifique seu email para ativar sua conta.'
-      });
+      console.log('Cadastro realizado! Verifique seu email para ativar sua conta.');
       
       // Armazena o email registrado para exibir na mensagem de sucesso
-      setRegisteredEmail(email);
+      // Recuperar email da sessão (caso tenha sido salvo no userService)
+      const savedEmail = sessionStorage.getItem('registered-email') || email;
+      setRegisteredEmail(savedEmail);
       
       // Ativa o estado de sucesso
       setSignupSuccess(true);
       
       // Mostrar a opção de verificar email
-      setVerifyEmailAddress(email);
+      setVerifyEmailAddress(savedEmail);
+      
+      // Limpar as flags automaticamente após 5 minutos para evitar problemas futuros
+      setTimeout(() => {
+        sessionStorage.removeItem('just-registered');
+        sessionStorage.removeItem('registered-email');
+        console.log('🧹 Flags limpas automaticamente após 5 minutos');
+      }, 5 * 60 * 1000);
       
       // Limpa os campos
       setEmail("");
+      setDisplayName("");
       setBirthdate("");
       setPassword("");
       setConfirmPassword("");
       setPasswordStrength(null);
       setTermsAccepted(false);
       
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Erro ao criar conta (try/catch):', error);
       
+      const err = error as { name?: string; message?: string };
       // Evitar exibir múltiplos erros se for de email já cadastrado
-      if (!error.message?.includes('já está cadastrado') && 
-          error.name !== 'UserExists' &&
-          !error.message?.includes('already registered') &&
-          !error.message?.includes('already exists') &&
-          !error.message?.includes('email taken') &&
-          !error.message?.includes('duplicate key') &&
-          !error.message?.includes('unique constraint') &&
-          !error.message?.includes('uniqueness violation')) {
-        // Apenas exibir o toast genérico para erros diferentes do email já cadastrado
-        toast.error('Falha no cadastro', {
-          id: signupToast,
-          description: 'Ocorreu um erro durante o cadastro. Tente novamente.'
-        });
+      if (!err.message?.includes('já está cadastrado') && 
+          err.name !== 'UserExists' &&
+          !err.message?.includes('already registered') &&
+          !err.message?.includes('already exists') &&
+          !err.message?.includes('email taken') &&
+          !err.message?.includes('duplicate key') &&
+          !err.message?.includes('unique constraint') &&
+          !err.message?.includes('uniqueness violation')) {
+        // Apenas exibir erro genérico para erros diferentes do email já cadastrado
+        console.error('Falha no cadastro: Ocorreu um erro durante o cadastro. Tente novamente.');
         animateErrorField();
       }
     } finally {
@@ -662,9 +1181,7 @@ export default function Auth() {
       }
       
       // Sucesso na verificação
-      toast.success("Email verificado com sucesso!", {
-        description: "Agora você pode fazer login na sua conta."
-      });
+      console.log("Email verificado com sucesso! Agora você pode fazer login na sua conta.");
       
       // Abrir o Gmail em uma nova aba
       openGmail();
@@ -680,7 +1197,7 @@ export default function Auth() {
         }, 2000);
       }
       
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Erro ao verificar email:', error);
       animateErrorField();
     } finally {
@@ -706,7 +1223,7 @@ export default function Auth() {
     >
       <style dangerouslySetInnerHTML={{
         __html: `
-        .terms-dialog .fixed.inset-0.z-50.bg-background\/80.backdrop-blur-sm.data-\[state\=open\]:animate-in.data-\[state\=closed\]:animate-out.data-\[state\=closed\]:fade-out-0.data-\[state\=open\]:fade-in-0 {
+        .terms-dialog .fixed.inset-0.z-50.bg-background/80.backdrop-blur-sm.data-[state=open]:animate-in.data-[state=closed]:animate-out.data-[state=closed]:fade-out-0.data-[state=open]:fade-in-0 {
           background-color: rgba(0, 0, 0, 0.25);
           backdrop-filter: blur(6px);
           -webkit-backdrop-filter: blur(6px);
@@ -725,20 +1242,66 @@ export default function Auth() {
       >
         <DialogHeader className="border-b border-neutral-800 pb-4 mb-6">
           <DialogTitle className="text-xl font-light tracking-wider text-white uppercase">
-            Termos e Condições
+            {termsAndConditions?.title || 'Termos e Condições'}
           </DialogTitle>
           <DialogDescription className="text-neutral-400 text-sm mt-2">
-            Leia atentamente os termos antes de prosseguir
+            {termsAndConditions?.language === 'pt' ? 'Leia atentamente os termos antes de prosseguir' :
+             termsAndConditions?.language === 'en' ? 'Please read the terms carefully before proceeding' :
+             termsAndConditions?.language === 'es' ? 'Lea atentamente los términos antes de continuar' :
+             'Leia atentamente os termos antes de prosseguir'}
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4 text-sm text-neutral-300 pt-4">
-          <div className="bg-black/60 border border-neutral-800 p-4 rounded-lg">
-            <p className="text-neutral-100 font-medium text-center">AVISO LEGAL IMPORTANTE: ESTE É UM CONTRATO VINCULANTE. LEIA ATENTAMENTE ANTES DE UTILIZAR O SERVIÇO.</p>
-          </div>
-          
-          <p className="text-neutral-200">Ao acessar ou utilizar o ProfEyes, você concorda expressamente em renunciar a determinados direitos legais e aceitar limitações de responsabilidade conforme detalhado abaixo. Se você não concorda com qualquer parte destes termos, não utilize nossos serviços.</p>
-          
-          <p className="text-neutral-400 text-xs border-b border-neutral-800 pb-2 mb-2">Última atualização: {new Date().toLocaleDateString()}</p>
+          {termsAndConditions ? (
+            <>
+              <div className="bg-black/60 border border-neutral-800 p-4 rounded-lg">
+                <p className="text-neutral-100 font-medium text-center">
+                  {termsAndConditions.content.legalWarning}
+                </p>
+              </div>
+              
+              <p className="text-neutral-200">
+                {termsAndConditions.content.introduction}
+              </p>
+              
+              <p className="text-neutral-400 text-xs border-b border-neutral-800 pb-2 mb-2">
+                {termsAndConditions.language === 'pt' ? 'Última atualização:' :
+                 termsAndConditions.language === 'en' ? 'Last updated:' :
+                 termsAndConditions.language === 'es' ? 'Última actualización:' :
+                 'Última atualização:'} {termsAndConditions.lastUpdated}
+              </p>
+              
+              {/* Renderizar seções dinamicamente */}
+              {termsAndConditions.content.sections.map((section, index) => (
+                <div key={index}>
+                  <h3 className="text-white/90 font-medium mt-6 mb-4">{section.title}</h3>
+                  <div dangerouslySetInnerHTML={{ __html: section.content }} />
+                </div>
+              ))}
+              
+              {/* Seção de aceitação */}
+              <div className="mt-8">
+                <h3 className="text-white/90 font-medium mb-4">{termsAndConditions.content.acceptance.title}</h3>
+                <ol className="list-decimal list-inside space-y-2 text-neutral-300">
+                  {termsAndConditions.content.acceptance.items.map((item, index) => (
+                    <li key={index}>{item}</li>
+                  ))}
+                </ol>
+                <p className="text-neutral-400 mt-4 text-center italic">
+                  {termsAndConditions.content.acceptance.footer}
+                </p>
+              </div>
+            </>
+          ) : (
+            <div className="bg-black/60 border border-neutral-800 p-4 rounded-lg">
+              <p className="text-neutral-100 font-medium text-center">
+                {language === 'pt' ? 'Carregando termos...' :
+                 language === 'en' ? 'Loading terms...' :
+                 language === 'es' ? 'Cargando términos...' :
+                 'Carregando termos...'}
+              </p>
+            </div>
+          )}
           
           <style dangerouslySetInnerHTML={{ __html: `
             .terms-modal-content {
@@ -797,7 +1360,7 @@ export default function Auth() {
               text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
             }
             
-            .terms-modal-content .bg-black\/60 {
+            .terms-modal-content .bg-black/60 {
               background-color: rgba(0, 0, 0, 0.7);
               box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
             }
@@ -826,95 +1389,13 @@ export default function Auth() {
             }
           `}} />
           
-          <p><strong>CONTEÚDO EXCLUSIVAMENTE INFORMATIVO:</strong> Todo o conteúdo disponibilizado em nossa plataforma, incluindo, mas não se limitando a: análises técnicas, gráficos, indicadores, sinais de mercado, notícias, relatórios, projeções, simulações, ferramentas de cálculo, e quaisquer outros materiais, tem caráter EXCLUSIVAMENTE INFORMATIVO e EDUCACIONAL. Nenhuma informação disponibilizada deve ser interpretada como recomendação de compra, venda ou manutenção de ativos financeiros.</p>
+
           
-          <p><strong>AUSÊNCIA ABSOLUTA DE GARANTIA DE RESULTADOS:</strong> Não garantimos, sob nenhuma hipótese, rentabilidade, retorno ou resultado específico de qualquer natureza. Resultados passados NÃO são, em nenhuma circunstância, garantia ou indicativo de resultados futuros. Qualquer projeção, estimativa ou exemplificação de ganhos potenciais apresentada em nossa plataforma é meramente ilustrativa e hipotética, não representando promessa ou expectativa real de ganhos.</p>
+
           
-          <p><strong>RISCOS INERENTES AO MERCADO FINANCEIRO:</strong> Investimentos em mercados financeiros envolvem riscos significativos, incluindo, mas não se limitando a: possibilidade de perda parcial ou total do capital investido, volatilidade de preços, liquidez dos ativos, riscos cambiais, riscos de crédito, riscos sistêmicos, riscos operacionais, riscos regulatórios e outros fatores que podem afetar negativamente o valor dos investimentos. O usuário reconhece, compreende e aceita integralmente todos estes riscos ao utilizar nossa plataforma.</p>
+
           
-          <p><strong>DECISÕES DE INVESTIMENTO:</strong> Todas as decisões de investimento são tomadas exclusivamente pelo usuário, por sua própria conta e risco. Recomendamos enfaticamente que o usuário consulte profissionais de investimentos devidamente certificados e registrados nos órgãos competentes antes de tomar qualquer decisão de investimento.</p>
-          
-          <h3 className="text-white/90 font-medium">2. LIMITAÇÃO ABSOLUTA DE RESPONSABILIDADE</h3>
-          <p><strong>RENÚNCIA EXPRESSA A QUALQUER RECLAMAÇÃO:</strong> Ao utilizar nossa plataforma, o usuário renuncia expressamente, na extensão máxima permitida pela legislação aplicável, a qualquer direito de apresentar reclamações, processos judiciais ou extrajudiciais, ações coletivas ou individuais, ou qualquer outro tipo de demanda contra a empresa, seus proprietários, diretores, funcionários, colaboradores, parceiros, afiliados ou quaisquer pessoas físicas ou jurídicas relacionadas à plataforma, por quaisquer danos ou prejuízos decorrentes do uso ou incapacidade de uso da plataforma.</p>
-          
-          <p><strong>ACORDO IRREVOGÁVEL DE NÃO PROCESSAR:</strong> O usuário concorda irrevogavelmente em não iniciar, participar ou prosseguir com qualquer ação judicial, arbitragem, mediação, reclamação administrativa ou qualquer outro procedimento legal contra o ProfEyes, seus proprietários, diretores, funcionários, colaboradores, parceiros ou afiliados, relacionado direta ou indiretamente ao uso da plataforma ou às informações nela contidas. Esta renúncia inclui, mas não se limita a, ações por perdas financeiras, danos morais, danos emergentes, lucros cessantes, ou quaisquer outros tipos de danos ou prejuízos.</p>
-          
-          <p><strong>FALHAS TÉCNICAS E OPERACIONAIS:</strong> Não nos responsabilizamos, em nenhuma hipótese, por falhas, interrupções, atrasos, erros, bugs, vírus, malwares ou quaisquer outros problemas no funcionamento da plataforma, incluindo, mas não se limitando a: problemas de conexão, indisponibilidade do serviço, atrasos na transmissão de dados, falhas de servidor, problemas de compatibilidade com dispositivos ou navegadores, ou quaisquer outras questões técnicas que possam afetar o acesso ou uso da plataforma.</p>
-          
-          <p><strong>PRECISÃO E ATUALIDADE DAS INFORMAÇÕES:</strong> Embora nos esforcemos para fornecer informações precisas e atualizadas, não garantimos, de forma alguma, a exatidão, integridade, atualidade, confiabilidade ou adequação das informações disponibilizadas. As informações podem conter erros, imprecisões, omissões ou desatualizações. O usuário reconhece que utiliza tais informações por sua própria conta e risco.</p>
-          
-          <p><strong>PERDAS FINANCEIRAS E OUTROS DANOS:</strong> Em nenhuma circunstância, independentemente da teoria legal invocada, seremos responsáveis por quaisquer perdas ou danos diretos, indiretos, incidentais, consequenciais, especiais, punitivos ou exemplares resultantes do uso ou incapacidade de uso de nossa plataforma, incluindo, mas não se limitando a: perdas financeiras, perda de lucros, perda de oportunidades de negócio, perda de dados, danos à reputação, ou quaisquer outros danos, mesmo que tenhamos sido previamente advertidos sobre a possibilidade de tais danos.</p>
-          
-          <p><strong>LIMITAÇÃO DE VALOR:</strong> Na eventualidade improvável de que, apesar das disposições destes Termos, sejamos considerados legalmente responsáveis por algum dano ou prejuízo, nossa responsabilidade total e agregada será limitada ao valor pago pelo usuário para acessar a plataforma nos últimos 12 meses, ou R$ 100,00 (cem reais), o que for menor.</p>
-          
-          <h3 className="text-white/90 font-medium">3. CONFORMIDADE LEGAL E REGULATÓRIA</h3>
-          <p><strong>LEGISLAÇÃO APLICÁVEL:</strong> Nossa plataforma opera em conformidade com a legislação brasileira, incluindo, mas não se limitando a: Lei nº 6.385/76 (que regula o mercado de valores mobiliários), Instruções da CVM, Lei nº 13.709/2018 (Lei Geral de Proteção de Dados - LGPD), e demais normas aplicáveis. No entanto, o usuário reconhece que é sua responsabilidade verificar se o uso da plataforma está em conformidade com as leis e regulamentos aplicáveis em sua jurisdição.</p>
-          
-          <p><strong>NÃO CARACTERIZAÇÃO DE CONSULTORIA:</strong> De acordo com a Instrução CVM nº 592/2017, a atividade de consultoria de valores mobiliários consiste na prestação de serviços de orientação, recomendação e aconselhamento personalizado. Reiteramos enfaticamente que NÃO realizamos tais atividades. Qualquer interpretação de que nosso conteúdo constitui consultoria de investimentos é incorreta e contrária às disposições expressas nestes Termos.</p>
-          
-          <p><strong>AUSÊNCIA DE RELAÇÃO FIDUCIÁRIA:</strong> Não existe relação fiduciária entre a plataforma e seus usuários. Não assumimos nenhum dever fiduciário ou obrigação de lealdade para com os usuários. Nossa relação é estritamente limitada ao fornecimento de informações e ferramentas, conforme descrito nestes Termos.</p>
-          
-          <h3 className="text-white/90 font-medium">4. PRIVACIDADE, DADOS E CONFIDENCIALIDADE</h3>
-          <p><strong>COLETA E USO DE DADOS:</strong> Respeitamos sua privacidade de acordo com nossa Política de Privacidade. Seus dados são armazenados de forma segura e não são compartilhados com terceiros sem seu consentimento explícito, exceto quando exigido por lei, ordem judicial ou para proteger nossos direitos legais.</p>
-          
-          <p><strong>MONITORAMENTO E REGISTROS:</strong> Reservamo-nos o direito de monitorar, registrar e armazenar informações sobre o uso da plataforma, incluindo, mas não se limitando a: endereços IP, dispositivos utilizados, páginas visitadas, tempo de permanência, ações realizadas e quaisquer outras informações relacionadas ao uso da plataforma. Estes registros podem ser utilizados para fins de segurança, melhoria do serviço, cumprimento de obrigações legais ou defesa em processos judiciais.</p>
-          
-          <h3 className="text-white/90 font-medium">5. RESPONSABILIDADES E OBRIGAÇÕES DO USUÁRIO</h3>
-          <p><strong>RESPONSABILIDADE EXCLUSIVA:</strong> O usuário é exclusivamente responsável por todas as decisões de investimento, transações financeiras, e quaisquer outras ações tomadas com base nas informações obtidas através da plataforma. O usuário reconhece que é o único responsável por avaliar a adequação das informações às suas necessidades, objetivos financeiros, perfil de risco e situação financeira.</p>
-          
-          <p><strong>OBRIGAÇÃO DE BUSCAR ACONSELHAMENTO PROFISSIONAL:</strong> O usuário concorda em buscar aconselhamento profissional adequado antes de tomar decisões de investimento. Recomendamos enfaticamente a consulta a consultores de investimentos registrados na CVM, contadores, advogados especializados e outros profissionais qualificados antes de realizar qualquer investimento.</p>
-          
-          <p><strong>VERACIDADE DAS INFORMAÇÕES:</strong> O usuário garante que todas as informações fornecidas durante o cadastro e uso da plataforma são verdadeiras, precisas, atuais e completas. O usuário compromete-se a atualizar prontamente quaisquer informações que se tornem incorretas ou desatualizadas.</p>
-          
-          <p><strong>PROIBIÇÃO DE USO INDEVIDO:</strong> O usuário concorda em não utilizar a plataforma para qualquer finalidade ilegal, não autorizada ou proibida por estes Termos ou pela legislação aplicável. É expressamente proibido: (i) violar direitos de propriedade intelectual; (ii) distribuir, modificar, copiar ou criar obras derivadas do conteúdo da plataforma; (iii) realizar engenharia reversa, descompilação ou tentativa de acesso ao código-fonte; (iv) utilizar robôs, spiders, scrapers ou outros meios automatizados para acessar a plataforma; (v) interferir ou tentar interferir no funcionamento adequado da plataforma; (vi) contornar medidas de segurança; ou (vii) utilizar a plataforma de qualquer maneira que possa danificá-la ou prejudicar sua funcionalidade.</p>
-          
-          <h3 className="text-white/90 font-medium">6. PROPRIEDADE INTELECTUAL</h3>
-          <p><strong>DIREITOS RESERVADOS:</strong> Todo o conteúdo disponibilizado na plataforma, incluindo, mas não se limitando a: textos, gráficos, logotipos, ícones, imagens, clipes de áudio, downloads digitais, compilações de dados, software, código, design, layout, e quaisquer outros materiais, são de propriedade exclusiva do ProfEyes ou de seus licenciadores e estão protegidos pelas leis brasileiras e internacionais de direitos autorais, marcas registradas, patentes e outros direitos de propriedade intelectual.</p>
-          
-          <p><strong>LICENÇA LIMITADA:</strong> Concedemos ao usuário uma licença limitada, não exclusiva, não transferível, revogável e não sublicenciável para acessar e utilizar a plataforma apenas para uso pessoal e não comercial, sujeita a estes Termos. Esta licença não inclui o direito de: (i) revender ou usar comercialmente a plataforma ou seu conteúdo; (ii) distribuir, exibir publicamente ou executar publicamente qualquer conteúdo; (iii) modificar ou criar obras derivadas da plataforma ou de seu conteúdo; (iv) utilizar mineração de dados, robôs ou métodos similares de coleta e extração de dados; (v) fazer download de qualquer parte da plataforma, exceto para cache de página quando permitido pelos recursos da plataforma; ou (vi) utilizar a plataforma ou seu conteúdo para além do uso pretendido.</p>
-          
-          <h3 className="text-white/90 font-medium">7. MODIFICAÇÕES, SUSPENSÃO E RESCISÃO</h3>
-          <p><strong>MODIFICAÇÕES DOS TERMOS:</strong> Reservamo-nos o direito de modificar, alterar, adicionar ou remover partes destes Termos a qualquer momento, a nosso exclusivo critério, sem aviso prévio. As alterações entrarão em vigor imediatamente após sua publicação na plataforma. O uso continuado da plataforma após tais modificações constitui aceitação dos novos Termos. É responsabilidade do usuário verificar regularmente se houve alterações.</p>
-          
-          <p><strong>MODIFICAÇÕES DA PLATAFORMA:</strong> Reservamo-nos o direito de modificar, suspender, descontinuar ou restringir, temporária ou permanentemente, todo ou parte da plataforma, incluindo quaisquer serviços, funcionalidades, conteúdos ou recursos, sem aviso prévio e sem qualquer responsabilidade perante o usuário ou terceiros.</p>
-          
-          <p><strong>SUSPENSÃO E RESCISÃO:</strong> Reservamo-nos o direito de suspender ou encerrar o acesso do usuário à plataforma, a qualquer momento, por qualquer motivo ou sem motivo, sem aviso prévio e sem qualquer responsabilidade perante o usuário ou terceiros. Motivos para suspensão ou rescisão podem incluir, mas não se limitam a: (i) violação destes Termos; (ii) uso fraudulento ou abusivo da plataforma; (iii) comportamento que prejudique outros usuários; (iv) solicitações de autoridades legais; ou (v) questões técnicas ou de segurança.</p>
-          
-          <h3 className="text-white/90 font-medium">8. DISPOSIÇÕES GERAIS</h3>
-          <p><strong>ACORDO INTEGRAL:</strong> Estes Termos constituem o acordo integral entre o usuário e o ProfEyes em relação ao uso da plataforma, substituindo quaisquer acordos, entendimentos ou comunicações anteriores, sejam escritos ou verbais.</p>
-          
-          <p><strong>INDEPENDÊNCIA DAS DISPOSIÇÕES:</strong> Se qualquer disposição destes Termos for considerada ilegal, nula ou inexequível, no todo ou em parte, por qualquer tribunal de jurisdição competente, tal disposição será considerada uma disposição independente e não afetará a validade e exequibilidade de quaisquer disposições remanescentes.</p>
-          
-          <p><strong>INDENIZAÇÃO OBRIGATÓRIA:</strong> O usuário concorda em defender, indenizar e isentar de responsabilidade o ProfEyes, seus proprietários, diretores, funcionários, colaboradores, parceiros, afiliados e licenciadores contra quaisquer reclamações, responsabilidades, danos, perdas, custos e despesas, incluindo honorários advocatícios razoáveis, decorrentes ou relacionados a: (i) violação destes Termos pelo usuário; (ii) uso da plataforma pelo usuário; (iii) violação de direitos de terceiros pelo usuário; (iv) decisões de investimento tomadas pelo usuário com base nas informações disponibilizadas na plataforma; ou (v) qualquer conteúdo publicado ou compartilhado pelo usuário através da plataforma. Esta obrigação de indenização sobreviverá à rescisão ou expiração destes Termos e ao uso da plataforma pelo usuário.</p>
-          
-          <p><strong>NÃO RENÚNCIA:</strong> A falha do ProfEyes em exercer ou fazer cumprir qualquer direito ou disposição destes Termos não constituirá renúncia a tal direito ou disposição. Nenhuma renúncia a qualquer disposição destes Termos será considerada uma renúncia adicional ou contínua de tal disposição ou de qualquer outra disposição.</p>
-          
-          <p><strong>CESSÃO:</strong> O usuário não pode ceder, transferir ou sublicenciar quaisquer direitos ou obrigações decorrentes destes Termos sem o consentimento prévio por escrito do ProfEyes. O ProfEyes pode ceder ou transferir estes Termos, no todo ou em parte, sem restrições.</p>
-          
-          <p><strong>LEI APLICÁVEL E FORO:</strong> Estes Termos são regidos e interpretados de acordo com as leis da República Federativa do Brasil. Qualquer disputa, controvérsia ou reclamação decorrente ou relacionada a estes Termos será submetida à jurisdição exclusiva do foro da Comarca de São Paulo, Estado de São Paulo, com expressa renúncia a qualquer outro, por mais privilegiado que seja.</p>
-          
-          <h3 className="text-white/90 font-medium">9. ARBITRAGEM OBRIGATÓRIA E RENÚNCIA A AÇÕES COLETIVAS</h3>
-          
-          <p><strong>ARBITRAGEM VINCULANTE:</strong> Qualquer disputa, controvérsia ou reclamação decorrente ou relacionada a estes Termos, incluindo sua validade, interpretação, execução, violação ou rescisão, será resolvida exclusivamente por arbitragem vinculante, de acordo com o Regulamento de Arbitragem da Câmara de Comércio Brasil-Canadá. A sede da arbitragem será a cidade de São Paulo, Estado de São Paulo, Brasil. O idioma da arbitragem será o português. A decisão arbitral será final e vinculativa para as partes.</p>
-          
-          <p><strong>RENÚNCIA A JULGAMENTO POR JÚRI:</strong> O usuário e o ProfEyes renunciam expressamente a qualquer direito a um julgamento por júri em qualquer ação, processo ou reconvenção decorrente ou relacionada a estes Termos ou à plataforma.</p>
-          
-          <p><strong>RENÚNCIA A AÇÕES COLETIVAS:</strong> O usuário renuncia expressamente a qualquer direito de participar como representante ou membro de qualquer classe em qualquer ação coletiva, consolidada ou representativa contra o ProfEyes ou seus proprietários, diretores, funcionários, colaboradores, parceiros ou afiliados. Qualquer disputa será resolvida individualmente, e o usuário não poderá buscar reparação como membro de uma classe ou grupo.</p>
-          
-          <p><strong>PRAZO PARA RECLAMAÇÕES:</strong> Qualquer reclamação ou causa de ação decorrente ou relacionada a estes Termos ou à plataforma deve ser iniciada no prazo máximo de 6 (seis) meses após o surgimento da causa de ação, caso contrário, tal reclamação ou causa de ação será permanentemente impedida.</p>
-          
-          <h3 className="text-white/90 font-medium">10. DECLARAÇÃO DE CIÊNCIA E ACEITAÇÃO</h3>
-          <p className="mt-6 text-white/90 font-medium">Ao clicar em "Aceitar e Continuar", você reconhece e declara expressamente que:</p>
-          <ol className="list-decimal pl-5 space-y-2 text-white/70">
-            <li className="text-gray-300">Leu, compreendeu e concorda integralmente com todos os termos e condições acima descritos;</li>
-            <li className="text-gray-300">Compreende os riscos associados a investimentos no mercado financeiro;</li>
-            <li className="text-gray-300">Reconhece que o ProfEyes não oferece consultoria de investimentos;</li>
-            <li className="text-gray-300">Assume total responsabilidade por suas decisões de investimento;</li>
-            <li className="text-gray-300">Renuncia a quaisquer reclamações contra o ProfEyes por perdas ou danos relacionados ao uso da plataforma;</li>
-            <li className="text-gray-300">Tem capacidade legal para aceitar estes termos e utilizar a plataforma.</li>
-          </ol>
-          
-          <p className="mt-4 text-gray-400">Se não concordar com qualquer parte destes termos, você deve clicar em "Recusar" e não poderá utilizar nossa plataforma.</p>
+
         </div>
         <DialogFooter className="mt-8 flex flex-col sm:flex-row gap-3 pt-4 border-t border-neutral-800">
           <Button 
@@ -922,7 +1403,10 @@ export default function Auth() {
             onClick={() => setShowTerms(false)}
             className="bg-neutral-900 hover:bg-neutral-800 text-neutral-200 transition-all duration-300 px-6 py-2 h-10 text-sm tracking-wide"
           >
-            Recusar
+            {termsAndConditions?.language === 'pt' ? 'Recusar' :
+             termsAndConditions?.language === 'en' ? 'Decline' :
+             termsAndConditions?.language === 'es' ? 'Rechazar' :
+             'Recusar'}
           </Button>
           <Button 
             onClick={() => {
@@ -933,7 +1417,10 @@ export default function Auth() {
             }}
             className="bg-white hover:bg-neutral-200 text-black transition-all duration-300 px-6 py-2 h-10 text-sm tracking-wide font-medium"
           >
-            Aceitar e Continuar
+            {termsAndConditions?.language === 'pt' ? 'Li e aceito' :
+             termsAndConditions?.language === 'en' ? 'I have read and accept' :
+             termsAndConditions?.language === 'es' ? 'He leído y acepto' :
+             'Li e aceito'}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -1030,7 +1517,18 @@ export default function Auth() {
       >
         <Button 
           className="bg-black/30 hover:bg-black/50 text-white/80 hover:text-white/90 border-[0.5px] border-white/[0.05] h-11 rounded-xl transition-all duration-300 group"
-          onClick={openGmail}
+          onClick={() => {
+            openGmail();
+            // Limpar as flags após um pequeno delay para permitir que o usuário veja a tela por alguns segundos
+            setTimeout(() => {
+              // Limpar TODAS as flags de proteção
+              sessionStorage.removeItem('just-registered');
+              sessionStorage.removeItem('registered-email');
+              sessionStorage.removeItem('prevent_auth_redirect');
+              localStorage.removeItem('prevent_dashboard_redirect');
+              console.log('🧹 TODAS as flags de proteção limpas após clicar em Conferir Email');
+            }, 3000);
+          }}
         >
           <CheckCheck className="h-4 w-4 mr-2 opacity-70 group-hover:opacity-90 transition-opacity" />
           <span className="text-sm tracking-wide">Conferir Email</span>
@@ -1040,10 +1538,22 @@ export default function Auth() {
           variant="ghost" 
           className="text-white/40 hover:text-white/60 hover:bg-white/5"
           onClick={() => {
+            // Limpar TODAS as flags de proteção para permitir redirecionamento normal
+            sessionStorage.removeItem('just-registered');
+            sessionStorage.removeItem('registered-email');
+            sessionStorage.removeItem('prevent_auth_redirect');
+            localStorage.removeItem('prevent_dashboard_redirect');
+            console.log('🧹 TODAS as flags de proteção limpas após clicar em Voltar para Login');
+            
+            // Configurar o componente para mostrar formulário de login
             setSignupSuccess(false);
             setEmail("");
             setPassword("");
             setConfirmPassword("");
+            
+            // Forçar a seleção da aba de login diretamente no estado
+            console.log('🔄 Forçando seleção da aba de login via estado React');
+            setActiveTab("login");
           }}
         >
           <span className="text-xs">Voltar para Login</span>
@@ -1058,95 +1568,146 @@ export default function Auth() {
       initial={{ opacity: 0, scale: 0.95 }}
       animate={{ opacity: 1, scale: 1 }}
       exit={{ opacity: 0, scale: 0.95 }}
-      transition={{ duration: 0.3 }}
-      className="flex flex-col items-center justify-center py-6 text-center"
+      transition={{ duration: 0.5 }}
+      className="flex flex-col items-center justify-center py-8 text-center"
     >
       <motion.div
         initial={{ scale: 0 }}
         animate={{ scale: 1 }}
         transition={{ 
           type: "spring", 
-          stiffness: 300, 
-          damping: 25,
-          delay: 0.1 
+          stiffness: 260, 
+          damping: 20,
+          delay: 0.2 
         }}
-        className="mb-4 relative"
+        className="mb-6 relative"
       >
         <div className="absolute inset-0 rounded-full bg-emerald-500/10 blur-md"></div>
         <div className="relative">
-          <CheckCircle2 className="h-16 w-16 text-emerald-400/80" strokeWidth={1.5} />
+          <CheckCircle2 className="h-20 w-20 text-emerald-400/80" strokeWidth={1.5} />
         </div>
       </motion.div>
       
       <motion.h2 
-        className="text-xl font-light text-white/90 mb-2"
-        initial={{ y: 10, opacity: 0 }}
+        className="text-xl font-light text-white/90 mb-3"
+        initial={{ y: 20, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
-        transition={{ delay: 0.2 }}
+        transition={{ delay: 0.4 }}
       >
         Login Bem-sucedido!
       </motion.h2>
       
       <motion.p 
-        className="text-white/50 text-sm mb-3"
-        initial={{ y: 10, opacity: 0 }}
+        className="text-white/50 text-sm mb-6"
+        initial={{ y: 20, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
-        transition={{ delay: 0.3 }}
+        transition={{ delay: 0.5 }}
       >
-        Redirecionando para o dashboard...
+        Bem-vindo de volta, <span className="text-white/80 font-medium">{loggedInEmail}</span>. Você será redirecionado em instantes...
       </motion.p>
       
       <motion.div 
-        className="w-full bg-gray-800/30 h-1.5 rounded-full mt-1 overflow-hidden"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
-        transition={{ delay: 0.3 }}
+        transition={{ delay: 0.7 }}
+        className="w-full"
       >
+        <div className="w-full bg-white/5 rounded-full h-1 overflow-hidden">
         <motion.div 
-          className="h-full bg-gradient-to-r from-emerald-500/40 to-emerald-500/80 rounded-full"
+            className="h-full bg-gradient-to-r from-emerald-400 to-emerald-600"
           initial={{ width: "0%" }}
           animate={{ width: "100%" }}
+            transition={{ duration: 3, ease: "easeInOut" }}
+          />
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+
+  // Conteúdo de email verificado com sucesso
+  const EmailVerifiedContent = () => (
+    <motion.div 
+      initial={{ opacity: 0, scale: 0.95 }}
+      animate={{ opacity: 1, scale: 1 }}
+      exit={{ opacity: 0, scale: 0.95 }}
+      transition={{ duration: 0.5 }}
+      className="flex flex-col items-center justify-center py-8 text-center"
+    >
+      <motion.div
+        initial={{ scale: 0 }}
+        animate={{ scale: 1 }}
           transition={{ 
-            duration: 1, 
-            ease: "easeInOut" 
-          }}
+          type: "spring", 
+          stiffness: 260, 
+          damping: 20,
+          delay: 0.2 
+        }}
+        className="mb-6 relative"
+      >
+        <div className="absolute inset-0 rounded-full bg-emerald-500/10 blur-md"></div>
+        <div className="relative">
+          <CheckCircle2 className="h-20 w-20 text-emerald-400/80" strokeWidth={1.5} />
+        </div>
+      </motion.div>
+      
+      <motion.h2 
+        className="text-xl font-light text-white/90 mb-3"
+        initial={{ y: 20, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        transition={{ delay: 0.4 }}
+      >
+        Email Confirmado!
+      </motion.h2>
+      
+      <motion.p 
+        className="text-white/50 text-sm mb-6 max-w-md"
+        initial={{ y: 20, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        transition={{ delay: 0.5 }}
+      >
+        Sua conta foi ativada com sucesso. Agora você pode fazer login com suas credenciais.
+      </motion.p>
+      
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: 0.7 }}
+        className="w-full"
+      >
+        <div className="w-full bg-white/5 rounded-full h-1 overflow-hidden">
+          <motion.div
+            className="h-full bg-gradient-to-r from-emerald-400 to-emerald-600"
+            initial={{ width: "0%" }}
+            animate={{ width: "100%" }}
+            transition={{ duration: 2, ease: "easeInOut" }}
         />
+        </div>
+        <p className="text-white/40 text-xs mt-2">Redirecionando para login...</p>
       </motion.div>
     </motion.div>
   );
 
   // Componente de mensagem de erro
-  const ErrorMessage = ({ message }: { message: string }) => (
-    <motion.div 
-      initial={{ opacity: 0, height: 0 }}
-      animate={{ opacity: 1, height: 'auto' }}
-      exit={{ opacity: 0, height: 0 }}
-      transition={{ duration: 0.2 }}
-      className="flex items-center text-rose-400/80 text-xs mt-1.5"
-    >
-      <AlertCircle className="h-3 w-3 mr-1.5 flex-shrink-0" />
-      <span>{message}</span>
-    </motion.div>
-  );
-  
-  // Componente de indicador de força de senha
-  const PasswordStrengthIndicator = ({ strength }: { strength: { isStrong: boolean; message: string } }) => {
-    // Identificar requisitos não atendidos
+  // Componente de indicador de força de senha memorizado para evitar re-renders
+  const PasswordStrengthIndicator = useMemo(() => {
+    // Só renderizar se há uma senha para validar
+    if (!password) return null;
+    
+    // Identificar requisitos baseados na senha atual
     const requirements = [
-      { id: 'length', label: 'Pelo menos 8 caracteres', met: password.length >= 8 },
-      { id: 'lowercase', label: 'Pelo menos uma letra minúscula', met: /[a-z]/.test(password) },
-      { id: 'uppercase', label: 'Pelo menos uma letra maiúscula', met: /[A-Z]/.test(password) },
-      { id: 'number', label: 'Pelo menos um número', met: /[0-9]/.test(password) },
-      { id: 'special', label: 'Pelo menos um caractere especial', met: /[^A-Za-z0-9]/.test(password) },
+      { id: 'length', label: authT.passwordMinLength, met: password.length >= 8 },
+      { id: 'lowercase', label: authT.passwordLowercase, met: /[a-z]/.test(password) },
+      { id: 'uppercase', label: authT.passwordUppercase, met: /[A-Z]/.test(password) },
+      { id: 'number', label: authT.passwordNumber, met: /[0-9]/.test(password) },
+      { id: 'special', label: authT.passwordSpecial, met: /[^A-Za-z0-9]/.test(password) },
     ];
 
-    // Filtrar apenas os requisitos não atendidos
-    const missingRequirements = requirements.filter(req => !req.met);
     // Requisitos atendidos
     const metRequirements = requirements.filter(req => req.met);
 
     return (
       <motion.div 
+        key="password-strength" // Key fixa para evitar recriação desnecessária
         initial={{ opacity: 0, height: 0 }}
         animate={{ opacity: 1, height: 'auto' }}
         exit={{ opacity: 0, height: 0 }}
@@ -1156,10 +1717,10 @@ export default function Auth() {
         <div className="flex items-center justify-between">
           <div className="flex items-center text-white/50 text-xs">
             <AlertCircle className="h-3 w-3 mr-1.5 opacity-70" />
-            Requisitos de senha
+            {authT.passwordRequirements}
           </div>
           <div className="text-[10px] text-white/30">
-            {metRequirements.length}/{requirements.length} atendidos
+            {metRequirements.length}/{requirements.length} {authT.passwordRequirementsMet}
           </div>
         </div>
         
@@ -1195,7 +1756,7 @@ export default function Auth() {
         </div>
       </motion.div>
     );
-  };
+  }, [password]); // Memorizar baseado apenas na senha, não no showPassword
 
   // Componente de indicador de correspondência de senhas
   const PasswordMatchIndicator = ({ match }: { match: { isMatch: boolean; message: string } }) => (
@@ -1230,109 +1791,76 @@ export default function Auth() {
     </motion.div>
   );
 
-  // Componente para a tela de recuperação de senha
-  const ForgotPasswordContent = () => (
-    <motion.div 
-      className="space-y-5"
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -10 }}
-      transition={{ duration: 0.5 }}
-    >
-      {passwordResetSent ? (
-        <motion.div 
-          initial={{ opacity: 0, scale: 0.95 }}
-          animate={{ opacity: 1, scale: 1 }}
-          className="text-center space-y-4"
-        >
-          <CheckCircle2 className="h-16 w-16 text-emerald-500 mx-auto" />
-          <h2 className="text-xl text-white/90">Email Enviado!</h2>
-          <p className="text-white/60 text-sm">
-            Enviamos instruções de recuperação de senha para seu email. Por favor, verifique sua caixa de entrada.
-          </p>
-          <Button 
-            onClick={() => {
-              setForgotPasswordState(false);
-              setPasswordResetSent(false);
-            }}
-            className="mt-4"
-          >
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Voltar para o login
-          </Button>
-        </motion.div>
-      ) : (
-        <>
-          <div>
-            <h2 className="text-xl text-white/90 mb-2">Recuperar Senha</h2>
-            <p className="text-white/60 text-sm">
-              Digite seu email e enviaremos instruções para redefinir sua senha.
-            </p>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="reset-email" className="text-xs uppercase text-white/40 tracking-wider font-light flex items-center">
-              <Mail className="h-3 w-3 mr-1.5 opacity-40" />
-              Email
-            </Label>
-            <Input 
-              id="reset-email"
-              type="email"
-              value={email}
-              onChange={(e) => {
-                setEmail(e.target.value);
-                clearError();
-              }}
-              placeholder="seu@email.com"
-              className={`bg-black/20 border-[0.5px] border-white/[0.03] h-11 px-4 text-white/70 focus:outline-none focus:ring-1 focus:ring-white/10 hover:bg-black/30 transition-all duration-300 rounded-xl placeholder:text-white/20 ${error?.field === 'email' ? 'border-rose-500/50 animate-shake' : ''}`}
-              disabled={loadingAction !== null}
-              ref={emailRef}
-            />
-            <AnimatePresence>
-              {error?.field === 'email' && <ErrorMessage message={error.message} />}
-            </AnimatePresence>
-          </div>
-
-          <div className="flex space-x-3">
-            <Button 
-              onClick={() => setForgotPasswordState(false)}
-              className="flex-1 bg-black/30 hover:bg-black/50 text-white/80 hover:text-white/90 border-[0.5px] border-white/[0.05] h-11 rounded-xl transition-all duration-300"
-            >
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              Voltar
-            </Button>
-            <Button 
-              onClick={handleResetPassword}
-              className="flex-1 bg-black/30 hover:bg-black/50 text-white/80 hover:text-white/90 border-[0.5px] border-white/[0.05] h-11 rounded-xl transition-all duration-300"
-              disabled={loadingAction !== null}
-            >
-              {loadingAction === 'reset' ? (
-                <div className="flex items-center justify-center space-x-3">
-                  <div className="h-4 w-4 relative">
-                    <div className="absolute inset-0 border-2 border-white/10 rounded-full"></div>
-                    <div className="absolute inset-0 border-2 border-t-white/40 rounded-full animate-spin"></div>
-                  </div>
-                  <span className="text-sm tracking-wide text-white/50">Enviando...</span>
-                </div>
-              ) : (
-                <>
-                  <Mail className="h-4 w-4 mr-2" />
-                  Enviar Email
-                </>
-              )}
-            </Button>
-          </div>
-        </>
-      )}
-    </motion.div>
-  );
+  // Função para atualizar a senha quando o usuário acessa o link de redefinição
+  const handleUpdatePassword = async () => {
+    clearError();
+    
+    // Validar campos
+    if (!password) {
+      setError({ field: 'password', message: authT.newPasswordRequired });
+      return;
+    }
+    
+    if (password !== confirmPassword) {
+      setError({ field: 'confirmPassword', message: 'As senhas não coincidem' });
+      return;
+    }
+    
+    // Verificar força da senha
+    const strength = isStrongPassword(password);
+    if (!strength.isStrong) {
+      setError({ field: 'password', message: strength.message });
+      return;
+    }
+    
+    try {
+      setLoadingAction('update-password');
+      
+      // Obter o código de redefinição de senha do localStorage
+      const resetCode = localStorage.getItem('passwordResetCode');
+      
+      if (!resetCode) {
+        setError({ field: 'password', message: 'Código de redefinição de senha inválido. Tente novamente.' });
+        return;
+      }
+      
+      // Atualizar a senha usando o Supabase
+      const { error } = await (supabase as SupabaseClient<Database>).auth.updateUser({
+        password: password
+      });
+      
+      if (error) {
+        setError({ field: 'password', message: error.message });
+        return;
+      }
+      
+      // Sucesso - remover o código de redefinição e mostrar mensagem
+      localStorage.removeItem('passwordResetCode');
+      
+      // Senha atualizada com sucesso
+      console.log('Senha atualizada com sucesso! Você já pode fazer login.');
+      
+      // Redirecionar para login após um pequeno delay
+      setTimeout(() => {
+        setForgotPasswordState(false);
+        setPassword('');
+        setConfirmPassword('');
+      }, 2000);
+      
+    } catch (error: unknown) {
+      console.error('Erro ao atualizar senha:', error);
+      setError({ field: 'password', message: authT.passwordUpdateError });
+    } finally {
+      setLoadingAction(null);
+    }
+  };
 
   // Função para lidar com a recuperação de senha
   const handleResetPassword = async () => {
     clearError();
     
     if (!email) {
-      setError({ field: 'email', message: 'Por favor, informe seu email' });
+      setError({ field: 'email', message: authT.emailRequired });
       emailRef.current?.focus();
       return;
     }
@@ -1347,12 +1875,323 @@ export default function Auth() {
       }
       
       setPasswordResetSent(true);
-      toast.success('Email de recuperação enviado com sucesso!');
-    } catch (error: any) {
+      console.log('Email de recuperação enviado com sucesso!');
+    } catch (error: unknown) {
       console.error('Erro ao enviar email de recuperação:', error);
-      setError({ field: 'email', message: 'Erro ao enviar email de recuperação. Tente novamente.' });
+      setError({ field: 'email', message: authT.resetEmailError });
     } finally {
       setLoadingAction(null);
+    }
+  };
+
+  // Handlers estáveis para o email input
+  const handleEmailChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    setEmail(e.target.value);
+    clearError();
+  }, [clearError]);
+
+  // Componente para a tela de recuperação de senha
+  const ForgotPasswordContent = useMemo(() => {
+    // Verificar se temos um código de redefinição de senha armazenado
+    const resetCode = localStorage.getItem('passwordResetCode');
+    
+    return (
+    <motion.div 
+      className="space-y-5"
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -10 }}
+      transition={{ duration: 0.5 }}
+    >
+      {passwordResetSent ? (
+        <motion.div 
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="text-center space-y-4"
+        >
+          <CheckCircle2 className="h-16 w-16 text-emerald-500 mx-auto" />
+          <h2 className="text-xl text-white/90">{authT.emailSentTitle}</h2>
+          <p className="text-white/60 text-sm">
+            {authT.emailSentMessage}
+          </p>
+          <Button 
+            onClick={() => {
+              setForgotPasswordState(false);
+              setPasswordResetSent(false);
+            }}
+            className="mt-4 bg-black/30 hover:bg-black/50 text-white/80 hover:text-white/90 border-[0.5px] border-white/[0.05] h-11 rounded-xl transition-all duration-300 hover:scale-[1.02] active:scale-[0.98]"
+          >
+            <ArrowLeft className="h-4 w-4 mr-2 opacity-70 group-hover:opacity-90 transition-opacity" />
+            <span className="text-sm tracking-wide">{authT.backToLoginButton}</span>
+          </Button>
+        </motion.div>
+      ) : resetCode ? (
+        // Formulário para definir nova senha quando acessado pelo link
+        <>
+          <div>
+            <h2 className="text-xl text-white/90 mb-2">{authT.resetPasswordTitle}</h2>
+            <p className="text-white/60 text-sm">
+              {authT.newPasswordDesc}
+            </p>
+          </div>
+          
+          <div className="space-y-2">
+            <Label htmlFor="new-password" className="text-xs uppercase text-white/40 tracking-wider font-light flex items-center">
+              <KeyRound className="h-3 w-3 mr-1.5 opacity-40" />
+              {authT.newPassword}
+            </Label>
+            <div className="relative group">
+              <Input 
+                id="new-password"
+                type={showPassword ? "text" : "password"}
+                value={password}
+                onChange={(e) => {
+                  setPassword(e.target.value);
+                  validatePasswordStrength(e.target.value);
+                  validatePasswordMatch();
+                  clearError();
+                }}
+                placeholder="••••••••"
+                className={`bg-black/20 border-[0.5px] border-white/[0.03] h-11 px-4 text-white/70 focus:outline-none focus:border-white/10 hover:bg-black/30 transition-all duration-300 rounded-xl placeholder:text-white/20 ${error?.field === 'password' ? 'border-rose-500/50 animate-shake' : ''}`}
+                disabled={loadingAction !== null}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 hover:text-white/60 transition-colors"
+                tabIndex={-1}
+              >
+                {showPassword ? (
+                  <Eye className="h-4 w-4" />
+                ) : (
+                  <EyeOff className="h-4 w-4" />
+                )}
+              </button>
+            </div>
+            <AnimatePresence mode="wait">
+              {error?.field === 'password' && (
+                passwordStrength && !passwordStrength.isStrong ? (
+                  PasswordStrengthIndicator
+                ) : (
+                  <ErrorMessage message={error.message} />
+                )
+              )}
+            </AnimatePresence>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="confirm-new-password" className="text-xs uppercase text-white/40 tracking-wider font-light flex items-center">
+              <KeyRound className="h-3 w-3 mr-1.5 opacity-40" />
+              {authT.confirmNewPassword}
+            </Label>
+            <div className="relative group">
+              <Input 
+                id="confirm-new-password"
+                type={showConfirmPassword ? "text" : "password"}
+                value={confirmPassword}
+                onChange={(e) => {
+                  setConfirmPassword(e.target.value);
+                  validatePasswordMatch();
+                  clearError();
+                }}
+                placeholder="••••••••"
+                className={`bg-black/20 border-[0.5px] border-white/[0.03] h-11 px-4 text-white/70 focus:outline-none focus:border-white/10 hover:bg-black/30 transition-all duration-300 rounded-xl placeholder:text-white/20 ${error?.field === 'confirmPassword' ? 'border-rose-500/50 animate-shake' : ''}`}
+                disabled={loadingAction !== null}
+              />
+              <button
+                type="button"
+                onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 hover:text-white/60 transition-colors"
+                tabIndex={-1}
+              >
+                {showConfirmPassword ? (
+                  <Eye className="h-4 w-4" />
+                ) : (
+                  <EyeOff className="h-4 w-4" />
+                )}
+              </button>
+            </div>
+            <AnimatePresence mode="wait">
+              {error?.field === 'confirmPassword' ? (
+                <ErrorMessage message={error.message} />
+              ) : (
+                showPasswordMatch && password && confirmPassword && passwordsMatch && (
+                  <PasswordMatchIndicator match={passwordsMatch} />
+                )
+              )}
+            </AnimatePresence>
+          </div>
+
+          <div className="flex space-x-3">
+            <Button 
+              onClick={() => {
+                localStorage.removeItem('passwordResetCode');
+                setForgotPasswordState(false);
+              }}
+              className="flex-1 bg-black/30 hover:bg-black/50 text-white/80 hover:text-white/90 border-[0.5px] border-white/[0.05] h-11 rounded-xl transition-all duration-300"
+            >
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              {authT.cancelButton}
+            </Button>
+            <Button 
+              onClick={handleUpdatePassword}
+              className="flex-1 bg-black/30 hover:bg-black/50 text-white/80 hover:text-white/90 border-[0.5px] border-white/[0.05] h-11 rounded-xl transition-all duration-300"
+              disabled={loadingAction !== null}
+            >
+              {loadingAction === 'update-password' ? (
+                <div className="flex items-center justify-center space-x-3">
+                  <div className="h-4 w-4 relative">
+                    <div className="absolute inset-0 border-2 border-white/10 rounded-full"></div>
+                    <div className="absolute inset-0 border-2 border-t-white/40 rounded-full animate-spin"></div>
+                  </div>
+                  <span className="text-sm tracking-wide text-white/50">{authT.updatingPassword}</span>
+                </div>
+              ) : (
+                <>
+                  <KeyRound className="h-4 w-4 mr-2" />
+                  {authT.updatePassword}
+                </>
+              )}
+            </Button>
+          </div>
+        </>
+      ) : (
+        // Formulário para solicitar redefinição de senha
+        <>
+          <div>
+            <h2 className="text-xl text-white/90 mb-2">{authT.forgotPasswordTitle}</h2>
+            <p className="text-white/60 text-sm">
+              {authT.forgotPasswordDesc}
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="reset-email" className="text-xs uppercase text-white/40 tracking-wider font-light flex items-center">
+              <Mail className="h-3 w-3 mr-1.5 opacity-40" />
+              {authT.email}
+            </Label>
+            <Input 
+              id="reset-email"
+              type="email"
+              value={email}
+              onChange={handleEmailChange}
+              placeholder="seu@email.com"
+              className={`bg-black/20 border-[0.5px] border-white/[0.03] h-11 px-4 text-white/70 focus:outline-none focus:border-white/10 hover:bg-black/30 transition-all duration-300 rounded-xl placeholder:text-white/20 ${error?.field === 'email' ? 'border-rose-500/50 animate-shake' : ''}`}
+              disabled={loadingAction !== null}
+              ref={emailRef}
+            />
+            <AnimatePresence>
+              {error?.field === 'email' && <ErrorMessage message={error.message} />}
+            </AnimatePresence>
+          </div>
+
+          <div className="flex space-x-3">
+            <Button 
+              onClick={() => setForgotPasswordState(false)}
+              className="flex-1 bg-black/30 hover:bg-black/50 text-white/80 hover:text-white/90 border-[0.5px] border-white/[0.05] h-11 rounded-xl transition-all duration-300"
+            >
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              {authT.backButton}
+            </Button>
+            <Button 
+              onClick={handleResetPassword}
+              className="flex-1 bg-black/30 hover:bg-black/50 text-white/80 hover:text-white/90 border-[0.5px] border-white/[0.05] h-11 rounded-xl transition-all duration-300"
+              disabled={loadingAction !== null}
+            >
+              {loadingAction === 'reset' ? (
+                <div className="flex items-center justify-center space-x-3">
+                  <div className="h-4 w-4 relative">
+                    <div className="absolute inset-0 border-2 border-white/10 rounded-full"></div>
+                    <div className="absolute inset-0 border-2 border-t-white/40 rounded-full animate-spin"></div>
+                  </div>
+                  <span className="text-sm tracking-wide text-white/50">{authT.sendingEmail}</span>
+                </div>
+              ) : (
+                <>
+                  <Mail className="h-4 w-4 mr-2" />
+                  {authT.sendEmailButton}
+                </>
+              )}
+            </Button>
+          </div>
+        </>
+      )}
+    </motion.div>
+  );
+  }, [
+    passwordResetSent,
+    showPassword,
+    password,
+
+    passwordStrength,
+    showConfirmPassword,
+    confirmPassword,
+    showPasswordMatch,
+    passwordsMatch,
+    loadingAction,
+    error?.field,
+    error?.message,
+    email,
+    handleEmailChange
+  ]);
+
+  // Limpar erros quando mudar de aba
+  useEffect(() => {
+    const handleTabChange = (event: CustomEvent) => {
+      const { value } = event.detail;
+      console.log('Mudança de aba detectada:', value);
+      
+      // Limpar erros ao mudar de aba
+      setError({ field: '', message: '' });
+      setPasswordStrength({ isStrong: false, message: '' });
+      setPasswordsMatch({ isMatch: false, message: '' });
+    };
+    
+    // Adicionar listener para mudanças de aba
+    document.addEventListener('tabsValueChange', handleTabChange as EventListener);
+    
+    // Limpar listener ao desmontar
+    return () => {
+      document.removeEventListener('tabsValueChange', handleTabChange as EventListener);
+    };
+  }, []);
+  
+  // Adicionar listener para detectar cliques nas abas
+  useEffect(() => {
+    const handleTabClick = (event: MouseEvent) => {
+      const target = event.target as HTMLElement;
+      if (target.getAttribute('data-value') === 'login' || 
+          target.closest('[data-value="login"]') || 
+          target.getAttribute('data-value') === 'signup' || 
+          target.closest('[data-value="signup"]')) {
+        
+        // Limpar erros ao clicar em uma aba
+        setError({ field: '', message: '' });
+        setPasswordStrength({ isStrong: false, message: '' });
+        setPasswordsMatch({ isMatch: false, message: '' });
+      }
+    };
+    
+    // Adicionar listener para cliques
+    document.addEventListener('click', handleTabClick);
+    
+    // Limpar listener ao desmontar
+    return () => {
+      document.removeEventListener('click', handleTabClick);
+    };
+  }, []);
+
+  // Função para validar formato de URL
+  const validateUrl = (url: string): boolean => {
+    // Verificar se a URL está em branco (é opcional)
+    if (!url.trim()) return true;
+    
+    // Verificar formato básico de URL
+    try {
+      new URL(url);
+      return true;
+    } catch (e) {
+      return false;
     }
   };
 
@@ -1393,10 +2232,23 @@ export default function Auth() {
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.7, ease: "easeOut" }}
-        className="w-full max-w-md relative"
+        className="w-full max-w-xl relative"
       >
         {/* Cartão principal com efeito de vidro */}
         <div className="p-8 bg-black/40 backdrop-blur-xl rounded-2xl border-[0.5px] border-white/[0.05] shadow-[0_8px_30px_rgb(0,0,0,0.12)]">
+          {/* Seletor de idioma minimalista no canto superior direito */}
+          <motion.div 
+            className="absolute top-4 right-4 z-10"
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ delay: 0.5, duration: 0.3 }}
+          >
+            <LanguageSelector 
+              variant="auth"
+              showFlag={true}
+            />
+          </motion.div>
+
           <motion.div
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
@@ -1411,7 +2263,7 @@ export default function Auth() {
             >
               <img 
                 src="/profeyes-logo-removebg-preview.png" 
-                alt="ProfEyes Logo" 
+                alt="Trending Logo" 
                 className="w-24 h-auto"
                 style={{ 
                   filter: "drop-shadow(0 0 10px rgba(255, 255, 255, 0.1))"
@@ -1430,7 +2282,7 @@ export default function Auth() {
                 textShadow: '0 0 15px rgba(255, 255, 255, 0.2)'
               }}
             >
-              Login / Cadastro
+              {authT.loginSignupTitle}
             </motion.h1>
           </motion.div>
 
@@ -1438,23 +2290,30 @@ export default function Auth() {
             {verifyEmailState ? (
               <VerifyEmailContent />
             ) : forgotPasswordState ? (
-              <ForgotPasswordContent />
+              ForgotPasswordContent
+            ) : emailVerified ? (
+              <EmailVerifiedContent />
             ) : (
-              <Tabs defaultValue="login" className="w-full">
+              <Tabs 
+                defaultValue="login" 
+                className="w-full" 
+                id="auth-tabs"
+                value={activeTab}
+                onValueChange={(value) => setActiveTab(value)}>
                 <TabsList className="grid w-full grid-cols-2 mb-8 bg-black/20 p-1 rounded-xl border-[0.5px] border-white/[0.03]">
                   <TabsTrigger 
                     value="login" 
                     className="rounded-lg data-[state=active]:bg-black/40 data-[state=active]:text-white/90 data-[state=active]:shadow-sm text-white/50 transition-all duration-300"
                   >
                     <User className="h-3.5 w-3.5 mr-2 opacity-70" />
-                    Login
+                    {authT.loginTab}
                   </TabsTrigger>
                   <TabsTrigger 
                     value="signup" 
                     className="rounded-lg data-[state=active]:bg-black/40 data-[state=active]:text-white/90 data-[state=active]:shadow-sm text-white/50 transition-all duration-300"
                   >
                     <UserPlus className="h-3.5 w-3.5 mr-2 opacity-70" />
-                    Cadastro
+                    {authT.signupTab}
                   </TabsTrigger>
                 </TabsList>
                 
@@ -1474,7 +2333,7 @@ export default function Auth() {
                         <div className="space-y-2">
                           <Label htmlFor="email" className="text-xs uppercase text-white/40 tracking-wider font-light flex items-center">
                             <Mail className="h-3 w-3 mr-1.5 opacity-40" />
-                            Email
+                            {authT.email}
                           </Label>
                           <div className="relative group">
                             <Input 
@@ -1485,9 +2344,9 @@ export default function Auth() {
                                 setEmail(e.target.value);
                                 clearError();
                               }}
-                              placeholder="seu-email@exemplo.com"
-                              className={`bg-black/20 border-[0.5px] border-white/[0.03] h-11 px-4 text-white/70 focus:outline-none focus:ring-1 focus:ring-white/10 hover:bg-black/30 transition-all duration-300 rounded-xl placeholder:text-white/20 ${error?.field === 'email' ? 'border-rose-500/50 animate-shake' : ''}`}
-                              disabled={authLoading || loadingAction !== null}
+                              placeholder={authT.emailPlaceholder}
+                              className={`bg-black/20 border-[0.5px] border-white/[0.03] h-11 px-4 text-white/70 focus:outline-none focus:border-white/10 hover:bg-black/30 transition-all duration-300 rounded-xl placeholder:text-white/20 ${error?.field === 'email' ? 'border-rose-500/50 animate-shake' : ''}`}
+                              disabled={loadingAction !== null}
                               ref={emailRef}
                               style={{
                                 backgroundColor: "rgba(0, 0, 0, 0.2)",
@@ -1504,7 +2363,7 @@ export default function Auth() {
                         <div className="space-y-2">
                           <Label htmlFor="password" className="text-xs uppercase text-white/40 tracking-wider font-light flex items-center">
                             <KeyRound className="h-3 w-3 mr-1.5 opacity-40" />
-                            Senha
+                            {authT.password}
                           </Label>
                           <div className="relative group">
                             <Input 
@@ -1516,8 +2375,8 @@ export default function Auth() {
                                 clearError();
                               }}
                               placeholder="••••••••"
-                              className={`bg-black/20 border-[0.5px] border-white/[0.03] h-11 px-4 text-white/70 focus:outline-none focus:ring-1 focus:ring-white/10 hover:bg-black/30 transition-all duration-300 rounded-xl placeholder:text-white/20 ${error?.field === 'password' ? 'border-rose-500/50 animate-shake' : ''}`}
-                              disabled={authLoading || loadingAction !== null}
+                              className={`bg-black/20 border-[0.5px] border-white/[0.03] h-11 px-4 text-white/70 focus:outline-none focus:border-white/10 hover:bg-black/30 transition-all duration-300 rounded-xl placeholder:text-white/20 ${error?.field === 'password' ? 'border-rose-500/50 animate-shake' : ''}`}
+                              disabled={loadingAction !== null}
                               onKeyDown={(e) => e.key === 'Enter' && handleLogin(e)}
                               ref={passwordRef}
                               style={{
@@ -1533,9 +2392,9 @@ export default function Auth() {
                               tabIndex={-1}
                             >
                               {showPassword ? (
-                                <EyeOff className="h-4 w-4" />
-                              ) : (
                                 <Eye className="h-4 w-4" />
+                              ) : (
+                                <EyeOff className="h-4 w-4" />
                               )}
                             </button>
                           </div>
@@ -1549,12 +2408,10 @@ export default function Auth() {
                               onClick={() => setForgotPasswordState(true)}
                               className="text-xs text-white/40 hover:text-white/60 transition-colors"
                             >
-                              Esqueceu a senha?
+                              {authT.forgotPassword}
                             </button>
                           </div>
                         </div>
-                        
-                        {/* Remover o div de "Permanecer conectado" que estava aqui */}
                         
                         <motion.div
                           initial={{ opacity: 0, y: 10 }}
@@ -1565,7 +2422,7 @@ export default function Auth() {
                           <Button 
                             className="w-full bg-black/30 hover:bg-black/50 text-white/80 hover:text-white/90 border-[0.5px] border-white/[0.05] h-11 rounded-xl transition-all duration-300 group"
                             onClick={handleLogin}
-                            disabled={authLoading || loadingAction !== null}
+                            disabled={loadingAction !== null}
                           >
                             {loadingAction === 'login' ? (
                               <div className="flex items-center justify-center space-x-3">
@@ -1573,12 +2430,12 @@ export default function Auth() {
                                   <div className="absolute inset-0 border-2 border-white/10 rounded-full"></div>
                                   <div className="absolute inset-0 border-2 border-t-white/40 rounded-full animate-spin"></div>
                                 </div>
-                                <span className="text-sm tracking-wide text-white/50">Entrando...</span>
+                                <span className="text-sm tracking-wide text-white/50">{authT.loading}</span>
                               </div>
                             ) : (
                               <>
                                 <LogIn className="h-4 w-4 mr-2 opacity-70 group-hover:opacity-90 transition-opacity" />
-                                <span className="text-sm tracking-wide">Entrar</span>
+                                <span className="text-sm tracking-wide">{authT.loginButton}</span>
                               </>
                             )}
                           </Button>
@@ -1605,7 +2462,7 @@ export default function Auth() {
                         <div className="space-y-2">
                           <Label htmlFor="signup-email" className="text-xs uppercase text-white/40 tracking-wider font-light flex items-center">
                             <Mail className="h-3 w-3 mr-1.5 opacity-40" />
-                            Email
+                            {authT.email}
                           </Label>
                           <div className="relative group">
                             <Input 
@@ -1616,9 +2473,9 @@ export default function Auth() {
                                 setEmail(e.target.value);
                                 clearError();
                               }}
-                              placeholder="seu-email@exemplo.com"
-                              className={`bg-black/20 border-[0.5px] border-white/[0.03] h-11 px-4 text-white/70 focus:outline-none focus:ring-1 focus:ring-white/10 hover:bg-black/30 transition-all duration-300 rounded-xl placeholder:text-white/20 ${error?.field === 'email' ? 'border-rose-500/50 animate-shake' : ''}`}
-                              disabled={authLoading || loadingAction !== null}
+                              placeholder={authT.emailPlaceholder}
+                              className={`bg-black/20 border-[0.5px] border-white/[0.03] h-11 px-4 text-white/70 focus:outline-none focus:border-white/10 hover:bg-black/30 transition-all duration-300 rounded-xl placeholder:text-white/20 ${error?.field === 'email' ? 'border-rose-500/50 animate-shake' : ''}`}
+                              disabled={loadingAction !== null}
                               ref={emailRef}
                               style={{
                                 backgroundColor: "rgba(0, 0, 0, 0.2)",
@@ -1632,11 +2489,60 @@ export default function Auth() {
                           </AnimatePresence>
                         </div>
                         
+                        {/* Nome de Exibição */}
+                        <div className="space-y-2">
+                          <Label htmlFor="signup-displayname" className="text-xs uppercase text-white/40 tracking-wider font-light flex items-center">
+                            <User className="h-3 w-3 mr-1.5 opacity-40" />
+                            {authT.displayName}
+                          </Label>
+                          <div className="relative group">
+                            <Input 
+                              id="signup-displayname" 
+                              type="text" 
+                              value={displayName}
+                              onChange={(e) => {
+                                const newValue = e.target.value;
+                                // Permitir apagar todos os caracteres, mas validar apenas o limite máximo
+                                if (newValue.length <= 30) {
+                                  setDisplayName(newValue);
+                                  clearError();
+                                  // Limpar erro apenas se excedeu o limite, não se estiver vazio
+                                  if (displayNameError && displayNameError.includes('máximo')) {
+                                    setDisplayNameError(null);
+                                  }
+                                }
+                              }}
+                              onBlur={handleDisplayNameBlur}
+                              placeholder={authT.displayNamePlaceholder}
+                              maxLength={30}
+                              className={`bg-black/20 border-[0.5px] ${displayNameError ? 'border-red-500/50' : 'border-white/[0.03]'} h-11 px-4 pr-16 text-white/70 focus:outline-none focus:border-white/10 focus:bg-black/25 hover:bg-black/30 transition-all duration-300 rounded-xl placeholder:text-white/20 ${error?.field === 'displayName' ? 'border-rose-500/50 animate-shake' : ''}`}
+                              disabled={loadingAction !== null}
+                              ref={displayNameRef}
+                              style={{
+                                backgroundColor: "rgba(0, 0, 0, 0.2)",
+                                color: "rgba(255, 255, 255, 0.7)",
+                                caretColor: "rgba(255, 255, 255, 0.7)"
+                              }}
+                            />
+                            <div className="absolute top-0 right-0 bottom-0 flex items-center pr-3 pointer-events-none">
+                              <p className="text-xs text-white/40">
+                                {displayName.length}{authT.characterCount}
+                              </p>
+                            </div>
+                          </div>
+                          <AnimatePresence>
+                            {(error?.field === 'displayName' && <ErrorMessage message={error.message} />) ||
+                             (displayNameError && <ErrorMessage message={displayNameError} />)}
+                          </AnimatePresence>
+                        </div>
+                        
+
+                        
                         {/* Senha */}
                         <div className="space-y-2">
                           <Label htmlFor="signup-password" className="text-xs uppercase text-white/40 tracking-wider font-light flex items-center">
                             <KeyRound className="h-3 w-3 mr-1.5 opacity-40" />
-                            Senha
+                            {authT.password}
                           </Label>
                           <div className="relative group">
                             <Input 
@@ -1649,9 +2555,9 @@ export default function Auth() {
                                 validatePasswordMatch();
                                 clearError();
                               }}
-                              placeholder="••••••••"
-                              className={`bg-black/20 border-[0.5px] border-white/[0.03] h-11 px-4 text-white/70 focus:outline-none focus:ring-1 focus:ring-white/10 hover:bg-black/30 transition-all duration-300 rounded-xl placeholder:text-white/20 ${error?.field === 'password' ? 'border-rose-500/50 animate-shake' : ''}`}
-                              disabled={authLoading || loadingAction !== null}
+                              placeholder={authT.passwordPlaceholder}
+                              className={`bg-black/20 border-[0.5px] border-white/[0.03] h-11 px-4 text-white/70 focus:outline-none focus:border-white/10 hover:bg-black/30 transition-all duration-300 rounded-xl placeholder:text-white/20 ${error?.field === 'password' ? 'border-rose-500/50 animate-shake' : ''}`}
+                              disabled={loadingAction !== null}
                               ref={passwordRef}
                               style={{
                                 backgroundColor: "rgba(0, 0, 0, 0.2)",
@@ -1666,18 +2572,18 @@ export default function Auth() {
                               tabIndex={-1}
                             >
                               {showPassword ? (
-                                <EyeOff className="h-4 w-4" />
-                              ) : (
                                 <Eye className="h-4 w-4" />
+                              ) : (
+                                <EyeOff className="h-4 w-4" />
                               )}
                             </button>
                           </div>
-                          <AnimatePresence>
-                            {error?.field === 'password' ? (
-                              <ErrorMessage message={error.message} />
-                            ) : (
-                              showPasswordValidation && passwordStrength && (
-                                <PasswordStrengthIndicator strength={passwordStrength} />
+                          <AnimatePresence mode="wait">
+                            {error?.field === 'password' && (
+                              passwordStrength && !passwordStrength.isStrong ? (
+                                PasswordStrengthIndicator
+                              ) : (
+                                <ErrorMessage message={error.message} />
                               )
                             )}
                           </AnimatePresence>
@@ -1687,7 +2593,7 @@ export default function Auth() {
                         <div className="space-y-2">
                           <Label htmlFor="confirm-password" className="text-xs uppercase text-white/40 tracking-wider font-light flex items-center">
                             <KeyRound className="h-3 w-3 mr-1.5 opacity-40" />
-                            Confirmar Senha
+                            {authT.confirmPassword}
                           </Label>
                           <div className="relative group">
                             <Input 
@@ -1699,9 +2605,9 @@ export default function Auth() {
                                 validatePasswordMatch();
                                 clearError();
                               }}
-                              placeholder="••••••••"
-                              className={`bg-black/20 border-[0.5px] border-white/[0.03] h-11 px-4 text-white/70 focus:outline-none focus:ring-1 focus:ring-white/10 hover:bg-black/30 transition-all duration-300 rounded-xl placeholder:text-white/20 ${error?.field === 'confirmPassword' ? 'border-rose-500/50 animate-shake' : ''}`}
-                              disabled={authLoading || loadingAction !== null}
+                              placeholder={authT.confirmPasswordPlaceholder}
+                              className={`bg-black/20 border-[0.5px] border-white/[0.03] h-11 px-4 text-white/70 focus:outline-none focus:border-white/10 hover:bg-black/30 transition-all duration-300 rounded-xl placeholder:text-white/20 ${error?.field === 'confirmPassword' ? 'border-rose-500/50 animate-shake' : ''}`}
+                              disabled={loadingAction !== null}
                               onKeyDown={(e) => e.key === 'Enter' && handleSignUp()}
                               ref={confirmPasswordRef}
                               style={{
@@ -1717,13 +2623,13 @@ export default function Auth() {
                               tabIndex={-1}
                             >
                               {showConfirmPassword ? (
-                                <EyeOff className="h-4 w-4" />
-                              ) : (
                                 <Eye className="h-4 w-4" />
+                              ) : (
+                                <EyeOff className="h-4 w-4" />
                               )}
                             </button>
                           </div>
-                          <AnimatePresence>
+                          <AnimatePresence mode="wait">
                             {error?.field === 'confirmPassword' ? (
                               <ErrorMessage message={error.message} />
                             ) : (
@@ -1743,7 +2649,7 @@ export default function Auth() {
                               <line x1="8" x2="8" y1="2" y2="6" />
                               <line x1="3" x2="21" y1="10" y2="10" />
                             </svg>
-                            Data de Nascimento
+                            {authT.birthdate}
                           </Label>
                           <div className="relative">
                             <Input 
@@ -1751,11 +2657,11 @@ export default function Auth() {
                               type="text"
                               value={birthdate}
                               onChange={handleBirthdateChange}
-                              placeholder="DD/MM/AAAA"
+                              placeholder={authT.birthdatePlaceholder}
                               maxLength={10}
                               ref={birthdateRef}
-                              className={`bg-black/20 border-[0.5px] border-white/[0.03] h-11 px-4 text-white/70 focus:outline-none focus:ring-1 focus:ring-white/10 hover:bg-black/30 transition-all duration-300 rounded-xl placeholder:text-white/20 ${error?.field === 'birthdate' ? 'border-rose-500/50 animate-shake' : ''}`}
-                              disabled={authLoading || loadingAction !== null}
+                              className={`bg-black/20 border-[0.5px] border-white/[0.03] h-11 px-4 text-white/70 focus:outline-none focus:border-white/10 hover:bg-black/30 transition-all duration-300 rounded-xl placeholder:text-white/20 ${error?.field === 'birthdate' ? 'border-rose-500/50 animate-shake' : ''}`}
+                              disabled={loadingAction !== null}
                               style={{
                                 backgroundColor: "rgba(0, 0, 0, 0.2)",
                                 color: "rgba(255, 255, 255, 0.7)",
@@ -1764,7 +2670,7 @@ export default function Auth() {
                             />
                             <div className="absolute top-0 right-0 bottom-0 flex items-center pr-3 pointer-events-none">
                               <p className="text-xs text-white/20">
-                                {birthdate.length < 2 ? "Dia" : 
+                                {birthdate.length < 2 ? authT.dayPlaceholder : 
                                  birthdate.length < 5 ? "Mês" : 
                                  birthdate.length < 10 ? "Ano" : ""}
                               </p>
@@ -1774,7 +2680,111 @@ export default function Auth() {
                             {(error?.field === 'birthdate' && <ErrorMessage message={error.message} />) || 
                              (birthdateError && <ErrorMessage message={birthdateError} />)}
                           </AnimatePresence>
-                          <p className="text-xs text-white/40 mt-1">Apenas maiores de 18 anos podem se cadastrar.</p>
+                          <p className="text-xs text-white/40 mt-1">{authT.ageRestriction}</p>
+                        </div>
+                        
+                        {/* Tipo de Investidor */}
+                        <div className="space-y-2">
+                          <Label className="text-xs uppercase text-white/40 tracking-wider font-light flex items-center">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-3 w-3 mr-1.5 opacity-40">
+                              <path d="M3 3v18h18" />
+                              <path d="m19 9-5 5-4-4-3 3" />
+                            </svg>
+                            {authT.investorType}
+                          </Label>
+                          <InvestorTypeSelector
+                            value={investorType}
+                            onChange={(value) => {
+                              setInvestorType(value);
+                              clearError();
+                            }}
+                            error={error?.field === 'investorType' ? error.message : undefined}
+                          />
+                        </div>
+                        
+                        {/* Apoie seu trader favorito (OPCIONAL) */}
+                        <div className="space-y-2 pt-2 relative">
+                          <div 
+                            className="flex items-center justify-between cursor-pointer p-3 border border-white/5 rounded-lg bg-black/30 shadow-sm h-11"
+                            onClick={() => setShowTraderSupport(!showTraderSupport)}
+                          >
+                            <Label className="text-xs uppercase text-white/40 tracking-wider font-light flex items-center cursor-pointer">
+                                                                    <Heart className="h-3 w-3 mr-1.5 text-purple-600" />
+                              {t('trader.support.optional')}
+                            </Label>
+                            <button
+                              type="button"
+                              title={showTraderSupport ? "Ocultar suporte do trader" : "Mostrar suporte do trader"}
+                              aria-label={showTraderSupport ? "Ocultar suporte do trader" : "Mostrar suporte do trader"}
+                              className={`w-6 h-6 rounded-full bg-black/40 flex items-center justify-center border border-white/[0.03] transition-transform duration-300 ${showTraderSupport ? 'rotate-180' : ''}`}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setShowTraderSupport(!showTraderSupport);
+                              }}
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-white/60">
+                                <path d="m6 9 6 6 6-6"/>
+                              </svg>
+                            </button>
+                          </div>
+                          
+                          <AnimatePresence>
+                            {showTraderSupport && (
+                              <motion.div
+                                initial={{ opacity: 0, height: 0 }}
+                                animate={{ opacity: 1, height: 'auto' }}
+                                exit={{ opacity: 0, height: 0 }}
+                                transition={{ duration: 0.2 }}
+                                className="space-y-4 pt-1 overflow-hidden"
+                              >
+                                <div className="space-y-3 bg-gradient-to-br from-black/40 via-black/20 to-black/30 p-4 rounded-xl border border-white/[0.08] shadow-inner">
+                                  <div className="flex items-start space-x-2.5">
+                                    <div className="mt-0.5 relative">
+                                      <div className="absolute -inset-1.5 bg-gradient-to-br from-purple-800/20 via-purple-700/10 to-purple-600/20 rounded-full blur-sm"></div>
+                                      <div className="relative p-1 bg-black/30 border border-purple-700/20 rounded-full">
+                                        <Heart className="h-3 w-3 text-purple-600" />
+                                      </div>
+                                    </div>
+                                    <p className="text-xs text-white/70 leading-relaxed">
+                                      {t('trader.support.add')}
+                                    </p>
+                                  </div>
+                                  
+                                  
+                                  {/* Link do trader */}
+                                  <div className="space-y-1.5 pt-1">
+                                    <Label htmlFor="trader-link" className="text-xs text-white/60 flex items-center">
+                                      <LinkIcon className="h-3 w-3 mr-1.5 text-purple-600/80" />
+                                      {t('trader.support.link')}
+                                    </Label>
+                                    <div className="relative">
+                                      <div className="absolute inset-0 bg-gradient-to-r from-white/5 via-white/3 to-white/5 rounded-lg blur transition-opacity duration-300 pointer-events-none" 
+                                           style={{ opacity: preferredTraderLink ? 0.2 : 0 }}></div>
+                                    <Input
+                                      id="trader-link"
+                                      type="url"
+                                      value={preferredTraderLink}
+                                      onChange={(e) => {
+                                        setPreferredTraderLink(e.target.value);
+                                        clearError();
+                                      }}
+                                        placeholder={t('trader.support.link.placeholder')}
+                                        className={`bg-black/20 border-[0.5px] border-white/[0.08] h-9 px-3 text-xs text-white/70 focus:outline-none focus:bg-black/40 focus:border-white/15 hover:bg-black/30 transition-all duration-300 rounded-lg placeholder:text-white/20 ${error?.field === 'preferredTraderLink' ? 'border-rose-500/50 animate-shake' : ''}`}
+                                      ref={traderLinkRef}
+                                    />
+
+                                    </div>
+                                    <AnimatePresence>
+                                      {error?.field === 'preferredTraderLink' && <ErrorMessage message={error.message} />}
+                                    </AnimatePresence>
+                                    <p className="text-[9px] text-white/30 pt-0.5">
+                                      Este campo não é obrigatório para prosseguir.
+                                    </p>
+                                  </div>
+                                </div>
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
                         </div>
                         
                         {/* Termos e Condições */}
@@ -1803,26 +2813,24 @@ export default function Auth() {
                                 <div className="absolute inset-0 rounded-sm bg-emerald-400/10 blur-[4px] scale-150"></div>
                               </div>
                             )}
-                            <div className="space-y-1">
-                              <Label 
-                                htmlFor="terms" 
-                                className={`text-xs ${termsAccepted ? 'text-emerald-400/90' : 'text-white/60'} leading-relaxed cursor-pointer transition-colors duration-300`}
+                            <Label 
+                              htmlFor="terms" 
+                              className={`text-xs ${termsAccepted ? 'text-emerald-400/90' : 'text-white/60'} leading-relaxed cursor-pointer transition-colors duration-300 mt-1`}
+                            >
+                              {authT.acceptTerms} <button 
+                                type="button" 
+                                onClick={() => setShowTerms(true)}
+                                className={`${termsAccepted ? 'text-emerald-400 hover:text-emerald-300' : 'text-white/80 hover:text-white'} underline underline-offset-2 focus:outline-none transition-colors duration-300`}
                               >
-                                Li e concordo com os <button 
-                                  type="button" 
-                                  onClick={() => setShowTerms(true)}
-                                  className={`${termsAccepted ? 'text-emerald-400 hover:text-emerald-300' : 'text-white/80 hover:text-white'} underline underline-offset-2 focus:outline-none transition-colors duration-300`}
-                                >
-                                  Termos e Condições
-                                </button> de uso da plataforma.
-                              </Label>
-                              <AnimatePresence>
-                                {(error?.field === 'terms' || showTermsError && !termsAccepted) && (
-                                  <ErrorMessage message="Você precisa aceitar os termos e condições para continuar" />
-                                )}
-                              </AnimatePresence>
-                            </div>
+                                {authT.viewTerms}
+                              </button>
+                            </Label>
                           </div>
+                          <AnimatePresence>
+                            {(error?.field === 'terms' || showTermsError && !termsAccepted) && (
+                              <ErrorMessage message={authT.termsRequired} />
+                            )}
+                          </AnimatePresence>
                         </div>
                         
                         {/* Botão de Cadastro */}
@@ -1835,7 +2843,7 @@ export default function Auth() {
                           <Button 
                             className="w-full bg-black/30 hover:bg-black/50 text-white/80 hover:text-white/90 border-[0.5px] border-white/[0.05] h-11 rounded-xl transition-all duration-300 group"
                             onClick={handleSignUp}
-                            disabled={authLoading || loadingAction !== null}
+                            disabled={loadingAction !== null}
                           >
                             {loadingAction === 'signup' ? (
                               <div className="flex items-center justify-center space-x-3">
@@ -1843,12 +2851,12 @@ export default function Auth() {
                                   <div className="absolute inset-0 border-2 border-white/10 rounded-full"></div>
                                   <div className="absolute inset-0 border-2 border-t-white/40 rounded-full animate-spin"></div>
                                 </div>
-                                <span className="text-sm tracking-wide text-white/50">Cadastrando...</span>
+                                <span className="text-sm tracking-wide text-white/50">{authT.loading}</span>
                               </div>
                             ) : (
                               <>
                                 <UserPlus className="h-4 w-4 mr-2 opacity-70 group-hover:opacity-90 transition-opacity" />
-                                <span className="text-sm tracking-wide">Cadastrar</span>
+                                <span className="text-sm tracking-wide">{authT.signupButton}</span>
                               </>
                             )}
                           </Button>

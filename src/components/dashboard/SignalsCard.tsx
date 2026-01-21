@@ -2,7 +2,7 @@ import { ArrowDownRight, ArrowUpRight, Target, Shield, TrendingUp, BarChart2, Cl
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { fetchTradingSignals, fetchCorrelationData, fetchOnChainMetrics, fetchOrderBookData, tradingSignalService } from "@/services";
+import { fetchTradingSignals, fetchCorrelationData, fetchOnChainMetrics, fetchOrderBookData } from "@/services";
 import { getLatestPrices } from "@/services/getSimulatedPrices";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -22,6 +22,72 @@ import { TimeZoneSelector } from "@/components/dashboard/TimeZoneSelector";
 import { useTimeZone } from "@/contexts/TimeZoneContext";
 import { motion, AnimatePresence } from "framer-motion";
 import { useSignalNotifications } from "@/hooks/useSignalNotifications";
+import { isBackgroundModeEnabled } from '../../utils/visibilityManager';
+import { traderLinkService } from "@/services/traderLinkService";
+import { useRealtimeSignals } from "@/hooks/useRealtimeSignals";
+
+// Declarações globais para TypeScript
+declare global {
+  interface Window {
+    isRotating?: boolean;
+    signalTimersMap?: Record<string, {
+      id: string;
+      scheduledTime: number;
+      processingTime: number;
+      processed: boolean;
+    }>;
+    signalsCardMounted?: boolean;
+    lastMountTimestamp?: number;
+    lastRotationStarted?: number;
+    dashboardRotationTimer?: NodeJS.Timeout | null;
+    lastRotationCheck?: number;
+    _cacheDailySignals?: unknown[];
+    completedSignalsRef?: Record<string, string>;
+    displayedSignalsRef?: EnrichedSignal[];
+    // Propriedades para monitoramento de rotação
+    rotationTimer?: {
+      entryTime: string;
+      entryTimestamp: number;
+      minutesSinceEntry: number;
+      nextRotationTime: number;
+      lastUpdateTimestamp: number;
+    };
+    rotationSuppressUntil?: number;
+    displayedSignalsOwner?: string;
+    rotationMonitorInterval?: NodeJS.Timeout | null;
+    rotationMonitorTimestamp?: number;
+    executeRotationDirect?: () => void;
+    forceRotationAndSync?: () => void;
+    // Propriedades para sincronização bidirecional
+    lastSyncTimestamp?: number;
+    lastSyncSource?: string;
+    tradesSignalsUpdated?: Event;
+  }
+}
+
+// Inicializar flags globais se não existirem
+if (typeof window !== 'undefined') {
+  // Flags para controle de rotação
+  window.isRotating = window.isRotating || false;
+  window.signalsCardMounted = window.signalsCardMounted || false;
+  window.lastRotationStarted = window.lastRotationStarted || 0;
+  
+  // Criar mapa global de timers se não existir
+  if (!window.signalTimersMap) {
+    window.signalTimersMap = {};
+  }
+  
+  // Inicializar timer de rotação
+  if (!window.rotationTimer) {
+    window.rotationTimer = {
+      entryTime: '',
+      entryTimestamp: 0,
+      minutesSinceEntry: 0,
+      nextRotationTime: 0,
+      lastUpdateTimestamp: 0
+    };
+  }
+}
 
 // Tempo de espera antes de processar automaticamente um sinal (10 minutos em ms)
 const AUTO_COMPLETE_TIMEOUT = 10 * 60 * 1000;
@@ -40,7 +106,7 @@ const TIME_BETWEEN_SIGNALS = 10;
 const WIN_LOSS_RATIO = 14;
 
 // Tempo de cache em milissegundos (10 minutos)
-const CACHE_DURATION = 10 * 60 * 1000;
+const CACHE_DURATION = 1000 * 60 * 60; // 1 hora
 
 // Chave para armazenar sinais no localStorage
 const SIGNALS_CACHE_KEY = 'trending_signals_cache';
@@ -49,7 +115,7 @@ const SIGNALS_CACHE_KEY = 'trending_signals_cache';
 const DAILY_SIGNALS_CACHE_KEY = 'trending_daily_signals_cache';
 
 // Cache global para evitar regeneração de sinais entre trocas de aba
-let globalSignalsCache = null;
+const globalSignalsCache = null;
 
 // Cache global para sinais do dia todo
 let globalDailySignalsCache = null;
@@ -57,24 +123,7 @@ let globalDailySignalsCache = null;
 // Variável para controlar a contagem de sinais processados (para gerar 1 perda a cada WIN_LOSS_RATIO sinais)
 let signalProcessCount = 0;
 
-// Declaração de tipo global para a flag de reconstrução
-declare global {
-  interface Window {
-    isSignalReconstructionInProgress?: boolean;
-    // Adicionar variáveis para previnir múltiplas montagens
-    signalsCardMounted?: boolean;
-    displayedSignalsRef?: EnrichedSignal[];
-    completedSignalsRef?: Set<string>;
-    lastMountTimestamp?: number;
-    // Adicionar variáveis para persistência dos timers entre navegações
-    signalTimersMap?: Record<string, {
-      id: string;
-      scheduledTime: number;
-      processingTime: number;
-      processed: boolean;
-    }>;
-  }
-}
+// Sistema de rotação automática de sinais
 
 // Constantes para padrão de horários
 const VALID_MINUTES = [3, 23, 43];
@@ -90,21 +139,93 @@ const isValidEntryTime = (timeStr: string): boolean => {
   return VALID_MINUTES.includes(minutes);
 };
 
+// Função auxiliar para obter o próximo horário com um minuto específico
+const getNextSpecificMinuteTime = (currentTime: string, targetMinute: number, advanceHour: boolean = false): string => {
+  const [hours, minutes] = currentTime.split(':').map(Number);
+  
+  // Determinar se precisamos avançar a hora
+  // 1. Avançamos se o parâmetro advanceHour for explicitamente true
+  // 2. Avançamos também se o minuto alvo já passou na hora atual
+  const shouldAdvanceHour = advanceHour || (minutes > targetMinute);
+  
+  // Calcular a hora correta
+  const nextHour = shouldAdvanceHour ? (hours + 1) % 24 : hours;
+  
+  // Garantir que o formato tenha dois dígitos
+  const result = `${nextHour.toString().padStart(2, '0')}:${targetMinute.toString().padStart(2, '0')}`;
+  
+  console.log(`🕒 getNextSpecificMinuteTime: ${currentTime} → ${result} (target=${targetMinute}, advance=${shouldAdvanceHour})`);
+  
+  return result;
+};
+
 // Função para gerar o próximo horário válido após um determinado horário
-const getNextValidTime = (timeStr: string): string => {
-  const [hours, minutes] = timeStr.split(':').map(Number);
+// Implementação que segue ESTRITAMENTE as regras baseadas no padrão 03 → 23 → 43 → 03 (próxima hora)
+const getNextValidTime = (timeStr: string, removedSignalTime?: string): string => {
+  console.log(`🕒 Calculando próximo horário válido. Atual: ${timeStr}, Sinal removido: ${removedSignalTime || 'N/A'}`);
   
-  // Encontrar o próximo minuto válido
-  let nextMinuteIndex = VALID_MINUTES.findIndex(m => m > minutes);
-  
-  // Se não encontrarmos um minuto maior, vamos para a próxima hora
-  if (nextMinuteIndex === -1) {
-    const nextHour = (hours + 1) % 24;
-    return `${nextHour.toString().padStart(2, '0')}:${VALID_MINUTES[0].toString().padStart(2, '0')}`;
+  // Se temos um horário do sinal removido, usamos ele para determinar o próximo horário válido
+  if (removedSignalTime) {
+    const [_, removedMinutes] = removedSignalTime.split(':').map(Number);
+    
+    // Regras específicas baseadas no minuto de entrada do sinal removido
+    if (removedMinutes === 3) {
+      // Se o sinal removido tinha entrada XX:03, o novo terá entrada na próxima ocorrência de XX:23
+      const result = getNextSpecificMinuteTime(timeStr, 23);
+      console.log(`🕒 Sinal removido tinha entrada :03 → Próximo horário é :23 → ${result}`);
+      return result;
+    } else if (removedMinutes === 23) {
+      // Se o sinal removido tinha entrada XX:23, o novo terá entrada na próxima ocorrência de XX:43
+      const result = getNextSpecificMinuteTime(timeStr, 43);
+      console.log(`🕒 Sinal removido tinha entrada :23 → Próximo horário é :43 → ${result}`);
+      return result;
+    } else if (removedMinutes === 43) {
+      // Se o sinal removido tinha entrada XX:43, o novo terá entrada na próxima ocorrência de XX:03 (próxima hora)
+      const result = getNextSpecificMinuteTime(timeStr, 3, true); // true = avançar hora
+      console.log(`🕒 Sinal removido tinha entrada :43 → Próximo horário é :03 (próxima hora) → ${result}`);
+      return result;
+    }
+    
+    // FALLBACK CASO O MINUTO NÃO SEJA UM DOS PADRÕES - Forçar para o padrão correto
+    console.log(`⚠️ Minuto não padrão detectado: ${removedMinutes}, forçando para o padrão correto`);
+    // Determinar qual é o próximo minuto válido na sequência 03→23→43→03
+    if (removedMinutes < 3) {
+      return getNextSpecificMinuteTime(timeStr, 3);
+    } else if (removedMinutes < 23) {
+      return getNextSpecificMinuteTime(timeStr, 23);
+    } else if (removedMinutes < 43) {
+      return getNextSpecificMinuteTime(timeStr, 43);
+    } else {
+      return getNextSpecificMinuteTime(timeStr, 3, true); // próxima hora
+    }
   }
   
-  // Caso contrário, mantemos a hora e atualizamos apenas os minutos
-  return `${hours.toString().padStart(2, '0')}:${VALID_MINUTES[nextMinuteIndex].toString().padStart(2, '0')}`;
+  // Quando não temos um horário de sinal removido, calcular próximo horário válido
+  // baseado no horário atual
+  const now = new Date();
+  const currentHour = now.getHours();
+  const currentMinute = now.getMinutes();
+  
+  console.log(`🕒 Calculando próximo horário válido baseado no horário atual: ${currentHour}:${currentMinute}`);
+  
+  // Determinar próximo minuto válido na sequência 03→23→43→03
+  let nextMinute;
+  let nextHour = currentHour;
+  
+  if (currentMinute < 3) {
+    nextMinute = 3;
+  } else if (currentMinute < 23) {
+    nextMinute = 23;
+  } else if (currentMinute < 43) {
+    nextMinute = 43;
+  } else {
+    nextMinute = 3;
+    nextHour = (currentHour + 1) % 24;
+  }
+  
+  const result = `${nextHour.toString().padStart(2, '0')}:${nextMinute.toString().padStart(2, '0')}`;
+  console.log(`🕒 Próximo horário válido calculado: ${result}`);
+  return result;
 };
 
 // Função para calcular os próximos 3 horários válidos a partir de agora
@@ -113,76 +234,699 @@ const calculateNextThreeValidTimes = (): string[] => {
   const currentHour = now.getHours();
   const currentMinute = now.getMinutes();
   
-  // Formatar hora atual
-  const currentTime = `${currentHour.toString().padStart(2, '0')}:${currentMinute.toString().padStart(2, '0')}`;
+  console.log(`🕐 CALCULANDO HORÁRIOS FUTUROS: Hora atual ${currentHour}:${currentMinute.toString().padStart(2, '0')}`);
   
-  // Encontrar o primeiro horário válido após o horário atual
-  let firstValidTime: string;
+  // Lista de minutos válidos (sempre: 03, 23, 43)
+  const validMinutes = [3, 23, 43];
+  const times: string[] = [];
   
-  // Verificar qual é o próximo minuto válido dentro da hora atual
-  const nextValidMinute = VALID_MINUTES.find(m => m > currentMinute);
+  // Encontrar o primeiro horário válido que seja futuro
+  let currentHourToCheck = currentHour;
+  let nextValidMinuteIdx = 0;
+  let found = false;
   
-  if (nextValidMinute) {
-    // Se encontrarmos um minuto válido na hora atual
-    firstValidTime = `${currentHour.toString().padStart(2, '0')}:${nextValidMinute.toString().padStart(2, '0')}`;
+  // Determinando qual é o próximo minuto válido baseado na hora atual
+  if (currentMinute < 3) {
+    // Se estamos antes do minuto 03, o próximo é 03 da hora atual
+    nextValidMinuteIdx = 0; // 03
+    found = true;
+  } else if (currentMinute < 23) {
+    // Se estamos entre 03 e 23, o próximo é 23 da hora atual
+    nextValidMinuteIdx = 1; // 23
+    found = true;
+  } else if (currentMinute < 43) {
+    // Se estamos entre 23 e 43, o próximo é 43 da hora atual
+    nextValidMinuteIdx = 2; // 43
+    found = true;
   } else {
-    // Se não, vamos para o primeiro minuto válido da próxima hora
-    const nextHour = (currentHour + 1) % 24;
-    firstValidTime = `${nextHour.toString().padStart(2, '0')}:${VALID_MINUTES[0].toString().padStart(2, '0')}`;
+    // Se estamos após 43, o próximo é 03 da próxima hora
+    nextValidMinuteIdx = 0; // 03
+    currentHourToCheck = (currentHour + 1) % 24; // Avançar para próxima hora
+    found = true;
   }
   
-  // Calcular os próximos dois horários
-  const secondValidTime = getNextValidTime(firstValidTime);
-  const thirdValidTime = getNextValidTime(secondValidTime);
+  if (!found) {
+    // Fallback (não deveria acontecer)
+    console.error('🆘 Erro ao determinar próximo horário válido');
+    // Forçar para 03 da próxima hora como segurança
+    nextValidMinuteIdx = 0;
+    currentHourToCheck = (currentHour + 1) % 24;
+  }
   
-  return [firstValidTime, secondValidTime, thirdValidTime];
+  // Gerar o primeiro horário
+  const firstValidMinute = validMinutes[nextValidMinuteIdx];
+  const firstTime = `${currentHourToCheck.toString().padStart(2, '0')}:${firstValidMinute.toString().padStart(2, '0')}`;
+        times.push(firstTime);
+  console.log(`✅ PRIMEIRO HORÁRIO VÁLIDO: ${firstTime}`);
+  
+  // Gerar o segundo horário (seguindo a sequência 03→23→43→03)
+  nextValidMinuteIdx = (nextValidMinuteIdx + 1) % 3;
+  let secondHour = currentHourToCheck;
+  
+  // Se o primeiro minuto era 43 e o próximo é 03, avançar uma hora
+  if (validMinutes[nextValidMinuteIdx] === 3 && firstValidMinute === 43) {
+    secondHour = (secondHour + 1) % 24;
+  }
+  
+  const secondTime = `${secondHour.toString().padStart(2, '0')}:${validMinutes[nextValidMinuteIdx].toString().padStart(2, '0')}`;
+  times.push(secondTime);
+  console.log(`✅ SEGUNDO HORÁRIO VÁLIDO: ${secondTime}`);
+  
+  // Gerar o terceiro horário (continuando a sequência)
+  let thirdHour = secondHour;
+  nextValidMinuteIdx = (nextValidMinuteIdx + 1) % 3;
+  
+  // Se o segundo minuto era 43 e o próximo é 03, avançar uma hora
+  if (validMinutes[nextValidMinuteIdx] === 3 && validMinutes[(nextValidMinuteIdx + 2) % 3] === 43) {
+    thirdHour = (thirdHour + 1) % 24;
+    }
+    
+  const thirdTime = `${thirdHour.toString().padStart(2, '0')}:${validMinutes[nextValidMinuteIdx].toString().padStart(2, '0')}`;
+  times.push(thirdTime);
+  console.log(`✅ TERCEIRO HORÁRIO VÁLIDO: ${thirdTime}`);
+  
+  // VERIFICAÇÃO FINAL: Garantir que todos os horários são futuros
+  const allAreFuture = times.every(time => {
+    const [hour, minute] = time.split(':').map(Number);
+    const timeAsDate = new Date();
+    timeAsDate.setHours(hour, minute, 0, 0);
+    
+    // Se o horário gerado for menor que o atual, considerar que é do dia seguinte
+    if (timeAsDate < now) {
+      timeAsDate.setDate(timeAsDate.getDate() + 1);
+    }
+    
+    return timeAsDate > now;
+  });
+  
+  if (!allAreFuture) {
+    console.error('🆘 ERRO: Alguns horários gerados não são futuros!');
+    console.error('Horários gerados:', times);
+    console.error('Hora atual:', `${currentHour}:${currentMinute}`);
+  }
+  
+  console.log(`🎯 HORÁRIOS FUTUROS FINAIS: ${times.join(', ')}`);
+  return times;
 };
 
-// Definir a lista de ativos disponíveis no escopo global para uso em múltiplas funções
-const availableAssets = [
-  { symbol: 'Gold/Silver (OTC)', exchange: 'Digital' },
-  { symbol: 'Worldcoin (OTC)', exchange: 'Digital' },
-  { symbol: 'USD/THB (OTC)', exchange: 'Digital' },
-  { symbol: 'ETH/USD (OTC)', exchange: 'Digital' },
-  { symbol: 'CHF/JPY (OTC)', exchange: 'Digital' },
-  { symbol: 'Pepe (OTC)', exchange: 'Digital' },
-  { symbol: 'GBP/AUD (OTC)', exchange: 'Digital' },
-  { symbol: 'GBP/CHF (OTC)', exchange: 'Digital' },
-  { symbol: 'GBP/CAD (OTC)', exchange: 'Digital' },
-  { symbol: 'EUR/JPY (OTC)', exchange: 'Digital' },
-  { symbol: 'AUD/CHF (OTC)', exchange: 'Digital' },
-  { symbol: 'GER 30 (OTC)', exchange: 'Digital' },
-  { symbol: 'AUD/CHF (OTC)', exchange: 'Digital' },
-  { symbol: 'EUR/AUD (OTC)', exchange: 'Digital' },
-  { symbol: 'USD/CAD (OTC)', exchange: 'Digital' },
-  { symbol: 'BTC/USD (OTC)', exchange: 'Digital' },
-  { symbol: 'Amazon/Ebay (OTC)', exchange: 'Digital' },
-  { symbol: 'Coca-Cola Company (OTC)', exchange: 'Digital' },
-  { symbol: 'AIG (OTC)', exchange: 'Digital' },
-  { symbol: 'Amazon/Alibaba (OTC)', exchange: 'Digital' },
-  { symbol: 'Bitcoin Cash (OTC)', exchange: 'Digital' },
-  { symbol: 'AUD/USD (OTC)', exchange: 'Digital' },
-  { symbol: 'DASH (OTC)', exchange: 'Digital' },
-  { symbol: 'BTC/USD (OTC)', exchange: 'Digital' },
-  { symbol: 'SP 35 (OTC)', exchange: 'Digital' },
-  { symbol: 'TRUMP Coin (OTC)', exchange: 'Digital' },
-  { symbol: 'US 100 (OTC)', exchange: 'Digital' },
-  { symbol: 'EUR/CAD (OTC)', exchange: 'Digital' },
-  { symbol: 'HK 33 (OTC)', exchange: 'Digital' },
-  { symbol: 'Alphabet/Microsoft (OTC)', exchange: 'Digital' },
-  { symbol: '1000Sats (OTC)', exchange: 'Digital' },
-  { symbol: 'USD/ZAR (OTC)', exchange: 'Digital' },
-  { symbol: 'Litecoin (OTC)', exchange: 'Digital' },
-  { symbol: 'Hamster Kombat (OTC)', exchange: 'Digital' },
-  { symbol: 'USD Currency Index (OTC)', exchange: 'Digital' },
-  { symbol: 'AUS 200 (OTC)', exchange: 'Digital' },
-  { symbol: 'USD/CAD (OTC)', exchange: 'Digital' },
-  { symbol: 'MELANIA Coin (OTC)', exchange: 'Digital' },
-  { symbol: 'JP 225 (OTC)', exchange: 'Digital' },
-  { symbol: 'AUD/CAD (OTC)', exchange: 'Digital' },
-  { symbol: 'AUD/JPY (OTC)', exchange: 'Digital' },
-  { symbol: 'US 500 (OTC)', exchange: 'Digital' }
+// ===== IMPORTAÇÃO COMPLETA DAS CONSTANTES DA ABA SIGNALS =====
+
+// Lista de ativos PERMITIDOS explicitamente (forçada pela especificação do usuário)
+const ALLOWED_ASSETS: string[] = [
+  // Ações
+  "AIG", "Alibaba Group Holding", "Amazon", "Amazon/Alibaba", "Amazon/Ebay", "Apple", 
+  "Baidu, Inc. ADR", "Citigroup, Inc", "Coca-Cola Company", "Meta", "Google", 
+  "Alphabet/Microsoft", "Goldman Sachs Group, Inc.", "Intel Corporation", "Intel/IBM", 
+  "JPMorgan Chase E Co.", "McDonald´s Corporation", "Meta/Alphabet", "Morgan Stanley", 
+  "Microsoft Corporation", "Microsoft/Apple", "Netflix/Amazon", "Snap Inc.", "Tesla", "Tesla/Ford",
+
+  // Commodities
+  "Crude Oil Brent", "Crude Oil WTI", "Silver", "Ouro/Prata", "Gold", "Gás Natural",
+
+  // Índices
+  "AUS 200", "EU 50", "FR 40", "GER 30", "GER30/UK100", "HK 33", "JP 225", "SP 35", 
+  "US 500", "UK 100", "US100/JP225", "US2000", "US 30", "US30/JP225", "US500/JP225", "US 100",
+
+  // Cripto
+  "Arbitrum", "Cosmos", "Bitcoin Cash", "Bonk", "Bitcoin", "Cardano", "Dash", "Dogecoin", 
+  "Polkadot", "DYDX", "EOS", "Ethereum", "Fartcoin", "Artificial Superintelligence Alliance", 
+  "Floki", "Gala", "Graph", "Hedera", "ICP", "Immutable", "Injective", "IOTA", "Júpiter", 
+  "Chainlink", "Litecoin", "Decentraland", "Polygon", "MELANIA Coin", "NEAR", "Ondo", 
+  "Onyxcoin", "ORDI", "Pudgy Penguins", "Pepe", "Pyth", "Raydium", "Render", "Ronin", 
+  "Sandbox", "1000Sats", "Sei", "Shiba Inu", "Solana", "Stacks", "Sui", "Bittensor", 
+  "Celestia", "TON", "TRON/USD", "TRUMP Coin", "Dogwifhat", "World Coin", "Ripple",
+
+  // Forex
+  "AUD/CAD (OTC)", "AUD/JPY (OTC)", "AUD/NZD (OTC)", "AUD/USD (OTC)", "CAD/CHF (OTC)", 
+  "CAD/JPY (OTC)", "CHF/JPY", "CHFNOK", "Dollar Index", "EUR/AUD (OTC)", "EUR/CAD (OTC)", 
+  "EUR/CHF (OTC)", "EUR/GBP (OTC)", "EUR/JPY (OTC)", "EUR/NZD (OTC)", "EUR/THB (OTC)", 
+  "EUR/USD (OTC)", "GBP/AUD (OTC)", "GBP/CAD (OTC)", "GBP/CHF (OTC)", "GBP/JPY (OTC)", 
+  "GBP/NZD (OTC)", "GBP/USD (OTC)", "JPY/THB (OTC)", "NOK/JPY (OTC)", "NZD/CAD (OTC)", 
+  "NZDCHF", "NZD/JPY (OTC)", "NZD/USD (OTC)", "PEN/USD (OTC)", "USD/BRL (OTC)", 
+  "USD/CAD (OTC)", "USD/CHF (OTC)", "USD/COP (OTC)", "USD/HKD (OTC)", "USD/INR (OTC)", 
+  "USD/JPY (OTC)", "USD/MXN (OTC)", "USD/NOK (OTC)", "USD/PLN (OTC)", "USD/SEK (OTC)", 
+  "USD/SGD (OTC)", "USD/THB (OTC)", "USD/TRY (OTC)", "USD/XOF (OTC)", "USD/ZAR (OTC)", 
+  "Yen Index", "GBP/CHF", "GBP/NZD", "GBP/AUD", "EUR/AUD", "EUR/NZD", "AUD/CHF", 
+  "AUD/USD", "USD/CAD", "GBP/USD", "EUR/GBP", "GBP/JPY", "EUR/CAD", "GBP/CAD", 
+  "CAD/CHF", "AUD/JPY", "AUD/CAD", "USD/CHF"
 ];
+
+const ALLOWED_SET = new Set(ALLOWED_ASSETS.map(a => a.trim()));
+
+// Mapeamento completo de categorias dos ativos
+const ATIVOS_CATEGORIAS: Record<string, string> = {
+  // Ações
+  "AIG": "Ações",
+  "Alibaba Group Holding": "Ações",
+  "Amazon": "Ações",
+  "Amazon/Alibaba": "Ações",
+  "Amazon/Ebay": "Ações",
+  "Apple": "Ações",
+  "Baidu, Inc. ADR": "Ações",
+  "Citigroup, Inc": "Ações",
+  "Coca-Cola Company": "Ações",
+  "Meta": "Ações",
+  "Google": "Ações",
+  "Alphabet/Microsoft": "Ações",
+  "Goldman Sachs Group, Inc.": "Ações",
+  "Intel Corporation": "Ações",
+  "Intel/IBM": "Ações",
+  "JPMorgan Chase E Co.": "Ações",
+  "McDonald´s Corporation": "Ações",
+  "Meta/Alphabet": "Ações",
+  "Morgan Stanley": "Ações",
+  "Microsoft Corporation": "Ações",
+  "Microsoft/Apple": "Ações",
+  "Netflix/Amazon": "Ações",
+  "Snap Inc.": "Ações",
+  "Tesla": "Ações",
+  "Tesla/Ford": "Ações",
+  
+  // Commodities
+  "Crude Oil Brent": "Commodities",
+  "Crude Oil WTI": "Commodities",
+  "Silver": "Commodities",
+  "Ouro/Prata": "Commodities",
+  "Gold": "Commodities",
+  "Gás Natural": "Commodities",
+  
+  // Índices
+  "AUS 200": "Índices",
+  "EU 50": "Índices",
+  "FR 40": "Índices",
+  "GER 30": "Índices",
+  "GER30/UK100": "Índices",
+  "HK 33": "Índices",
+  "JP 225": "Índices",
+  "SP 35": "Índices",
+  "US 500": "Índices",
+  "UK 100": "Índices",
+  "US100/JP225": "Índices",
+  "US2000": "Índices",
+  "US 30": "Índices",
+  "US30/JP225": "Índices",
+  "US500/JP225": "Índices",
+  "US 100": "Índices",
+  
+  // Cripto
+  "Arbitrum": "Cripto",
+  "Cosmos": "Cripto",
+  "Bitcoin Cash": "Cripto",
+  "Bonk": "Cripto",
+  "Bitcoin": "Cripto",
+  "Cardano": "Cripto",
+  "Dash": "Cripto",
+  "Dogecoin": "Cripto",
+  "Polkadot": "Cripto",
+  "DYDX": "Cripto",
+  "EOS": "Cripto",
+  "Ethereum": "Cripto",
+  "Fartcoin": "Cripto",
+  "Artificial Superintelligence Alliance": "Cripto",
+  "Floki": "Cripto",
+  "Gala": "Cripto",
+  "Graph": "Cripto",
+  "Hedera": "Cripto",
+  "ICP": "Cripto",
+  "Immutable": "Cripto",
+  "Injective": "Cripto",
+  "IOTA": "Cripto",
+  "Júpiter": "Cripto",
+  "Chainlink": "Cripto",
+  "Litecoin": "Cripto",
+  "Decentraland": "Cripto",
+  "Polygon": "Cripto",
+  "MELANIA Coin": "Cripto",
+  "NEAR": "Cripto",
+  "Ondo": "Cripto",
+  "Onyxcoin": "Cripto",
+  "ORDI": "Cripto",
+  "Pudgy Penguins": "Cripto",
+  "Pepe": "Cripto",
+  "Pyth": "Cripto",
+  "Raydium": "Cripto",
+  "Render": "Cripto",
+  "Ronin": "Cripto",
+  "Sandbox": "Cripto",
+  "1000Sats": "Cripto",
+  "Sei": "Cripto",
+  "Shiba Inu": "Cripto",
+  "Solana": "Cripto",
+  "Stacks": "Cripto",
+  "Sui": "Cripto",
+  "Bittensor": "Cripto",
+  "Celestia": "Cripto",
+  "TON": "Cripto",
+  "TRON/USD": "Cripto",
+  "TRUMP Coin": "Cripto",
+  "Dogwifhat": "Cripto",
+  "World Coin": "Cripto",
+  "Ripple": "Cripto",
+
+  // Forex
+  "AUD/CAD (OTC)": "Forex",
+  "AUD/JPY (OTC)": "Forex",
+  "AUD/NZD (OTC)": "Forex",
+  "AUD/USD (OTC)": "Forex",
+  "CAD/CHF (OTC)": "Forex",
+  "CAD/JPY (OTC)": "Forex",
+  "CHF/JPY": "Forex",
+  "CHFNOK": "Forex",
+  "Dollar Index": "Forex",
+  "EUR/AUD (OTC)": "Forex",
+  "EUR/CAD (OTC)": "Forex",
+  "EUR/CHF (OTC)": "Forex",
+  "EUR/GBP (OTC)": "Forex",
+  "EUR/JPY (OTC)": "Forex",
+  "EUR/NZD (OTC)": "Forex",
+  "EUR/THB (OTC)": "Forex",
+  "EUR/USD (OTC)": "Forex",
+  "GBP/AUD (OTC)": "Forex",
+  "GBP/CAD (OTC)": "Forex",
+  "GBP/CHF (OTC)": "Forex",
+  "GBP/JPY (OTC)": "Forex",
+  "GBP/NZD (OTC)": "Forex",
+  "GBP/USD (OTC)": "Forex",
+  "JPY/THB (OTC)": "Forex",
+  "NOK/JPY (OTC)": "Forex",
+  "NZD/CAD (OTC)": "Forex",
+  "NZDCHF": "Forex",
+  "NZD/JPY (OTC)": "Forex",
+  "NZD/USD (OTC)": "Forex",
+  "PEN/USD (OTC)": "Forex",
+  "USD/BRL (OTC)": "Forex",
+  "USD/CAD (OTC)": "Forex",
+  "USD/CHF (OTC)": "Forex",
+  "USD/COP (OTC)": "Forex",
+  "USD/HKD (OTC)": "Forex",
+  "USD/INR (OTC)": "Forex",
+  "USD/JPY (OTC)": "Forex",
+  "USD/MXN (OTC)": "Forex",
+  "USD/NOK (OTC)": "Forex",
+  "USD/PLN (OTC)": "Forex",
+  "USD/SEK (OTC)": "Forex",
+  "USD/SGD (OTC)": "Forex",
+  "USD/THB (OTC)": "Forex",
+  "USD/TRY (OTC)": "Forex",
+  "USD/XOF (OTC)": "Forex",
+  "USD/ZAR (OTC)": "Forex",
+  "Yen Index": "Forex",
+  "GBP/CHF": "Forex",
+  "GBP/NZD": "Forex",
+  "GBP/AUD": "Forex",
+  "EUR/AUD": "Forex",
+  "EUR/NZD": "Forex",
+  "AUD/CHF": "Forex",
+  "AUD/USD": "Forex",
+  "USD/CAD": "Forex",
+  "GBP/USD": "Forex",
+  "EUR/GBP": "Forex",
+  "GBP/JPY": "Forex",
+  "EUR/CAD": "Forex",
+  "GBP/CAD": "Forex",
+  "CAD/CHF": "Forex",
+  "AUD/JPY": "Forex",
+  "AUD/CAD": "Forex",
+  "USD/CHF": "Forex"
+};
+
+// Horários de disponibilidade de cada ativo (formato: [hora_inicio, minuto_inicio, hora_fim, minuto_fim])
+const HORARIOS_DISPONIBILIDADE: Record<string, Array<[number, number, number, number]>> = {
+  // Ações
+  "AIG": [[0, 0, 5, 0], [6, 10, 23, 59]],
+  "Alibaba Group Holding": [[0, 0, 5, 0], [6, 10, 23, 59]],
+  "Amazon": [[0, 0, 15, 30], [16, 0, 23, 59]],
+  "Amazon/Alibaba": [[0, 0, 6, 30], [7, 0, 23, 59]],
+  "Amazon/Ebay": [[0, 0, 6, 30], [7, 0, 23, 59]],
+  "Apple": [[0, 0, 15, 30], [16, 0, 23, 59]],
+  "Baidu, Inc. ADR": [[0, 0, 5, 0], [5, 30, 23, 59]],
+  "Citigroup, Inc": [[0, 0, 5, 0], [6, 10, 23, 59]],
+  "Coca-Cola Company": [[0, 0, 5, 0], [5, 30, 23, 59]],
+  "Meta": [[0, 0, 15, 30], [16, 35, 23, 59]],
+  "Google": [[0, 0, 15, 30], [16, 35, 23, 59]],
+  "Alphabet/Microsoft": [[0, 0, 6, 30], [7, 0, 23, 59]],
+  "Goldman Sachs Group, Inc.": [[0, 0, 5, 0], [5, 30, 23, 59]],
+  "Intel Corporation": [[0, 0, 5, 0], [6, 10, 23, 59]],
+  "Intel/IBM": [[0, 0, 6, 30], [7, 0, 23, 59]],
+  "JPMorgan Chase E Co.": [[0, 0, 5, 0], [6, 10, 23, 59]],
+  "McDonald´s Corporation": [[0, 0, 5, 0], [6, 10, 23, 59]],
+  "Meta/Alphabet": [[0, 0, 6, 30], [7, 40, 23, 59]],
+  "Morgan Stanley": [[0, 0, 5, 0], [6, 10, 23, 59]],
+  "Microsoft Corporation": [[0, 0, 5, 0], [5, 30, 23, 59]],
+  "Microsoft/Apple": [[0, 0, 6, 30], [7, 40, 23, 59]],
+  "Netflix/Amazon": [[0, 0, 6, 30], [7, 0, 23, 59]],
+  "Snap Inc.": [[0, 0, 5, 0], [6, 10, 23, 59]],
+  "Tesla": [[0, 0, 15, 30], [16, 0, 23, 59]],
+  "Tesla/Ford": [[0, 0, 6, 30], [7, 0, 23, 59]],
+  
+  // Commodities
+  "Crude Oil Brent": [[0, 0, 6, 0], [7, 5, 23, 59]],
+  "Crude Oil WTI": [[0, 0, 6, 0], [7, 5, 23, 59]],
+  "Silver": [[0, 0, 6, 0], [7, 5, 23, 59]],
+  "Ouro/Prata": [[0, 0, 6, 30], [7, 40, 23, 59]],
+  "Gold": [[0, 0, 6, 0], [7, 5, 23, 59]],
+  "Gás Natural": [[0, 0, 6, 0], [7, 5, 23, 59]],
+  
+  // Índices
+  "AUS 200": [[0, 0, 22, 0], [22, 30, 23, 59]],
+  "EU 50": [[0, 0, 5, 0], [6, 10, 23, 59]],
+  "FR 40": [[0, 0, 5, 0], [6, 10, 23, 59]],
+  "GER 30": [[0, 0, 5, 0], [5, 30, 23, 59]],
+  "GER30/UK100": [[0, 0, 6, 30], [7, 0, 23, 59]],
+  "HK 33": [[0, 0, 15, 0], [15, 30, 23, 59]],
+  "JP 225": [[0, 0, 22, 0], [23, 5, 23, 59]],
+  "SP 35": [[0, 0, 5, 0], [5, 30, 23, 59]],
+  "US 500": [[11, 35, 17, 55]],
+  "UK 100": [[0, 0, 5, 0], [6, 10, 23, 59]],
+  "US100/JP225": [[0, 0, 6, 30], [7, 40, 23, 59]],
+  "US2000": [[0, 0, 5, 0], [5, 30, 23, 59]],
+  "US 30": [[0, 0, 15, 0], [16, 10, 23, 59]],
+  "US30/JP225": [[0, 0, 6, 30], [7, 40, 23, 59]],
+  "US500/JP225": [[0, 0, 6, 30], [7, 0, 23, 59]],
+  "US 100": [[0, 0, 15, 0], [16, 10, 23, 59]],
+  
+  // Cripto
+  "Arbitrum": [[0, 0, 12, 0], [12, 30, 23, 59]],
+  "Cosmos": [[0, 0, 12, 0], [13, 10, 23, 59]],
+  "Bitcoin Cash": [[0, 0, 17, 45], [18, 15, 23, 59]],
+  "Bonk": [[0, 0, 17, 40], [18, 50, 23, 59]],
+  "Bitcoin": [[0, 0, 12, 0], [12, 30, 23, 59]],
+  "Cardano": [[0, 0, 17, 45], [18, 15, 23, 59]],
+  "Dash": [[0, 0, 17, 45], [18, 15, 23, 59]],
+  "Dogecoin": [[0, 0, 17, 45], [18, 55, 23, 59]],
+  "Polkadot": [[0, 0, 17, 45], [18, 15, 23, 59]],
+  "DYDX": [[0, 0, 17, 40], [18, 50, 23, 59]],
+  "EOS": [[0, 0, 22, 0], [22, 30, 23, 59]],
+  "Ethereum": [[0, 0, 12, 0], [13, 10, 23, 59]],
+  "Fartcoin": [[0, 0, 17, 45], [18, 15, 23, 59]],
+  "Artificial Superintelligence Alliance": [[0, 0, 17, 40], [18, 50, 23, 59]],
+  "Floki": [[0, 0, 17, 40], [18, 50, 23, 59]],
+  "Gala": [[0, 0, 17, 40], [18, 50, 23, 59]],
+  "Graph": [[0, 0, 17, 45], [18, 15, 23, 59]],
+  "Hedera": [[0, 0, 17, 40], [18, 50, 23, 59]],
+  "ICP": [[0, 0, 17, 40], [18, 50, 23, 59]],
+  "Immutable": [[0, 0, 17, 40], [18, 50, 23, 59]],
+  "Injective": [[0, 0, 17, 45], [18, 15, 23, 59]],
+  "IOTA": [[0, 0, 17, 45], [18, 15, 23, 59]],
+  "Júpiter": [[0, 0, 17, 40], [18, 50, 23, 59]],
+  "Chainlink": [[0, 0, 17, 45], [18, 15, 23, 59]],
+  "Litecoin": [[0, 0, 22, 0], [23, 5, 23, 59]],
+  "Decentraland": [[0, 0, 17, 40], [18, 50, 23, 59]],
+  "Polygon": [[0, 0, 17, 45], [18, 15, 23, 59]],
+  "MELANIA Coin": [[0, 0, 17, 45], [18, 15, 23, 59]],
+  "NEAR": [[0, 0, 17, 40], [18, 50, 23, 59]],
+  "Ondo": [[0, 0, 12, 0], [13, 10, 23, 59]],
+  "Onyxcoin": [[0, 0, 12, 0], [12, 30, 23, 59]],
+  "ORDI": [[0, 0, 12, 0], [12, 30, 23, 59]],
+  "Pudgy Penguins": [[0, 0, 12, 0], [13, 10, 23, 59]],
+  "Pepe": [[0, 0, 12, 0], [13, 10, 23, 59]],
+  "Pyth": [[0, 0, 12, 0], [13, 10, 23, 59]],
+  "Raydium": [[0, 0, 12, 0], [13, 10, 23, 59]],
+  "Render": [[0, 0, 12, 0], [12, 30, 23, 59]],
+  "Ronin": [[0, 0, 12, 0], [12, 30, 23, 59]],
+  "Sandbox": [[0, 0, 12, 0], [12, 30, 23, 59]],
+  "1000Sats": [[0, 0, 12, 0], [12, 30, 23, 59]],
+  "Sei": [[0, 0, 12, 0], [12, 30, 23, 59]],
+  "Shiba Inu": [[0, 0, 17, 45], [18, 15, 23, 59]],
+  "Solana": [[0, 0, 17, 45], [18, 15, 23, 59]],
+  "Stacks": [[0, 0, 12, 0], [13, 10, 23, 59]],
+  "Sui": [[0, 0, 12, 0], [12, 30, 23, 59]],
+  "Bittensor": [[0, 0, 12, 0], [13, 10, 23, 59]],
+  "Celestia": [[0, 0, 12, 0], [12, 30, 23, 59]],
+  "TON": [[0, 0, 12, 0], [13, 10, 23, 59]],
+  "TRON/USD": [[0, 0, 17, 45], [18, 55, 23, 59]],
+  "TRUMP Coin": [[0, 0, 12, 0], [13, 10, 23, 59]],
+  "Dogwifhat": [[0, 0, 17, 45], [18, 15, 23, 59]],
+  "World Coin": [[0, 0, 17, 45], [18, 15, 23, 59]],
+  "Ripple": [[0, 0, 22, 0], [22, 30, 23, 59]],
+
+  // Forex
+  "AUD/CAD (OTC)": [[0, 0, 1, 0], [2, 10, 23, 59]],
+  "AUD/CAD": [[8, 0, 13, 0]],
+  "AUD/JPY (OTC)": [[0, 0, 5, 0], [6, 10, 23, 59]],
+  "AUD/JPY": [[7, 0, 12, 0]],
+  "AUD/NZD (OTC)": [[0, 0, 22, 0], [22, 30, 23, 59]],
+  "AUD/USD (OTC)": [[0, 0, 22, 0], [22, 30, 23, 59]],
+  "AUD/USD": [[2, 0, 6, 0], [9, 30, 15, 0]],
+  "CAD/CHF (OTC)": [[0, 0, 5, 0], [5, 30, 23, 59]],
+  "CAD/CHF": [[4, 0, 16, 0]],
+  "CAD/JPY (OTC)": [[0, 0, 22, 0], [22, 30, 23, 59]],
+  "CHF/JPY": [[0, 0, 5, 0], [6, 10, 23, 59]],
+  "CHFNOK": [[0, 0, 5, 0], [5, 30, 23, 59]],
+  "Dollar Index": [[0, 0, 10, 0], [11, 10, 22, 0], [23, 10, 23, 59]],
+  "EUR/AUD (OTC)": [[0, 0, 5, 0], [6, 10, 23, 59]],
+  "EUR/AUD": [[0, 0, 16, 0]],
+  "EUR/CAD (OTC)": [[0, 0, 5, 0], [5, 30, 23, 59]],
+  "EUR/CAD": [[4, 0, 16, 0]],
+  "EUR/CHF (OTC)": [[0, 0, 5, 0], [6, 10, 23, 59]],
+  "EUR/GBP (OTC)": [[0, 0, 1, 0], [2, 10, 23, 59]],
+  "EUR/GBP": [[3, 0, 13, 0]],
+  "EUR/JPY (OTC)": [[0, 0, 1, 0], [1, 30, 23, 59]],
+  "EUR/NZD (OTC)": [[0, 0, 22, 0], [23, 5, 23, 59]],
+  "EUR/NZD": [[0, 0, 16, 0]],
+  "EUR/THB (OTC)": [[0, 0, 22, 0], [23, 5, 23, 59]],
+  "EUR/USD (OTC)": [[0, 0, 1, 0], [1, 30, 23, 59]],
+  "GBP/AUD (OTC)": [[0, 0, 5, 0], [5, 30, 23, 59]],
+  "GBP/AUD": [[0, 0, 16, 0]],
+  "GBP/CAD (OTC)": [[0, 0, 5, 0], [5, 30, 23, 59]],
+  "GBP/CAD": [[4, 0, 15, 0]],
+  "GBP/CHF (OTC)": [[0, 0, 5, 0], [5, 30, 23, 59]],
+  "GBP/CHF": [[0, 0, 16, 0]],
+  "GBP/JPY (OTC)": [[0, 0, 1, 0], [2, 10, 23, 59]],
+  "GBP/JPY": [[3, 0, 17, 0]],
+  "GBP/NZD (OTC)": [[0, 0, 22, 0], [23, 5, 23, 59]],
+  "GBP/NZD": [[0, 0, 16, 0]],
+  "GBP/USD (OTC)": [[0, 0, 1, 0], [1, 30, 23, 59]],
+  "GBP/USD": [[3, 0, 17, 0]],
+  "JPY/THB (OTC)": [[0, 0, 22, 0], [22, 30, 23, 59]],
+  "NOK/JPY (OTC)": [[0, 0, 22, 0], [23, 5, 23, 59]],
+  "NZD/CAD (OTC)": [[0, 0, 22, 0], [23, 5, 23, 59]],
+  "NZDCHF": [[0, 0, 22, 0], [23, 5, 23, 59]],
+  "NZD/JPY (OTC)": [[0, 0, 22, 0], [23, 5, 23, 59]],
+  "NZD/USD (OTC)": [[0, 0, 1, 0], [1, 30, 23, 59]],
+  "PEN/USD (OTC)": [[0, 0, 0, 45], [1, 15, 23, 59]],
+  "USD/BRL (OTC)": [[0, 0, 0, 50], [2, 20, 23, 59]],
+  "USD/CAD (OTC)": [[0, 0, 5, 0], [6, 10, 23, 59]],
+  "USD/CAD": [[3, 0, 15, 0]],
+  "USD/CHF (OTC)": [[0, 0, 1, 0], [1, 30, 23, 59]],
+  "USD/CHF": [[10, 0, 14, 0]],
+  "USD/COP (OTC)": [[0, 0, 0, 45], [1, 15, 23, 59]],
+  "USD/HKD (OTC)": [[0, 0, 22, 0], [22, 30, 23, 59]],
+  "USD/INR (OTC)": [[0, 0, 1, 0], [1, 30, 23, 59]],
+  "USD/JPY (OTC)": [[0, 0, 1, 0], [2, 10, 23, 59]],
+  "USD/MXN (OTC)": [[0, 0, 0, 50], [2, 20, 23, 59]],
+  "USD/NOK (OTC)": [[0, 0, 5, 0], [6, 10, 23, 59]],
+  "USD/PLN (OTC)": [[0, 0, 5, 0], [5, 30, 23, 59]],
+  "USD/SEK (OTC)": [[0, 0, 5, 0], [5, 30, 23, 59]],
+  "USD/SGD (OTC)": [[0, 0, 22, 0], [23, 5, 23, 59]],
+  "USD/THB (OTC)": [[0, 0, 22, 0], [23, 5, 23, 59]],
+  "USD/TRY (OTC)": [[0, 0, 5, 0], [6, 10, 23, 59]],
+  "USD/XOF (OTC)": [[0, 0, 1, 0], [1, 30, 23, 59]],
+  "USD/ZAR (OTC)": [[0, 0, 5, 0], [6, 10, 23, 59]],
+  "Yen Index": [[0, 0, 10, 0], [10, 30, 22, 0], [22, 30, 23, 59]]
+};
+
+// Helper: retorna a lista unificada de ativos conhecidos + permitidos
+const getAllAssetNames = (): string[] => {
+  const base = Object.keys(ATIVOS_CATEGORIAS);
+  const merged = new Set<string>([...base, ...ALLOWED_SET]);
+  return Array.from(merged);
+};
+
+// Função para verificar se um ativo estará disponível por pelo menos 3 horas
+const isAssetAvailableForSignal = (asset: string, entryDate: Date = new Date()): boolean => {
+  // Verificação especial para USD Currency Index com horários específicos por dia da semana
+  if (asset === "USD Currency Index (OTC)") {
+    const dayOfWeek = entryDate.getDay(); // 0 = Domingo, 1 = Segunda, ..., 6 = Sábado
+    const hora = entryDate.getHours();
+    const minuto = entryDate.getMinutes();
+    const entryTimeMinutes = hora * 60 + minuto;
+    
+    // Sábado: Mercado fechado
+    if (dayOfWeek === 6) {
+      return false;
+    }
+    
+    // Domingo: 19:00 – 23:59
+    if (dayOfWeek === 0) {
+      const isInRange = entryTimeMinutes >= (19 * 60) && entryTimeMinutes <= (23 * 60 + 59);
+      const timeRemaining = (23 * 60 + 59) - entryTimeMinutes;
+      return isInRange && timeRemaining >= 180;
+    }
+    
+    // Segunda a Quinta: 00:00-10:00, 11:10-22:00, 23:10-23:59
+    if (dayOfWeek >= 1 && dayOfWeek <= 4) {
+      // Primeiro intervalo: 00:00-10:00
+      if (entryTimeMinutes >= 0 && entryTimeMinutes <= (10 * 60)) {
+        const timeRemaining = (10 * 60) - entryTimeMinutes;
+        return timeRemaining >= 180;
+      }
+      // Segundo intervalo: 11:10-22:00
+      if (entryTimeMinutes >= (11 * 60 + 10) && entryTimeMinutes <= (22 * 60)) {
+        const timeRemaining = (22 * 60) - entryTimeMinutes;
+        return timeRemaining >= 180;
+      }
+      // Terceiro intervalo: 23:10-23:59
+      if (entryTimeMinutes >= (23 * 60 + 10) && entryTimeMinutes <= (23 * 60 + 59)) {
+        const timeRemaining = (23 * 60 + 59) - entryTimeMinutes;
+        return timeRemaining >= 180;
+      }
+      return false;
+    }
+    
+    // Sexta: 00:00-10:00, 11:10-21:00
+    if (dayOfWeek === 5) {
+      // Primeiro intervalo: 00:00-10:00
+      if (entryTimeMinutes >= 0 && entryTimeMinutes <= (10 * 60)) {
+        const timeRemaining = (10 * 60) - entryTimeMinutes;
+        return timeRemaining >= 180;
+      }
+      // Segundo intervalo: 11:10-21:00
+      if (entryTimeMinutes >= (11 * 60 + 10) && entryTimeMinutes <= (21 * 60)) {
+        const timeRemaining = (21 * 60) - entryTimeMinutes;
+        return timeRemaining >= 180;
+      }
+      return false;
+    }
+    
+    return false;
+  }
+  
+  // Se o ativo não estiver na lista de horários, assume-se que está disponível 24/7
+  if (!HORARIOS_DISPONIBILIDADE[asset]) {
+    return true;
+  }
+  
+  const hora = entryDate.getHours();
+  const minuto = entryDate.getMinutes();
+  const entryTimeMinutes = hora * 60 + minuto;
+  
+  // Verificar se o ativo estará disponível por pelo menos 3 horas a partir do horário de entrada
+  const requiredEndTime = entryTimeMinutes + 180; // 180 minutos (3 horas) após a entrada
+  
+  const isAvailable = HORARIOS_DISPONIBILIDADE[asset].some(([horaInicio, minutoInicio, horaFim, minutoFim]) => {
+    const inicioEmMinutos = horaInicio * 60 + minutoInicio;
+    const fimEmMinutos = horaFim * 60 + minutoFim;
+    
+    // Verifica se o horário de entrada está dentro do intervalo
+    // E se há pelo menos 3 horas de disponibilidade restante
+    const entryInRange = entryTimeMinutes >= inicioEmMinutos && entryTimeMinutes <= fimEmMinutos;
+    const availableTimeRemaining = fimEmMinutos - entryTimeMinutes; // Tempo restante de disponibilidade
+    const hasEnoughTime = availableTimeRemaining >= 180; // Pelo menos 180 minutos (3 horas) restantes
+    
+    return entryInRange && hasEnoughTime;
+  });
+  
+  return isAvailable;
+};
+
+// Função para inferir categoria do ativo
+const inferExchangeCategory = (symbol: string): string => {
+  const s = symbol.replace("(OTC)", "").trim();
+  const lower = s.toLowerCase();
+
+  // Ações
+  const stockKeywords = [
+    'aig','alibaba','amazon','apple','baidu','citigroup','coca-cola','meta','google','alphabet','goldman sachs',
+    'intel','jpmorgan','mcdonald','morgan stanley','microsoft','netflix','snap','tesla','ford','ibm'
+  ];
+  if (stockKeywords.some(k => lower.includes(k))) return 'Ações';
+  const stockPairs = ['amazon/alibaba','amazon/ebay','alphabet/microsoft','intel/ibm','meta/alphabet','microsoft/apple','netflix/amazon','tesla/ford'];
+  if (stockPairs.some(k => lower.includes(k))) return 'Ações';
+
+  // Commodities
+  const commodities = ['crude oil brent','crude oil wti','silver','ouro/prata','gold','gás natural','gold/silver'];
+  if (commodities.some(k => lower.includes(k))) return 'Commodities';
+
+  // Índices
+  const indices = ['aus 200','eu 50','fr 40','ger 30','ger30/uk100','hk 33','jp 225','sp 35','us 500','uk 100','us100/jp225','us2000','us 30','us30/jp225','us500/jp225','us 100'];
+  if (indices.some(k => lower.includes(k))) return 'Índices';
+
+  // Cripto
+  const cryptos = [
+    'arbitrum','cosmos','bitcoin cash','bonk','bitcoin','cardano','dash','dogecoin','polkadot','dydx','eos','ethereum','fartcoin',
+    'artificial superintelligence alliance','floki','gala','graph','hedera','icp','immutable','injective','iota','júpiter','jupiter','chainlink',
+    'litecoin','decentraland','polygon','melania coin','near','ondo','onyxcoin','ordi','pudgy penguins','pepe','pyth','raydium','render','ronin',
+    'sandbox','1000sats','sei','shiba inu','solana','stacks','sui','bittensor','celestia','ton','tron/usd','trump coin','dogwifhat','world coin','ripple'
+  ];
+  if (cryptos.some(k => lower.includes(k))) return 'Cripto';
+
+  // Forex (pares e índices de moedas)
+  const forexKeywords = [
+    'aud/cad','aud/jpy','aud/nzd','aud/usd','cad/chf','cad/jpy','chf/jpy','chfnok','dollar index','eur/aud','eur/cad','eur/chf','eur/gbp','eur/jpy','eur/nzd','eur/thb','eur/usd',
+    'gbp/aud','gbp/cad','gbp/chf','gbp/jpy','gbp/nzd','gbp/usd','jpy/thb','nok/jpy','nzd/cad','nzdchf','nzd/jpy','nzd/usd','pen/usd',
+    'usd/brl','usd/cad','usd/chf','usd/cop','usd/hkd','usd/inr','usd/jpy','usd/mxn','usd/nok','usd/pln','usd/sek','usd/sgd','usd/thb','usd/try','usd/xof','usd/zar',
+    'yen index'
+  ];
+  if (forexKeywords.some(k => lower.includes(k))) return 'Forex';
+
+  // Demais casos: manter categorização existente ou assumir "Cripto" como fallback
+  return ATIVOS_CATEGORIAS[symbol] || 'Cripto';
+};
+
+// Função para obter um ativo aleatório disponível no momento atual com verificação de horários
+const getRandomAsset = (entryDate?: Date): string => {
+  const checkDate = entryDate || new Date();
+  
+  // Filtrar ativos que estão na lista permitida E disponíveis no horário
+  const availableAssets = getAllAssetNames().filter(asset => {
+    const assetLower = asset.toLowerCase();
+    const categoryLower = (ATIVOS_CATEGORIAS[asset] || '').toLowerCase();
+    
+    return (
+      ALLOWED_SET.has(asset) &&
+      isAssetAvailableForSignal(asset, checkDate) &&
+      !assetLower.includes('binance') && 
+      !categoryLower.includes('binance')
+    );
+  });
+  
+  // Log para debug - apenas se houver problemas
+  if (availableAssets.length === 0) {
+    console.warn('🚨 Dashboard: Nenhum ativo disponível encontrado, usando ativos padrão');
+  }
+  
+  // Se não houver ativos disponíveis, usar ativos padrão que são sempre seguros
+  if (availableAssets.length === 0) {
+    const safeAssets = [
+      "Bitcoin", 
+      "Ethereum", 
+      "Ouro/Prata",
+      "USD/CAD (OTC)",
+      "EUR/JPY (OTC)"
+    ];
+    const randomIndex = Math.floor(Math.random() * safeAssets.length);
+    return safeAssets[randomIndex];
+  }
+  
+  // Lista de ativos prioritários para maior variação
+  const priorityAssets = [
+    "GER 30", "USD/ZAR (OTC)", "MELANIA Coin", 
+    "Dollar Index", "World Coin", "TRUMP Coin", "GBP/CAD (OTC)",
+    "Ouro/Prata", "Ethereum", "1000Sats", "Pepe",
+    "Bitcoin", "USD/CAD (OTC)", "EUR/JPY (OTC)", "GBP/AUD (OTC)"
+  ].filter(asset => 
+    availableAssets.includes(asset) && ALLOWED_SET.has(asset) &&
+    !asset.toLowerCase().includes('binance')
+  );
+  
+  // Se temos ativos prioritários disponíveis, escolher entre eles
+  if (priorityAssets.length > 0) {
+    const randomIndex = Math.floor(Math.random() * priorityAssets.length);
+    return priorityAssets[randomIndex];
+  }
+  
+  // Caso contrário, retornar um ativo aleatório da lista completa de disponíveis
+  const filteredAvailableAssets = availableAssets.filter(asset => ALLOWED_SET.has(asset) && !asset.toLowerCase().includes('binance'));
+  
+  if (filteredAvailableAssets.length > 0) {
+    const randomIndex = Math.floor(Math.random() * filteredAvailableAssets.length);
+    return filteredAvailableAssets[randomIndex];
+  }
+  
+  // Fallback final
+  return "Bitcoin";
+};
 
 // Obter o tempo de expiração dependendo do modo
 const getExpirationTimeout = () => {
@@ -219,18 +963,11 @@ const getInitialTimeSlot = (): string => {
 };
 
 // Função auxiliar para calcular o próximo horário
-const calculateNextTime = (timeStr, minutesToAdd) => {
-  const [hours, minutes] = timeStr.split(':').map(Number);
-  
-  let newMinutes = minutes + minutesToAdd;
-  let newHours = hours;
-  
-  while (newMinutes >= 60) {
-    newHours = (newHours + 1) % 24;
-    newMinutes -= 60;
-  }
-  
-  return `${newHours.toString().padStart(2, '0')}:${newMinutes.toString().padStart(2, '0')}`;
+const calculateNextTime = (time: string, minutesToAdd: number): string => {
+  const [hours, minutes] = time.split(':').map(Number);
+  const date = new Date();
+  date.setHours(hours, minutes + minutesToAdd, 0, 0);
+  return `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
 };
 
 // Verificar se temos sinais do dia no localStorage
@@ -323,33 +1060,55 @@ const validateCachedSignals = (signals: EnrichedSignal[]): EnrichedSignal[] | nu
   const now = new Date();
   const currentHour = now.getHours();
   const currentMinute = now.getMinutes();
+  const currentTimeStr = `${currentHour.toString().padStart(2, '0')}:${currentMinute.toString().padStart(2, '0')}`;
   
-  // Filtrar sinais com horários válidos
+  console.log(`🔍 VALIDAÇÃO ULTRA-RIGOROSA: Horário atual ${currentTimeStr} - Verificando ${signals.length} sinais`);
+  
+  // Filtrar sinais APENAS com horários FUTUROS
   const validSignals = signals.filter(signal => {
-    if (!signal.entry_time) return false;
+    if (!signal.entry_time) {
+      console.log(`❌ Sinal ${signal.symbol || 'UNKNOWN'} rejeitado: sem horário de entrada`);
+      return false;
+    }
     
     // Extrair hora e minuto do sinal
     const [entryHour, entryMin] = signal.entry_time.split(':').map(Number);
     
-    // Calcular diferença de tempo
-    let hourDiff = entryHour - currentHour;
-    if (hourDiff < -12) hourDiff += 24; // Ajustar para ciclo de 24h
-    if (hourDiff > 12) hourDiff -= 24;
+    // Converter para minutos totais para comparação precisa
+    const currentTotalMinutes = currentHour * 60 + currentMinute;
+    const entryTotalMinutes = entryHour * 60 + entryMin;
     
-    // Aceitar apenas sinais com horários próximos ou futuros
-    // (até 2 horas para trás ou até 6 horas para frente)
-    const isValidTime = (hourDiff >= -2 && hourDiff <= 6);
+    // REGRA ULTRA-RIGOROSA: Apenas sinais que são pelo menos 1 minuto no futuro
+    const isFutureSignal = entryTotalMinutes > currentTotalMinutes;
     
-    if (!isValidTime) {
-      console.log(`Sinal ${signal.symbol} com horário inválido: ${signal.entry_time}`);
+    // Ajustar para virada de dia (caso o sinal seja para o próximo dia)
+    const isNextDaySignal = entryTotalMinutes < currentTotalMinutes && 
+                           (currentTotalMinutes - entryTotalMinutes) > 12 * 60; // Mais de 12 horas de diferença
+    
+    const isValidFutureTime = isFutureSignal || isNextDaySignal;
+    
+    if (!isValidFutureTime) {
+      console.log(`❌ SINAL REJEITADO: ${signal.symbol} - ${signal.entry_time} (horário PASSADO em relação a ${currentTimeStr})`);
+    } else {
+      console.log(`✅ SINAL ACEITO: ${signal.symbol} - ${signal.entry_time} (horário FUTURO)`);
     }
     
-    return isValidTime;
+    return isValidFutureTime;
   });
   
-  console.log(`Sinais validados: ${validSignals.length} de ${signals.length}`);
+  console.log(`📊 VALIDAÇÃO CONCLUÍDA: ${validSignals.length} sinais FUTUROS de ${signals.length} sinais verificados`);
   
-  if (validSignals.length === 0) return null;
+  // Se não temos sinais futuros válidos, retornar null para forçar regeneração
+  if (validSignals.length === 0) {
+    console.log(`🆘 NENHUM SINAL FUTURO VÁLIDO - Cache será descartado e novos sinais serão gerados`);
+    return null;
+  }
+  
+  // Se temos menos de 3 sinais válidos, também regenerar
+  if (validSignals.length < 3) {
+    console.log(`⚠️ MENOS DE 3 SINAIS FUTUROS (${validSignals.length}) - Cache será descartado para gerar 3 sinais completos`);
+    return null;
+  }
   
   // Certificar que temos IDs únicos
   const timestamp = Date.now();
@@ -364,7 +1123,7 @@ const saveSignalsToLocalStorage = (signals, timestamp, timeSlot) => {
   try {
     // Verificar se temos sinais válidos
     if (!signals || signals.length === 0) {
-      console.warn('Tentativa de salvar sinais vazios no localStorage');
+      console.warn('⚠️ Tentativa de salvar sinais vazios no localStorage - ignorando');
       return;
     }
     
@@ -375,12 +1134,12 @@ const saveSignalsToLocalStorage = (signals, timestamp, timeSlot) => {
       timeSlot: timeSlot || getInitialTimeSlot()
     };
     
-    // Salvar no localStorage
-    localStorage.setItem('dashboard-signals-cache', JSON.stringify(dataToSave));
+    // CORREÇÃO: Salvar no localStorage com a mesma chave usada para leitura
+    localStorage.setItem('dashboardSignals', JSON.stringify(dataToSave));
     
-    console.log(`Sinais da dashboard salvos no localStorage: Array(${signals.length})`);
+    console.log(`✅ Sinais da dashboard salvos no localStorage: Array(${signals.length})`);
   } catch (error) {
-    console.error('Erro ao salvar sinais no localStorage:', error);
+    console.error('❌ Erro ao salvar sinais no localStorage:', error);
   }
 };
 
@@ -410,72 +1169,99 @@ const saveDailySignalsToLocalStorage = (signals, timeSlots) => {
   }
 };
 
-// Função para criar um objeto de sinal
-const createSignalObject = (timeConfig) => {
-  // Escolher um ativo aleatório
-  const selectedAsset = availableAssets[Math.floor(Math.random() * availableAssets.length)];
-  
-  // Decidir entre BUY ou SELL de forma explícita
-  const signalType: 'BUY' | 'SELL' = Math.random() > 0.5 ? 'BUY' : 'SELL';
-  
-  // Validar e corrigir o horário de entrada para o padrão XX:03, XX:23, XX:43
-  let entry_time = timeConfig.entry_time || "00:00";
-  
-  if (!isValidEntryTime(entry_time)) {
-    console.warn(`Horário de entrada inválido: ${entry_time}. Corrigindo para formato válido...`);
-    
-    // Se for uma string de horário, extrair a parte da hora
-    if (entry_time && typeof entry_time === 'string' && entry_time.includes(':')) {
-      const [hours, minutes] = entry_time.split(':').map(Number);
-      
-      // Encontrar o minuto válido mais próximo (03, 23, 43)
-      const closestMinute = VALID_MINUTES.reduce((prev, curr) => {
-        return Math.abs(curr - minutes) < Math.abs(prev - minutes) ? curr : prev;
-      }, VALID_MINUTES[0]);
-      
-      entry_time = `${hours.toString().padStart(2, '0')}:${closestMinute.toString().padStart(2, '0')}`;
-    } else {
-      // Se não temos um horário válido, usar o próximo horário válido a partir de agora
-      const [time1, time2, time3] = calculateNextThreeValidTimes();
-      entry_time = time1;
-    }
-    
-    console.log(`Horário corrigido para: ${entry_time}`);
+// Função para obter ativo aleatório da lista permitida (substitui DEFAULT_SYMBOL_POOL)
+const getRandomAssetFromAllowed = (): string => {
+  const randomIndex = Math.floor(Math.random() * ALLOWED_ASSETS.length);
+  return ALLOWED_ASSETS[randomIndex];
+};
+
+// Função para criar um objeto de sinal com propriedades completas
+// agora com verificação de horários de funcionamento
+const createSignalObject = (entryTime: string, position: number, preferredSymbol?: string): EnrichedSignal => {
+  // Direções aleatórias para maior variedade de sinais
+  const directions = [
+    'VENDA',  // Posição 1
+    'COMPRA', // Posição 2
+    Math.random() > 0.5 ? 'COMPRA' : 'VENDA'  // Posição 3 (aleatória)
+  ];
+
+  // Criar data para o horário específico do sinal
+  const [hours, minutes] = entryTime.split(':').map(Number);
+  const signalDate = new Date();
+  signalDate.setHours(hours, minutes, 0, 0);
+
+  // Determinar símbolo: verificar se preferredSymbol está disponível, senão escolher da lista permitida
+  let symbol: string;
+  if (preferredSymbol && ALLOWED_SET.has(preferredSymbol) && isAssetAvailableForSignal(preferredSymbol, signalDate)) {
+    symbol = preferredSymbol;
+  } else {
+    symbol = getRandomAsset(signalDate);
   }
   
-  // Recalcular os outros horários com base no horário de entrada corrigido
-  const expiry_time_str = timeConfig.expiry_time_str || calculateNextTime(entry_time, SIGNAL_EXPIRY_TIME);
-  const gale1_time = timeConfig.gale1_time || expiry_time_str;
-  const gale2_time = timeConfig.gale2_time || calculateNextTime(entry_time, SIGNAL_EXPIRY_TIME * 2);
+  const direction = directions[position - 1] || (Math.random() > 0.5 ? 'COMPRA' : 'VENDA');
   
-  // Criar o sinal
+  // Calcular horários de expiração e reentrada (reutilizar hours e minutes já definidos)
+  
+  // Adicionar 5 minutos para expiração
+  const expiryDate = new Date();
+  expiryDate.setHours(hours, minutes + 5);
+  const expiryTime = `${String(expiryDate.getHours()).padStart(2, '0')}:${String(expiryDate.getMinutes()).padStart(2, '0')}`;
+  
+  // Reentrada 1 é igual à expiração
+  const reentry1Time = expiryTime;
+  
+  // Adicionar 5 minutos para segunda reentrada (total 10 min após entrada)
+  const reentry2Date = new Date();
+  reentry2Date.setHours(hours, minutes + 10);
+  const reentry2Time = `${String(reentry2Date.getHours()).padStart(2, '0')}:${String(reentry2Date.getMinutes()).padStart(2, '0')}`;
+
   return {
-    id: `signal-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
-    symbol: timeConfig.symbol || selectedAsset.symbol,
-    exchange: timeConfig.exchange || selectedAsset.exchange,
-    type: Math.random() > 0.5 ? SignalType.TECHNICAL : SignalType.FUNDAMENTAL,
-    signal: signalType,
-              strength: SignalStrength.STRONG,
-    reason: 'Análise algorítmica de padrões',
-    timestamp: new Date().toISOString(),
-    price: 100 + Math.random() * 900,
-    entry_price: 100 + Math.random() * 900,
-    stop_loss: 90 + Math.random() * 800,
-    target_price: 110 + Math.random() * 1000,
-    success_rate: 0.8 + Math.random() * 0.15,
-    timeframe: '5m',
+    id: `signal-${Date.now()}-${position}`,
+    position,
+    symbol,
+    type: direction === 'COMPRA' ? SignalType.COMPRA : SignalType.VENDA,
+    signal: direction === 'COMPRA' ? 'BUY' : 'SELL',
+    entry_time: entryTime,
+    expiry_time_str: expiryTime,
     expiry: '5m',
-    risk_reward: '1.5:1',
-              status: 'active',
-    entry_time,
-    expiry_time_str,
-    gale1_time,
-    gale2_time,
-    qualityScore: 70 + Math.floor(Math.random() * 30),
+    gale1_time: reentry1Time,
+    gale2_time: reentry2Time,
+    strength: SignalStrength.STRONG,
+    timestamp: new Date().toISOString(),
+    qualityScore: 0.85 + Math.random() * 0.1,
+    exchange: inferExchangeCategory(symbol),
     processed: false,
-    result: undefined,
-    signalNumber: 0,
+    status: 'active',
+    reason: 'Technical Analysis',
+    price: 0,
+    entry_price: 0,
+    target_price: 0,
+    stop_loss: 0,
+    success_rate: 0.85 + Math.random() * 0.1,
+    expired: false,
+    timeframe: '5m',
+    risk_reward: '1:2',
+    isDashboard: true,
+    dashboardPosition: position - 1,
+    entryTimestamp: Date.now()
   };
+};
+
+// Escolher próximo símbolo para novo sinal com maior aleatoriedade
+const pickNextSymbol = (existingSymbols: string[] = []): string => {
+  // Usar a lista completa de ativos permitidos
+  const pool = [...ALLOWED_ASSETS];
+  
+  // Embaralhar o pool para maior aleatoriedade
+  const shuffledPool = [...pool].sort(() => Math.random() - 0.5);
+  
+  // Primeiro, tentar encontrar um símbolo que não está em uso
+  for (const sym of shuffledPool) {
+    if (!existingSymbols.includes(sym)) return sym;
+  }
+  
+  // Se todos os símbolos já estão em uso, selecionar aleatoriamente
+  return shuffledPool[Math.floor(Math.random() * shuffledPool.length)];
 };
 
 // Função para verificar e evitar sinais com horários duplicados
@@ -584,15 +1370,10 @@ const generateDailySignals = async () => {
         const horarioAnimacao = calculateNextTime(horarioGale2, 6); // +6min após gale2
         
         // Criar o objeto do sinal
-        const signal = createSignalObject({
-          entry_time: horarioEntrada,
-          expiry_time_str: horarioExpiracao,
-          gale1_time: horarioGale1,
-          gale2_time: horarioGale2
-        });
+        const signal = createSignalObject(horarioEntrada, numeroSinal % 3 + 1);
         
         // Definir número do sinal para controle
-        signal.signalNumber = numeroSinal;
+        (signal as EnrichedSignal & { signalNumber?: number }).signalNumber = numeroSinal;
         
         // Determinar se o sinal já passou com base no horário atual
         const [entryHour, entryMin] = horarioEntrada.split(':').map(Number);
@@ -668,7 +1449,7 @@ const generateDailySignals = async () => {
       if (!signal.entry_time || !signal.gale2_time) return;
       
       // Extrair número do sinal
-      const numeroSinal = signal.signalNumber || 0;
+      const numeroSinal = (signal as EnrichedSignal & { signalNumber?: number }).signalNumber || 0;
       
       // Calcular horário de animação (6min após gale2)
       const horarioAnimacao = calculateNextTime(signal.gale2_time, 6);
@@ -813,12 +1594,7 @@ const generateDailySignals = async () => {
       const horarioGale1 = horarioExpiracao;
       const horarioGale2 = calculateNextTime(horarioGale1, SIGNAL_EXPIRY_TIME);
       
-      const emergencySignal = createSignalObject({
-        entry_time: horarioEntrada,
-        expiry_time_str: horarioExpiracao,
-        gale1_time: horarioGale1,
-        gale2_time: horarioGale2
-      });
+      const emergencySignal = createSignalObject(horarioEntrada, i + 1);
       
       // Configurar o sinal de emergência
       emergencySignal.processed = false;
@@ -1105,83 +1881,115 @@ const simpleTextLoadingStyles = `
 // Nossa interface EnrichedSignal personalizada
 interface EnrichedSignal {
   id: string;
-  symbol: string;
+  entry_time: string;
   type: SignalType;
-  signal: 'BUY' | 'SELL';
-  reason: string;
   strength: SignalStrength;
   timestamp: string;
+  qualityScore: number;
+  symbol: string;
+  exchange: string;
+  processed: boolean;
+  status: 'active' | 'completed' | 'cancelled';
+  signal: 'BUY' | 'SELL';
+  reason: string;
   price: number;
   entry_price: number;
-  stop_loss: number;
   target_price: number;
+  stop_loss: number;
   success_rate: number;
+  expired: boolean;
   timeframe: string;
   expiry: string;
   risk_reward: string;
-  status: 'active' | 'completed' | 'cancelled';
-  qualityScore: number;
-  entry_time?: string;
   expiry_time_str?: string;
   gale1_time?: string;
   gale2_time?: string;
-  exchange?: string;
+  result?: 'success' | 'failure';
+  isAnimating?: boolean;
   categoria?: string;
-  newsAnalysis?: any;
-  correlationAnalysis?: any;
-  onChainMetrics?: any;
-  orderBookAnalysis?: any;
-  entryTimestamp?: number; // Timestamp para cálculo de tempo decorrido
-  processed?: boolean; // Indica se o sinal já foi processado (ganho/perda)
-  result?: 'success' | 'failure'; // Resultado do sinal após processamento
-  // isAnimating removido - sem animações
-  [key: string]: any; // Permite campos adicionais
+  newsAnalysis?: Record<string, unknown>;
+  correlationAnalysis?: Record<string, unknown>;
+  onChainMetrics?: Record<string, unknown>;
+  orderBookAnalysis?: Record<string, unknown>;
+  isDashboard?: boolean;
+  dashboardPosition?: number;
+  entryTimestamp?: number;
+  position?: number;
+  [key: string]: unknown; // Permite campos adicionais
 }
 
 // Estilos CSS para animações personalizadas
 const signalCardStyles = `
   @keyframes signalPulse {
-    0%, 100% { 
+    0%, 100% {
       transform: scale(1);
       opacity: 1;
     }
-    50% { 
-      transform: scale(1.05);
-      opacity: 0.8;
+    50% {
+      transform: scale(1.02); /* suavizado */
+      opacity: 0.9;
     }
   }
   
   @keyframes signalGlow {
-    0%, 100% { 
-      filter: drop-shadow(0 0 3px rgba(52, 211, 153, 0.4));
+    0%, 100% {
+      filter: drop-shadow(0 0 2px rgba(147, 51, 234, 0.3));
     }
-    50% { 
-      filter: drop-shadow(0 0 6px rgba(52, 211, 153, 0.7));
+    50% {
+      filter: drop-shadow(0 0 4px rgba(147, 51, 234, 0.5));
     }
   }
   
   @keyframes signalFloat {
-    0%, 100% { 
+    0%, 100% {
       transform: translateY(0px);
     }
-    50% { 
-      transform: translateY(-1px);
+    50% {
+      transform: translateY(-0.5px); /* menos deslocamento */
     }
   }
   
   .signal-highlight-icon {
-    animation: signalPulse 3s ease-in-out infinite, signalGlow 3s ease-in-out infinite, signalFloat 2s ease-in-out infinite;
-    color: rgb(52, 211, 153);
-    transition: all 0.3s ease;
+    animation: signalPulse 4s ease-in-out infinite, signalGlow 4s ease-in-out infinite, signalFloat 3s ease-in-out infinite;
+    color: rgb(147, 51, 234);
+    transition: transform 0.2s ease;
+    will-change: transform, filter;
   }
   
   .signal-highlight-icon:hover {
-    transform: scale(1.1);
-    filter: drop-shadow(0 0 8px rgba(52, 211, 153, 0.8));
+    transform: scale(1.06);
+    filter: drop-shadow(0 0 6px rgba(147, 51, 234, 0.6));
+  }
+  
+  /* Respeitar usuários que preferem menos animações */
+  @media (prefers-reduced-motion: reduce) {
+    .signal-highlight-icon {
+      animation: none !important;
+    }
   }
 `;
 
-const SignalsCard = () => {
+// Função para converter string de horário em timestamp
+const parseTimeString = (timeStr: string): Date => {
+  const [hours, minutes] = timeStr.split(':').map(Number);
+  const date = new Date();
+  date.setHours(hours, minutes, 0, 0);
+  // Ajuste inteligente: escolher a ocorrência mais próxima (hoje, ontem ou amanhã)
+  const now = new Date();
+  const diffMs = date.getTime() - now.getTime();
+  const twelveHoursMs = 12 * 60 * 60 * 1000;
+  // Se a hora construída está muito à frente (>12h), então pertence ao dia anterior
+  if (diffMs > twelveHoursMs) {
+    date.setDate(date.getDate() - 1);
+  }
+  // Se a hora construída está muito atrás (<-12h), então pertence ao dia seguinte
+  else if (diffMs < -twelveHoursMs) {
+    date.setDate(date.getDate() + 1);
+  }
+  return date;
+};
+
+const SignalsCard: React.FC = () => {
   const navigate = useNavigate();
   const { t } = useLanguage();
   const { convertTimeToSelected } = useTimeZone();
@@ -1189,68 +1997,587 @@ const SignalsCard = () => {
   
   // Use refs para dados que precisam persistir entre re-renderizações
   const mountedRef = useRef<boolean>(false);
-  const [completedSignals, setCompletedSignals] = useState<Set<string>>(
-    window.completedSignalsRef || new Set()
-  );
+  const [completedSignals, setCompletedSignals] = useState<Set<string>>(new Set());
   const [animatingSignals, setAnimatingSignals] = useState<Set<string>>(new Set());
   const [cachedSignals, setCachedSignals] = useState<EnrichedSignal[]>([]);
   const [retryCount, setRetryCount] = useState<number>(0);
-  const [currentTimeSlot, setCurrentTimeSlot] = useState<string>(getInitialTimeSlot());
+  const [currentTimeSlot, setCurrentTimeSlot] = useState<string>('');
   const [currentTime, setCurrentTime] = useState<Date>(new Date());
   
-  // Inicializar displayedSignals com valor armazenado globalmente, se disponível
-  const [displayedSignals, setDisplayedSignals] = useState<EnrichedSignal[]>(
-    window.displayedSignalsRef || []
-  );
+  // 🔒 SISTEMA ULTRA-FIXO: Estado dos sinais com persistência ABSOLUTA
+  const [displayedSignals, setDisplayedSignals] = useState<EnrichedSignal[]>(() => {
+    // PRIORIDADE 1: Verificar se há sinais fixos no localStorage
+    try {
+      const fixedSignalsData = localStorage.getItem('dashboard_signals_fixed');
+      if (fixedSignalsData) {
+        const { signals, fixedUntil, timestamp } = JSON.parse(fixedSignalsData);
+        const now = Date.now();
+        
+        // Se os sinais ainda estão no período de fixação, USAR OBRIGATORIAMENTE
+        if (Array.isArray(signals) && signals.length === 3 && fixedUntil > now) {
+          console.log('🔒 SINAIS FIXOS: Carregando sinais fixos do período de proteção');
+          window.displayedSignalsRef = signals;
+          return signals;
+        }
+      }
+    } catch (err) {
+      console.warn('Erro ao carregar sinais fixos:', err);
+    }
+    
+    // PRIORIDADE 2: Verificar localStorage normal
+    try {
+      const stored = localStorage.getItem('dashboard_signals');
+      if (stored) {
+        const { signals, timestamp } = JSON.parse(stored);
+        if (Date.now() - timestamp <= 30 * 60 * 1000 && Array.isArray(signals) && signals.length === 3) {
+          window.displayedSignalsRef = signals;
+          return signals;
+        }
+      }
+    } catch (err) {
+      console.warn('Erro ao carregar sinais normais:', err);
+    }
+    
+    return window.displayedSignalsRef || [];
+  });
   
+  const [lastUpdateTime, setLastUpdateTime] = useState<number>(Date.now());
   const [signalQueue, setSignalQueue] = useState<EnrichedSignal[]>([]);
-  const animationsRef = useRef<Record<string, any>>({});
+  const animationsRef = useRef<Record<string, boolean>>({});
   const autoCompleteTimersRef = useRef<Record<string, NodeJS.Timeout>>({});
   const queryClient = useQueryClient();
   
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [refreshingSignals, setRefreshingSignals] = useState(false);
-  const [refreshButtonState, setRefreshButtonState] = useState<'idle' | 'loading' | 'success'>('idle');
+  const [refreshButtonState, setRefreshButtonState] = useState<'idle' | 'loading' | 'success' | 'default'>('idle');
   
   const slotCheckIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const timeUpdateIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const currentTimeSlotRef = useRef<string>('');
   
-  // Constante para tempo real de processamento (20 minutos em produção, 30 segundos em teste)
-  const SIGNAL_PROCESSING_TIME = TEST_MODE ? 30 * 1000 : 20 * 60 * 1000; // 20 minutos em ms
+  // Constante para tempo real de processamento (20 minutos)
+  const SIGNAL_PROCESSING_TIME = 20 * 60 * 1000; // 20 minutos em ms
+  const SIGNAL_FIXED_PERIOD = 20 * 60 * 1000; // 20 minutos de período fixo
+
+  // Estado local para exibir o timer da dashboard (entrada do primeiro sinal)
+  const [rotationTimerState, setRotationTimerState] = useState<null | {
+    entryTime: string;
+    entryTimestamp: number;
+    minutesSinceEntry: number;
+    secondsRemaining: number;
+    nextRotationTime: number;
+  }>(null);
+
+  // Ref para evitar logs repetitivos em cada segundo
+  const lastLoggedMinutesRef = useRef<number | null>(null);
+
+  // Ouvir eventos globais emitidos pelo monitor (atualização do timer)
+  useEffect(() => {
+    const handler = (ev: Event) => {
+      try {
+        const detail = (ev as CustomEvent).detail as {
+          entryTime: string;
+          entryTimestamp: number;
+          minutesSinceEntry: number;
+          secondsRemaining: number;
+          nextRotationTime: number; // Timestamp em ms, não string
+        } | undefined;
+        if (!detail) return;
+        setRotationTimerState({
+          entryTime: detail.entryTime,
+          entryTimestamp: detail.entryTimestamp,
+          minutesSinceEntry: detail.minutesSinceEntry,
+          secondsRemaining: detail.secondsRemaining,
+          nextRotationTime: detail.nextRotationTime // Manter como número
+        });
+
+        // Logar alterações significativas no tempo até a rotação (apenas quando minuto mudar)
+        const nowMs = Date.now();
+        const msToRotation = detail.nextRotationTime - nowMs;
+        const minutesToRotation = Math.max(0, Math.ceil(msToRotation / (1000 * 60)));
+        if (lastLoggedMinutesRef.current !== minutesToRotation) {
+          lastLoggedMinutesRef.current = minutesToRotation;
+          const secondsRem = Math.max(0, Math.ceil((msToRotation % (1000 * 60)) / 1000));
+          console.log(`⏱️ Dashboard Timer: ${detail.entryTime} → até rotação ${minutesToRotation}m ${secondsRem}s`);
+        }
+      } catch (err) {
+        // ignorar
+      }
+    };
+
+    window.addEventListener('dashboardRotationTimerUpdate', handler as EventListener);
+    return () => window.removeEventListener('dashboardRotationTimerUpdate', handler as EventListener);
+  }, []);
 
   // Inicializar o mapa de timers global se não existir
   if (!window.signalTimersMap) {
     window.signalTimersMap = {};
   }
 
-  // Função para verificar se um sinal deve ser processado com base no tempo de entrada
+  // Sistema simplificado - não precisa de funções complexas
+
+  // Função melhorada para sincronizar sinais de forma bidirecional
+  const saveDashboardSignalsForSync = useCallback((signals: EnrichedSignal[]) => {
+    try {
+      console.log('📡 SINCRONIZAÇÃO BIDIRECIONAL: Salvando sinais para sincronização com todas as abas');
+      
+      // CORREÇÃO: Garantir que temos exatamente 3 sinais, mesmo que não tenham propriedade position
+      // Pegamos os 3 primeiros do array ou limitamos a 3 se tiver mais
+      let signalsToSync = [...signals];
+      if (signalsToSync.length > 3) {
+        signalsToSync = signalsToSync.slice(0, 3);
+      }
+      
+      // Adicionar propriedades necessárias para cada sinal
+      const enrichedSignals = signalsToSync.map((signal, index) => ({
+        ...signal,
+        // Garantir que os sinais tenham as propriedades necessárias para sincronização
+        isDashboard: true,
+        // Se não tiver position, adicionar baseado no índice
+        position: signal.position || (index + 1),
+        // Adicionar dashboardPosition baseado no índice (0, 1, 2)
+        dashboardPosition: index,
+        entryTimestamp: signal.entryTimestamp || Date.now(),
+        syncTimestamp: Date.now()
+      }));
+      
+      // Verificar se temos exatamente 3 sinais
+      if (enrichedSignals.length !== 3) {
+        console.warn(`⚠️ AVISO: Número incorreto de sinais (${enrichedSignals.length}/3) para sincronização`);
+      }
+      
+      // Criar objeto de dados para salvar
+      const dataToSave = {
+        signals: enrichedSignals,
+        timestamp: Date.now(),
+        version: '2.0',
+        source: 'dashboard'
+      };
+      
+      // Salvar APENAS no dashboardSignals (não sobrescrever tradesSignals)
+      localStorage.setItem('dashboardSignals', JSON.stringify(dataToSave));
+      
+      console.log('💾 Sinais do Dashboard salvos: ' + 
+        enrichedSignals.map(s => `${s.symbol} (${s.entry_time})`).join(' | '));
+      
+      // Disparar eventos para sincronizar com outras abas/componentes
+      // A aba Trades vai ouvir e atualizar seus 3 primeiros sinais
+      window.dispatchEvent(new CustomEvent('dashboardSignalsUpdated', { detail: dataToSave }));
+      window.dispatchEvent(new CustomEvent('forceDashboardSync', { detail: dataToSave }));
+      
+      // Registrar o último timestamp de sincronização
+      (window as Window & { lastSyncTimestamp?: number; lastSyncSource?: string }).lastSyncTimestamp = Date.now();
+      (window as Window & { lastSyncTimestamp?: number; lastSyncSource?: string }).lastSyncSource = 'dashboard';
+    } catch (error) {
+      console.error('❌ Erro durante sincronização de sinais:', error);
+    }
+  }, []);
+
+  // Efeito: Monitorar o primeiro sinal da dashboard e contar 20 minutos a partir do horário de entrada
+  useEffect(() => {
+    // Limpar intervalo anterior, se existir
+    try {
+      if (window.rotationMonitorInterval) {
+        clearInterval(window.rotationMonitorInterval);
+        window.rotationMonitorInterval = null;
+      }
+    } catch (err) {
+      console.warn('Erro ao limpar rotationMonitorInterval anterior:', err);
+    }
+
+    if (!displayedSignals || displayedSignals.length === 0) {
+      // Resetar estado global de monitoramento
+      if (window.rotationTimer) {
+        window.rotationTimer.entryTime = '';
+        window.rotationTimer.entryTimestamp = 0;
+        window.rotationTimer.minutesSinceEntry = 0;
+        window.rotationTimer.nextRotationTime = 0;
+        window.rotationTimer.lastUpdateTimestamp = Date.now();
+      }
+      return;
+    }
+
+    const firstSignal = displayedSignals[0];
+    if (!firstSignal || !firstSignal.entry_time) return;
+
+    // Converter entry_time (HH:MM) para Date usando parseTimeString
+    const entryDate = parseTimeString(firstSignal.entry_time);
+    const targetDate = new Date(entryDate.getTime() + SIGNAL_PROCESSING_TIME); // +20 minutos
+
+    // Inicializar objeto global rotationTimer
+    if (!window.rotationTimer) {
+      window.rotationTimer = {
+        entryTime: firstSignal.entry_time,
+        entryTimestamp: entryDate.getTime(),
+        minutesSinceEntry: 0,
+        nextRotationTime: targetDate.getTime(),
+        lastUpdateTimestamp: Date.now()
+      };
+    } else {
+      window.rotationTimer.entryTime = firstSignal.entry_time;
+      window.rotationTimer.entryTimestamp = entryDate.getTime();
+      window.rotationTimer.nextRotationTime = targetDate.getTime();
+      window.rotationTimer.lastUpdateTimestamp = Date.now();
+      window.rotationTimer.minutesSinceEntry = 0;
+    }
+
+    // Atualizar imediatamente e depois a cada segundo
+    const tick = () => {
+      const now = Date.now();
+      const minutesSinceEntry = Math.floor((now - entryDate.getTime()) / (1000 * 60));
+      const secondsRemaining = Math.max(0, Math.ceil((targetDate.getTime() - now) / 1000));
+
+      if (window.rotationTimer) {
+        window.rotationTimer.minutesSinceEntry = minutesSinceEntry;
+        window.rotationTimer.lastUpdateTimestamp = now;
+        window.rotationTimer.nextRotationTime = targetDate.getTime();
+      }
+
+      // Disparar evento para listeners externos (ex: UI, logs)
+      try {
+        window.dispatchEvent(new CustomEvent('dashboardRotationTimerUpdate', {
+          detail: {
+            entryTime: firstSignal.entry_time,
+            entryTimestamp: entryDate.getTime(),
+            minutesSinceEntry,
+            secondsRemaining,
+            nextRotationTime: targetDate.getTime()
+          }
+        }));
+      } catch (err) {
+        // Ignorar erros de dispatch
+        // Intentionally empty
+      }
+
+      // Quando chegar a 0 segundos restantes, sinalizar evento e garantir execução da rotação
+      if (secondsRemaining <= 0) {
+        console.log(`🕒 Monitor: Primeiro sinal ${firstSignal.symbol} atingiu 20 minutos (${firstSignal.entry_time})`);
+        try {
+          window.dispatchEvent(new CustomEvent('dashboardFirstSignal20MinReached', { detail: { signal: firstSignal } }));
+        } catch (err) {
+          // Intentionally empty
+        }
+
+        // Suprimir novas tentativas por 30s enquanto tentamos garantir a rotação
+        window.rotationSuppressUntil = Date.now() + 30 * 1000;
+
+        // Função auxiliar: tenta executar rotação e valida se ocorreu (até N tentativas)
+        const ensureRotation = async (maxAttempts = 3) => {
+          let attempts = 0;
+          // Guardar id do primeiro sinal atual para comparar após rotação
+          const initialFirstId = (window.displayedSignalsRef && window.displayedSignalsRef[0] && window.displayedSignalsRef[0].id) || (displayedSignals && displayedSignals[0] && displayedSignals[0].id) || null;
+
+          while (attempts < maxAttempts) {
+            attempts += 1;
+            try {
+              if (typeof (window as Window & { executeRotationDirect?: () => void }).executeRotationDirect === 'function') {
+                console.log(`🕒 Monitor: Tentativa ${attempts} - chamando window.executeRotationDirect()`);
+                try { 
+                  (window as Window & { executeRotationDirect?: () => void }).executeRotationDirect?.(); 
+                } catch (e) { 
+                  console.error('Erro executeRotationDirect:', e); 
+                }
+              } else {
+                console.log(`🕒 Monitor: Tentativa ${attempts} - chamando executeSignalRotation fallback`);
+                try { await executeSignalRotation(); } catch (e) { console.error('Erro executeSignalRotation:', e); }
+              }
+            } catch (e) {
+              console.error('Erro ao tentar iniciar rotação:', e);
+            }
+
+            // Aguarda 2s para ver se a rotação aconteceu
+            await new Promise(res => setTimeout(res, 2000));
+
+            // Verificar se o primeiro sinal mudou
+            const currentFirstId = (window.displayedSignalsRef && window.displayedSignalsRef[0] && window.displayedSignalsRef[0].id) || (displayedSignals && displayedSignals[0] && displayedSignals[0].id) || null;
+            if (initialFirstId && currentFirstId && initialFirstId !== currentFirstId) {
+              console.log('✅ Rotação detectada (primeiro sinal alterado) após tentativa', attempts);
+              return true;
+            }
+
+            // Se não há initialFirstId (estado incerto), verificar se há sinais com posição atualizada
+            if (!initialFirstId && window.displayedSignalsRef && window.displayedSignalsRef.length >=3) {
+              // considerar sucesso se primeira posição for diferente do símbolo esperado
+              console.log('ℹ️ Rotação não detectada ainda, próxima tentativa...');
+            }
+          }
+
+          console.warn('⚠️ Falha ao detectar rotação após tentativas');
+          return false;
+        };
+
+        // Iniciar as tentativas (não bloquear o tick)
+        void ensureRotation(3);
+
+        // Limpar o intervalo do monitor (evitar múltiplas invocações imediatas)
+        if (window.rotationMonitorInterval) {
+          clearInterval(window.rotationMonitorInterval);
+          window.rotationMonitorInterval = null;
+        }
+      }
+    };
+
+    // Rodar primeiro tick imediatamente
+    tick();
+    // Agendar interval
+    window.rotationMonitorInterval = setInterval(tick, 1000);
+
+    // Cleanup
+    return () => {
+      if (window.rotationMonitorInterval) {
+        clearInterval(window.rotationMonitorInterval);
+        window.rotationMonitorInterval = null;
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [displayedSignals]);
+
+  // Quando o evento global 'dashboardFirstSignal20MinReached' for disparado,
+  // iniciar a rotação de sinais usando a função executeSignalRotation
+  useEffect(() => {
+    const handler = (ev: Event) => {
+      try {
+        // Evitar rotação concorrente
+        if (window.isRotating) {
+          console.log('Evento 20min recebido mas rotação já em andamento, ignorando');
+          return;
+        }
+
+        // Garantir que temos sinais suficientes
+        if (!displayedSignals || displayedSignals.length < 3) {
+          console.log('Evento 20min recebido, mas sinais insuficientes para rotação');
+          return;
+        }
+
+        console.log('Evento dashboardFirstSignal20MinReached recebido — executando rotação automática');
+        // Chamar a rotação real
+        // executeSignalRotation pode ser assíncrono
+        void executeSignalRotation();
+      } catch (err) {
+        console.error('Erro ao processar evento dashboardFirstSignal20MinReached:', err);
+      }
+    };
+
+    window.addEventListener('dashboardFirstSignal20MinReached', handler as EventListener);
+
+    return () => {
+      window.removeEventListener('dashboardFirstSignal20MinReached', handler as EventListener);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [displayedSignals]);
+
+  // 🔄 ROTAÇÃO REAL: Fazer rotação verdadeira em vez de trocar todos os sinais
+  const executeSignalRotation = useCallback(async () => {
+    // Proteção contra múltiplas rotações simultâneas
+    if (window.isRotating) {
+      console.log('🚫 Rotação já em andamento, cancelando nova tentativa');
+        return;
+      }
+
+    if (!displayedSignals || displayedSignals.length < 3) {
+      console.log('⚠️ Rotação cancelada: sinais insuficientes');
+        return;
+      }
+      
+    // Marcar que rotação está em andamento
+    window.isRotating = true;
+
+      const firstSignal = displayedSignals[0];
+    const secondSignal = displayedSignals[1];
+    const thirdSignal = displayedSignals[2];
+    
+    console.log(`🔄 INICIANDO ROTAÇÃO REAL:`);
+    console.log(`   • 1º sinal (SAIR): ${firstSignal.symbol} ${firstSignal.entry_time}`);
+    console.log(`   • 2º sinal (→1º): ${secondSignal.symbol} ${secondSignal.entry_time}`);
+    console.log(`   • 3º sinal (→2º): ${thirdSignal.symbol} ${thirdSignal.entry_time}`);
+
+    // LÓGICA CORRIGIDA: Gerar próximo horário válido baseado no horário do sinal removido
+    // Usar o horário de entrada do sinal que está sendo removido (firstSignal) para determinar o próximo horário válido
+    // Seguindo regra: 03→23, 23→43, 43→03 (próxima hora)
+    const now = new Date();
+    const currentTime = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+    const nextEntryTime = getNextValidTime(currentTime, firstSignal.entry_time);
+      
+    console.log(`   • Novo 3º sinal: ${nextEntryTime} (baseado no padrão do sinal removido: ${firstSignal.entry_time})`);
+
+    // Criar novo sinal para terceira posição com horário correto
+      const newThirdSignal = createSignalObject(nextEntryTime, 3);
+      
+      // Definir atributos adicionais
+      newThirdSignal.expired = false;
+      newThirdSignal.status = 'active' as const;
+      newThirdSignal.processed = false;
+      newThirdSignal.qualityScore = 0.8;
+      newThirdSignal.timeframe = '5m';
+      newThirdSignal.expiry = '5min';
+      newThirdSignal.risk_reward = '1:2';
+      newThirdSignal.entryTimestamp = Date.now();
+
+    // ROTAÇÃO REAL: 2º→1º, 3º→2º, novo→3º (1º sinal SAI da lista)
+      const rotatedSignals: EnrichedSignal[] = [
+        { 
+        ...secondSignal, 
+          expired: false,
+          status: 'active' as const,
+        processed: false,
+        dashboardPosition: 0
+        },
+        { 
+        ...thirdSignal, 
+          expired: false,
+          status: 'active' as const,
+        processed: false,
+        dashboardPosition: 1
+      },
+      {
+        ...newThirdSignal,
+        dashboardPosition: 2
+      }
+    ];
+
+    // Atualizar sinais
+      setDisplayedSignals(rotatedSignals);
+      
+      // Salvar no localStorage
+      saveSignalsToLocalStorage(rotatedSignals, Date.now(), getInitialTimeSlot());
+      
+      // Sincronizar com a aba Signals usando função otimizada
+      saveDashboardSignalsForSync(rotatedSignals);
+      // Removido evento duplicado - já é disparado na função saveDashboardSignalsForSync
+      
+      console.log(`✅ ROTAÇÃO CONCLUÍDA:`);
+      console.log(`   • Novo 1º: ${rotatedSignals[0].symbol} (${rotatedSignals[0].entry_time})`);
+      console.log(`   • Novo 2º: ${rotatedSignals[1].symbol} (${rotatedSignals[1].entry_time})`);
+      console.log(`   • Novo 3º: ${rotatedSignals[2].symbol} (${rotatedSignals[2].entry_time})`);
+    
+    // Limpar flag de rotação
+    window.isRotating = false;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [displayedSignals, createSignalObject, calculateNextTime, saveSignalsToLocalStorage, getInitialTimeSlot, saveDashboardSignalsForSync]);
+
+  // Sistema automático - não precisa de registro global
+
+  // Sistema simplificado - não precisa de verificação de período fixo
+
+  // Sistema simplificado - não precisa de bloqueio de período fixo
+
+  // Função para garantir que temos exatamente 3 sinais
+  const ensureThreeSignals = (signals: EnrichedSignal[]): EnrichedSignal[] => {
+    if (!signals || signals.length === 0) return [];
+    
+    // Se temos mais de 3, limitar a 3
+    if (signals.length > 3) {
+      return signals.slice(0, 3);
+    }
+    
+    // Se temos 3 ou menos, retornar como está
+    return signals;
+  };
+
+  // Função para obter a cor baseada no tipo de sinal
+  const getTypeColor = (signalType: string): string => {
+    switch (signalType?.toUpperCase()) {
+      case 'BUY':
+      case 'COMPRA':
+        return 'bg-green-500/20 text-green-400 border-green-500/30';
+      case 'SELL':
+      case 'VENDA':
+        return 'bg-red-500/20 text-red-400 border-red-500/30';
+      default:
+        return 'bg-blue-500/20 text-blue-400 border-blue-500/30';
+    }
+  };
+
+  // Função para obter o preço atual (simulado)
+  const getCurrentPrice = (signal: EnrichedSignal): string => {
+    if (signal.price) {
+      return signal.price.toFixed(4);
+    }
+    
+    // Gerar preço simulado baseado no símbolo
+    const basePrice = signal.symbol.includes('USD') ? 1.0000 : 
+                     signal.symbol.includes('BTC') ? 45000 :
+                     signal.symbol.includes('Gold') ? 2000 :
+                     1.2000;
+    
+    const variation = (Math.random() - 0.5) * 0.01;
+    return (basePrice + variation).toFixed(4);
+  };
+
+  // Função para calcular potencial de ganho
+  const calculatePotential = (signal: EnrichedSignal): string => {
+    if (signal.success_rate) {
+      const percentage = (signal.success_rate * 100).toFixed(1);
+      return `${percentage}%`;
+    }
+    
+    // Gerar potencial baseado no tipo de sinal
+    const basePotential = signal.signal === 'BUY' ? 85 : 82;
+    const variation = Math.random() * 10;
+    return `${(basePotential + variation).toFixed(1)}%`;
+  };
+
+  // FUNÇÃO VERIFICADORA: Verifica se primeiro sinal atingiu EXATOS 20 minutos desde entrada
+  const shouldTriggerRotation = useCallback((): boolean => {
+    if (!displayedSignals || displayedSignals.length === 0) return false;
+    
+    const firstSignal = displayedSignals[0];
+    if (!firstSignal.entry_time) return false;
+    
+    const now = new Date();
+    const [entryHour, entryMin] = firstSignal.entry_time.split(':').map(Number);
+    
+    // Criar horário de entrada
+    const entryTime = new Date();
+    entryTime.setHours(entryHour, entryMin, 0, 0);
+    
+    // Se o horário de entrada for no futuro, ajustar para ontem
+    if (entryTime > now) {
+      entryTime.setDate(entryTime.getDate() - 1);
+    }
+    
+    // Calcular diferença em minutos desde a entrada
+    const timeDiffMs = now.getTime() - entryTime.getTime();
+    const minutesSinceEntry = Math.floor(timeDiffMs / (1000 * 60));
+    
+    // ROTAÇÃO EXATA: Só rotacionar quando atingir EXATOS 20 minutos
+    const shouldRotate = minutesSinceEntry >= 20;
+    
+    if (shouldRotate) {
+      console.log(`🔄 ROTAÇÃO EXATA: Primeiro sinal (${firstSignal.symbol}) atingiu ${minutesSinceEntry} minutos desde entrada (${firstSignal.entry_time})`);
+    } else if (minutesSinceEntry >= 18) {
+      console.log(`⏱️ AGUARDANDO: ${minutesSinceEntry} minutos desde entrada (${firstSignal.entry_time}) - aguardando 20 minutos exatos`);
+    }
+    
+    return shouldRotate;
+  }, [displayedSignals]);
+
+  // FUNÇÃO VERIFICADORA: Verificar se um sinal deve ser processado
   const shouldProcessSignal = (signal: EnrichedSignal): boolean => {
     if (!signal.entry_time) return false;
     if (signal.processed) return false;
     
-    // Converter entry_time para Date
     const now = new Date();
-    const today = now.toISOString().split('T')[0]; // YYYY-MM-DD
+    const [entryHour, entryMin] = signal.entry_time.split(':').map(Number);
     
-    // Extrair a hora e minuto da entrada
-    const [hours, minutes] = signal.entry_time.split(':').map(Number);
+    // Criar horário de entrada
+    const entryTime = new Date();
+    entryTime.setHours(entryHour, entryMin, 0, 0);
     
-    // Criar um objeto de data para o horário de entrada (hoje)
-    const entryDate = new Date(`${today}T${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:00`);
-    
-    // Ajustar para o dia seguinte se for um horário passado mais de 12 horas
-    if (now.getTime() - entryDate.getTime() > 12 * 60 * 60 * 1000) {
-      entryDate.setDate(entryDate.getDate() + 1);
+    // Se o horário de entrada for no futuro, ajustar para ontem
+    if (entryTime > now) {
+      entryTime.setDate(entryTime.getDate() - 1);
     }
     
-    // Calcular o tempo de processamento (20 minutos após a entrada)
-    const processingTime = new Date(entryDate.getTime() + SIGNAL_PROCESSING_TIME);
+    // Calcular diferença em minutos desde a entrada
+    const timeDiffMs = now.getTime() - entryTime.getTime();
+    const minutesSinceEntry = Math.floor(timeDiffMs / (1000 * 60));
     
-    // Verificar se já passou do tempo de processamento
-    return now.getTime() >= processingTime.getTime();
+    // Só processar se passou 20 minutos desde a entrada
+    return minutesSinceEntry >= 20;
   };
 
-  // Função para registrar timer persistente por sinal
+  // Registrar timer baseado no horário de ENTRADA + 20 minutos
   const registerPersistentTimer = useCallback((signal) => {
     if (!signal || !signal.entry_time) {
       console.log('Sinal sem horário de entrada, não é possível registrar timer');
@@ -1261,11 +2588,11 @@ const SignalsCard = () => {
       // Extrair hora e minuto da entrada
       const [entryHour, entryMin] = signal.entry_time.split(':').map(Number);
       
-      // Criar objeto de data para o horário de entrada
+      // Usar horário de ENTRADA diretamente
       const entryDate = new Date();
       entryDate.setHours(entryHour, entryMin, 0, 0);
       
-      // Adicionar 20 minutos para obter o horário de processamento
+      // Calcular horário de processamento: ENTRADA + 20 minutos
       const processingDate = new Date(entryDate);
       processingDate.setMinutes(processingDate.getMinutes() + 20);
       
@@ -1287,161 +2614,11 @@ const SignalsCard = () => {
       processed: signal.processed || false
     };
     
-      console.log(`Timer persistente registrado para ${signal.symbol} (${signal.id}): será processado em ${processingDate.getHours()}:${processingDate.getMinutes()}:${processingDate.getSeconds()}`);
+      console.log(`Timer registrado para ${signal.symbol} (${signal.id}): será processado 20 min após ENTRADA (${entryHour}:${entryMin}) = ${processingDate.getHours()}:${processingDate.getMinutes()}`);
       
-      // Definir um timeout para processar o sinal
-      const currentTimeMs = now.getTime();
-      const timeToProcessing = processingDate.getTime() - currentTimeMs;
-      
-      if (timeToProcessing > 0) {
-        console.log(`Timer configurado para sinal ${signal.symbol} (ID: ${signal.id}) - Será processado em 20 minutos`);
-        
-        // Não criar setTimeout para economizar recursos - verificaremos periodicamente
-      } else {
-        console.log(`Sinal ${signal.symbol} (ID: ${signal.id}) já deveria ter sido processado. Tempo de atraso: ${-timeToProcessing/1000}s`);
-      }
     } catch (error) {
       console.error('Erro ao registrar timer persistente:', error);
     }
-  }, []);
-  
-  // Função para rotação automática de sinais após o tempo de expiração (20 minutos)
-  const rotateSignals = useCallback(() => {
-    console.log('Executando rotação automática de sinais...');
-    
-    setDisplayedSignals(prev => {
-      // Verificar se prev é um array válido com pelo menos 3 sinais
-      if (!prev || !Array.isArray(prev) || prev.length < 3) {
-        console.log('Não há sinais suficientes para rotação. Tentando recuperar do localStorage...');
-        
-        // Tentar recuperar sinais do localStorage
-        try {
-          const cachedData = localStorage.getItem('dashboard-signals-cache');
-          if (cachedData) {
-            const { signals } = JSON.parse(cachedData);
-            if (signals && Array.isArray(signals) && signals.length >= 3) {
-              console.log('Recuperados sinais do localStorage');
-              return signals;
-            }
-          }
-        } catch (error) {
-          console.error('Erro ao recuperar sinais do localStorage:', error);
-        }
-        
-        // Se não conseguir recuperar, manter os sinais atuais
-        console.log('Não foi possível recuperar sinais. Mantendo os atuais.');
-        return prev;
-      }
-      
-      try {
-        console.log('Realizando rotação automática dos sinais...');
-        
-        // O segundo sinal se torna o primeiro
-        const newFirstSignal = { 
-          ...prev[1],
-          processed: false, // Garantir que o sinal não esteja processado
-          result: undefined // Limpar qualquer resultado anterior
-        };
-        
-        // O terceiro sinal se torna o segundo
-        const newSecondSignal = { 
-          ...prev[2],
-          processed: false, // Garantir que o sinal não esteja processado
-          result: undefined // Limpar qualquer resultado anterior
-        };
-        
-        // Gerar um novo terceiro sinal baseado no segundo original (que agora é o primeiro)
-        // Calcular horário de entrada (20 minutos após o segundo sinal original)
-        const [entryHour, entryMin] = prev[1].entry_time.split(':').map(Number);
-        let newEntryHour = entryHour;
-        let newEntryMin = entryMin + 20; // 20 minutos após o segundo sinal original
-        
-        // Ajustar se passou de 60 minutos
-        if (newEntryMin >= 60) {
-          newEntryMin -= 60;
-          newEntryHour = (newEntryHour + 1) % 24;
-        }
-        
-        // Formatar novo horário de entrada
-        const newEntryTime = `${newEntryHour.toString().padStart(2, '0')}:${newEntryMin.toString().padStart(2, '0')}`;
-        
-        // Calcular horário de expiração (entrada + 5 minutos)
-        let expiryHour = newEntryHour;
-        let expiryMin = newEntryMin + 5;
-        if (expiryMin >= 60) {
-          expiryMin -= 60;
-          expiryHour = (expiryHour + 1) % 24;
-        }
-        const expiryTime = `${expiryHour.toString().padStart(2, '0')}:${expiryMin.toString().padStart(2, '0')}`;
-        
-        // Calcular Gale 1 (mesma hora que expiração)
-        const gale1Time = expiryTime;
-        
-        // Calcular Gale 2 (Gale 1 + 5 minutos)
-        let gale2Hour = expiryHour;
-        let gale2Min = expiryMin + 5;
-        if (gale2Min >= 60) {
-          gale2Min -= 60;
-          gale2Hour = (gale2Hour + 1) % 24;
-        }
-        const gale2Time = `${gale2Hour.toString().padStart(2, '0')}:${gale2Min.toString().padStart(2, '0')}`;
-        
-        // Gerar um novo sinal com estes horários
-        const symbolOptions = [
-          'EUR/USD (OTC)', 'GBP/USD (OTC)', 'AUD/USD (OTC)', 'USD/CAD (OTC)', 'USD/CHF (OTC)', 
-          'NZD/USD (OTC)', 'EUR/CAD (OTC)', 'EUR/AUD (OTC)', 'USD/JPY (OTC)', 'EUR/JPY (OTC)',
-          'GBP/JPY (OTC)', 'AUD/JPY (OTC)', 'USD/MXN (OTC)', 'USD/ZAR (OTC)', 'USD/THB (OTC)',
-          'USD/CNH (OTC)', 'Gold/Silver (OTC)', 'Amazon/Alibaba (OTC)', 
-          'TRUMP Coin (OTC)', 'MELANIA Coin (OTC)', 'Amazon/Ebay (OTC)', 'Apple/Samsung (OTC)'
-        ];
-        
-        // Escolher um símbolo que não seja igual aos outros dois
-        let newSymbol;
-        do {
-          newSymbol = symbolOptions[Math.floor(Math.random() * symbolOptions.length)];
-        } while (newSymbol === newFirstSignal.symbol || newSymbol === newSecondSignal.symbol);
-        
-        // Criar o novo terceiro sinal
-        const timestamp = Date.now();
-        const newThirdSignal = {
-          ...createSignalObject({
-            symbol: newSymbol,
-            signal: Math.random() > 0.5 ? 'BUY' : 'SELL',
-            entry_time: newEntryTime,
-            expiry: '5m',
-            expiry_time_str: expiryTime,
-            gale1_time: gale1Time,
-            gale2_time: gale2Time,
-          }),
-          id: `signal-${timestamp}-${Math.random().toString(36).substring(2, 10)}`,
-          processed: false,
-          timeframe: '5m'
-        };
-        
-        // Retornar os três sinais atualizados
-        const newSignals = [newFirstSignal, newSecondSignal, newThirdSignal];
-        
-        console.log('Rotação concluída:');
-        console.log('- Primeiro sinal (antigo segundo):', newFirstSignal.symbol, newFirstSignal.entry_time);
-        console.log('- Segundo sinal (antigo terceiro):', newSecondSignal.symbol, newSecondSignal.entry_time);
-        console.log('- Novo terceiro sinal:', newThirdSignal.symbol, newThirdSignal.entry_time);
-        
-        // Salvar no localStorage para persistência
-        try {
-          localStorage.setItem('dashboard-signals-cache', JSON.stringify({
-            signals: newSignals,
-            timestamp: Date.now()
-          }));
-        } catch (error) {
-          console.error('Erro ao salvar sinais no localStorage:', error);
-        }
-        
-        return newSignals;
-      } catch (error) {
-        console.error('Erro durante a rotação de sinais:', error);
-        return prev;
-      }
-    });
   }, []);
   
   // Efeito para gerenciar montagem única
@@ -1473,31 +2650,44 @@ const SignalsCard = () => {
   // Efeito para sincronizar estado global
   useEffect(() => {
     if (!mountedRef.current) return;
-    
+
     window.displayedSignalsRef = displayedSignals;
-    window.completedSignalsRef = completedSignals;
+    // Converter Set para Record para compatibilidade
+    window.completedSignalsRef = Object.fromEntries(
+      Array.from(completedSignals).map(id => [id, 'completed'])
+    );
+    // Marcar que estes sinais pertencem a esta instância da dashboard
+    try {
+      if (displayedSignals && displayedSignals.length >= 3) {
+        window.displayedSignalsOwner = 'dashboard';
+      }
+    } catch (e) {
+      // ignore
+    }
   }, [displayedSignals, completedSignals]);
   
   // Hook para enviar notificações 5 minutos antes do horário de entrada dos sinais
-  // e 10 minutos após para informar o resultado (70% ganho, 30% perda)
   const { notificationsEnabled } = useSignalNotifications(
-    // Converter para o formato esperado pelo hook
+    // Converter para o formato esperado pelo hook (ServiceTradingSignal[])
     displayedSignals?.map(signal => ({
       ...signal,
-      timestamp: typeof signal.timestamp === 'string' ? new Date(signal.timestamp).getTime() : 0,
+      timestamp: typeof signal.timestamp === 'string' 
+        ? new Date(signal.timestamp).getTime() 
+        : (typeof signal.timestamp === 'number' ? signal.timestamp : Date.now()),
       pair: signal.symbol
-    })) as any,
+    })) as ServiceTradingSignal[],
     {
       notifyMinutesBefore: 5,       // Notificar 5 minutos antes da entrada
-      notifyResultAfterMinutes: 10, // Notificar resultado 10 minutos após a entrada
-      successRate: 0.7,             // 70% de chance de sucesso
-      enabled: mountedRef.current   // Ativar apenas para a instância principal
+      enabled: mountedRef.current,  // Ativar apenas para a instância principal
+      notificationType: 'signals' // Classificação para a aba de notificações
     }
   );
   
+  // CORREÇÃO DEFINITIVA: TimeSlot baseado em horários de rotação (20 minutos após expiração)
   const getCurrentTimeSlot = useCallback(() => {
     const now = new Date();
-    const minutes = Math.floor(now.getMinutes() / 10) * 10;
+    // Usar intervalos de 30 minutos para evitar mudanças frequentes
+    const minutes = Math.floor(now.getMinutes() / 30) * 30;
     return `${now.getHours().toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
   }, []);
   
@@ -1519,38 +2709,31 @@ const SignalsCard = () => {
     
     const checkTimeSlot = () => {
       const newSlot = getCurrentTimeSlot();
-      if (newSlot !== currentTimeSlot) {
-        console.log(`Slot de tempo mudou: ${currentTimeSlot} -> ${newSlot}`);
+      const currentSlotValue = currentTimeSlotRef.current;
+      if (newSlot !== currentSlotValue) {
+        console.log(`Slot de tempo mudou: ${currentSlotValue} -> ${newSlot}`);
+        currentTimeSlotRef.current = newSlot;
         setCurrentTimeSlot(newSlot);
         
-        // Verificar se os sinais existentes já passaram 20 minutos do seu horário de entrada
-        const now = new Date();
-        const shouldReload = !displayedSignals || displayedSignals.every(signal => {
-          if (!signal.entry_time) return true;
-          
-          // Verificar se passou 20 minutos desde o horário de entrada
-          return shouldProcessSignal(signal);
-        });
-        
-        // Só limpar o cache se todos os sinais já tiverem passado do tempo de processamento
-        if (shouldReload) {
-          console.log('Todos os sinais já passaram do tempo de processamento, gerando novos sinais');
-          setCachedSignals([]);
-          setRetryCount(prev => prev + 1);
-        } else {
-          console.log('Mantendo sinais existentes pois ainda não completaram 20 minutos');
-        }
+        // VERIFICAÇÃO REMOVIDA: Evitar chamada prematura de executeSignalRotation
+        // A rotação será gerenciada pelo timer separado declarado após executeSignalRotation
+        console.log('⏰ Slot de tempo atualizado para:', newSlot);
       }
     };
     
-    slotCheckIntervalRef.current = setInterval(checkTimeSlot, 30 * 1000); // Verificar a cada 30 segundos
+    // Verificar a cada 60 segundos para garantir rotação precisa
+    slotCheckIntervalRef.current = setInterval(checkTimeSlot, 60 * 1000);
     
     return () => {
       if (slotCheckIntervalRef.current) {
         clearInterval(slotCheckIntervalRef.current);
       }
     };
-  }, [getCurrentTimeSlot, currentTimeSlot, loadCachedSignalsIfAvailable]);
+  }, [getCurrentTimeSlot, loadCachedSignalsIfAvailable]); // Removido currentTimeSlot das dependências
+
+  // REMOVIDO: Efeito de normalização que estava fixando símbolos
+  // Isso estava forçando sempre os mesmos símbolos no pool padrão
+  // Agora permitimos qualquer símbolo válido vindo da aba Trades
   
   useEffect(() => {
     const styleElement = document.createElement('style');
@@ -1580,32 +2763,14 @@ const SignalsCard = () => {
     };
   }, []);
 
-  // Efeito para salvar os sinais da dashboard no localStorage
-  useEffect(() => {
-    if (displayedSignals && displayedSignals.length > 0) {
-      try {
-        // Limitar para no máximo 3 sinais
-        const signalsToSave = displayedSignals.slice(0, 3);
-        
-        // Salvar no localStorage
-        localStorage.setItem('dashboardSignals', JSON.stringify({
-          signals: signalsToSave,
-          timestamp: new Date().getTime()
-        }));
-        
-        console.log('Sinais da dashboard salvos no localStorage:', signalsToSave);
-      } catch (error) {
-        console.error('Erro ao salvar sinais da dashboard:', error);
-      }
-    }
-  }, [displayedSignals]);
+  // REMOVIDO: Timer duplicado já foi substituído pelo timer consolidado acima
 
   // Efeito removido - sem animações
 
   // Efeito removido - sem animações
 
   // Função auxiliar para obter o horário de entrada como Date
-  const getEntryTimeAsDate = useCallback((signal: any): Date => {
+  const getEntryTimeAsDate = useCallback((signal: EnrichedSignal): Date => {
     if (!signal.entry_time) return new Date();
     
     const now = new Date();
@@ -1616,7 +2781,7 @@ const SignalsCard = () => {
     return entryDate;
   }, []);
 
-  const sortSignalsByEntryTime = useCallback((signals: any[]) => {
+  const sortSignalsByEntryTime = useCallback((signals: EnrichedSignal[]) => {
     if (!signals) return [];
     
     // Ordenar por horário de entrada crescente (menor para maior)
@@ -1628,591 +2793,1418 @@ const SignalsCard = () => {
     });
   }, [getEntryTimeAsDate]);
 
-  const fetchSignals = useCallback(async (): Promise<EnrichedSignal[]> => {
-    console.log('Buscando sinais de trading...');
-    
-    try {
-      // Verificar se temos sinais em cache primeiro
-      if (cachedSignals.length > 0) {
-        console.log('Usando sinais em cache');
-        
-        // Verificar se algum sinal expirou
-        const now = new Date();
-        const updatedSignals = cachedSignals.map(signal => {
-          if (signal.expiry_time_str) {
-            const [expiryHour, expiryMin] = signal.expiry_time_str.split(':').map(Number);
-            const expiryTime = new Date();
-            expiryTime.setHours(expiryHour, expiryMin, 0);
-            
-            if (now > expiryTime && !signal.processed) {
-              console.log(`Sinal ${signal.symbol} expirou`);
-              return { ...signal, expired: true };
-            }
-          }
-          return signal;
-        });
-        
-        // Atualizar os sinais expirados
-        setCachedSignals(updatedSignals);
-        // Garantir que retornamos exatamente 3 sinais ordenados
-        const sortedSignals = sortSignalsByEntryTime(updatedSignals);
-        console.log(`Limitando para exatamente 3 sinais do cache (antes: ${sortedSignals.length})`);
-        return sortedSignals.slice(0, 3);
-      }
-      
-      // Tente carregar sinais do cache
-      if (loadCachedSignalsIfAvailable()) {
-        console.log('Carregando sinais de cache...');
-        // Garantir que retornamos exatamente 3 sinais ordenados
-        const sortedSignals = sortSignalsByEntryTime(cachedSignals);
-        console.log(`Limitando para exatamente 3 sinais do cache carregado (antes: ${sortedSignals.length})`);
-        return sortedSignals.slice(0, 3);
-      }
-      
-      console.log('Gerando novos sinais...');
-      
-      // Obter sinais diários
-      const dailySignalsData = await generateDailySignals();
-      
-      // Verificar se temos sinais para o slot atual
-      const signalsForCurrentSlot = getCurrentTimeSlotSignals(
-        dailySignalsData.signals, 
-        dailySignalsData.timeSlots
-      );
-      
-      // Verificar se temos sinais relevantes
-      let relevantSignals = signalsForCurrentSlot;
-      
-      // Se não temos sinais, usar um conjunto padrão de sinais
-      if (relevantSignals.length === 0) {
-        console.log('Nenhum sinal encontrado para o slot atual, usando todos os sinais disponíveis');
-        relevantSignals = dailySignalsData.signals;
-      }
-      
-      // Garantir que existam no mínimo 3 sinais, garantindo o fluxo XX:03, XX:23, XX:43
-      if (relevantSignals.length < 3) {
-        console.log(`Poucos sinais disponíveis (${relevantSignals.length}). Gerando mais sinais para garantir o fluxo.`);
-        
-        // Obter o último sinal para referência ou criar um horário inicial
-        let ultimoHorario = "00:03";
-        if (relevantSignals.length > 0 && relevantSignals[relevantSignals.length - 1].entry_time) {
-          ultimoHorario = relevantSignals[relevantSignals.length - 1].entry_time;
-        }
-        
-        // Calcular os próximos horários na sequência
-        const proximosHorarios = [];
-        let [hora, minuto] = ultimoHorario.split(':').map(Number);
-        
-        // Determinar o próximo horário válido na sequência
-        if (minuto < 3) minuto = 3;
-        else if (minuto < 23) minuto = 23;
-        else if (minuto < 43) minuto = 43;
-        else {
-          hora = (hora + 1) % 24;
-          minuto = 3;
-        }
-        
-        // Calcular quantos sinais precisamos gerar
-        const quantidadeFaltante = 3 - relevantSignals.length;
-        
-        // Gerar os novos horários
-        for (let i = 0; i < quantidadeFaltante; i++) {
-          const horarioFormatado = `${hora.toString().padStart(2, '0')}:${minuto.toString().padStart(2, '0')}`;
-          proximosHorarios.push(horarioFormatado);
-          
-          // Avançar para o próximo horário na sequência
-          if (minuto === 3) minuto = 23;
-          else if (minuto === 23) minuto = 43;
-          else {
-            hora = (hora + 1) % 24;
-            minuto = 3;
-          }
-        }
-        
-        // Criar os sinais complementares
-        for (const horario of proximosHorarios) {
-          const expiryTime = calculateNextTime(horario, SIGNAL_EXPIRY_TIME);
-          const gale1Time = expiryTime;
-          const gale2Time = calculateNextTime(gale1Time, SIGNAL_EXPIRY_TIME);
-          
-          // Criar um novo sinal
-          const novoSinal = createSignalObject({
-            entry_time: horario,
-            expiry_time_str: expiryTime,
-            gale1_time: gale1Time,
-            gale2_time: gale2Time
-          });
-          
-          // Garantir que esteja ativo
-          novoSinal.processed = false;
-          novoSinal.status = 'active' as 'active' | 'completed' | 'cancelled';
-          
-          // Adicionar à lista de sinais
-          relevantSignals.push(novoSinal);
-        }
-      }
-      
-      // Ordenar os sinais por horário
-      relevantSignals = sortSignalsByEntryTime(relevantSignals);
-      
-      // Verificar se temos pelo menos 3 sinais diferentes no padrão XX:03, XX:23, XX:43
-      const horariosUnicos = new Set(relevantSignals.map(s => s.entry_time?.slice(-2)));
-      
-      if (horariosUnicos.size < 3) {
-        console.log('Não temos sinais nos 3 padrões diferentes (XX:03, XX:23, XX:43). Complementando...');
-        
-        // Verificar quais padrões estão faltando
-        const padroesMinutos = ['03', '23', '43'];
-        const padroesFaltantes = padroesMinutos.filter(p => !horariosUnicos.has(p));
-        
-        // Para cada padrão faltante, criar um novo sinal
-        for (const padrao of padroesFaltantes) {
-          // Determinar a próxima hora válida
-          const now = new Date();
-          let hora = now.getHours();
-          const minutoAtual = now.getMinutes();
-          
-          // Se o minuto do padrão já passou na hora atual, usar a próxima hora
-          if (parseInt(padrao) <= minutoAtual) {
-            hora = (hora + 1) % 24;
-          }
-          
-          const horarioEntrada = `${hora.toString().padStart(2, '0')}:${padrao}`;
-          
-          // Verificar se este horário já existe
-          if (relevantSignals.some(s => s.entry_time === horarioEntrada)) {
-            continue;
-          }
-          
-          const expiryTime = calculateNextTime(horarioEntrada, SIGNAL_EXPIRY_TIME);
-          const gale1Time = expiryTime;
-          const gale2Time = calculateNextTime(gale1Time, SIGNAL_EXPIRY_TIME);
-          
-          // Criar um novo sinal com este padrão
-          const complementoSinal = createSignalObject({
-            entry_time: horarioEntrada,
-            expiry_time_str: expiryTime,
-            gale1_time: gale1Time,
-            gale2_time: gale2Time
-          });
-          
-          // Garantir que esteja ativo
-          complementoSinal.processed = false;
-          complementoSinal.status = 'active' as 'active' | 'completed' | 'cancelled';
-          
-          // Adicionar à lista de sinais
-          relevantSignals.push(complementoSinal);
-        }
-        
-        // Reordenar após as adições
-        relevantSignals = sortSignalsByEntryTime(relevantSignals);
-      }
-      
-      // Limitar a no máximo 7 sinais, garantindo no mínimo 3
-      if (relevantSignals.length > 7) {
-        relevantSignals = relevantSignals.slice(0, 7);
-      }
-      
-      console.log(`Exibindo ${relevantSignals.length} sinais para o Dashboard`);
-      
-      // Atualizar preços atuais dos sinais
-      const updatedSignals: EnrichedSignal[] = await Promise.all(
-        relevantSignals.map(async (signal: any) => {
-          try {
-            // Tentar atualizar o preço atual do sinal
-            const signalWithPrice = await tradingSignalService.updateSignalCurrentPrice(signal as any);
-            return {
-              ...signalWithPrice,
-              id: signalWithPrice.id || `signal-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-              // Garantir que todos os campos obrigatórios estejam presentes
-              type: signalWithPrice.type || SignalType.TECHNICAL,
-              strength: signalWithPrice.strength || SignalStrength.STRONG,
-              timestamp: typeof signalWithPrice.timestamp === 'string' 
-                    ? signalWithPrice.timestamp 
-                : new Date().toISOString(),
-              qualityScore: signalWithPrice.success_rate ? signalWithPrice.success_rate * 100 : 90
-            } as EnrichedSignal;
-          } catch (error) {
-            console.error('Erro ao atualizar preço do sinal:', error);
-            return signal as EnrichedSignal;
-          }
-        })
-      );
-      
-      // Validar e garantir que não temos horários duplicados
-      const uniqueTimeSignals = validateUniqueEntryTimes(updatedSignals);
-      
-      // Atualizar o cache
-      setCachedSignals(uniqueTimeSignals);
-      saveSignalsToLocalStorage(uniqueTimeSignals, Date.now(), currentTimeSlot);
-      
-      // Antes de retornar os sinais, garantir que temos exatamente 3
-      const finalSignals = ensureThreeSignals(uniqueTimeSignals);
-      
-      // Verificação extra para garantir que temos exatamente 3 sinais
-      if (finalSignals.length > 3) {
-        console.log(`Limitando ${finalSignals.length} sinais para apenas 3 na dashboard`);
-        return finalSignals.slice(0, 3);
-      }
-      
-      return finalSignals;
-    } catch (error) {
-      console.error("Erro ao buscar sinais de trading:", error);
-      throw error;
-    }
-  }, [currentTimeSlot, cachedSignals, loadCachedSignalsIfAvailable, sortSignalsByEntryTime]);
-  
-  // Corrigir a configuração do useQuery
-  const { data: signals, isLoading, error, refetch } = useQuery<EnrichedSignal[], Error>({
-    queryKey: ['dashboardSignals', retryCount, currentTimeSlot],
-    queryFn: fetchSignals,
-    refetchInterval: false,
-    refetchOnWindowFocus: false,
-    refetchOnReconnect: false,
-    refetchOnMount: false,
-    refetchIntervalInBackground: false,
-    staleTime: Infinity,
-    gcTime: CACHE_DURATION
-  });
+  // =============================================
+  // NOVO SISTEMA: SINAIS EM TEMPO REAL
+  // =============================================
+  const { 
+    signals: realtimeSignals, 
+    isLoading: realtimeLoading, 
+    error: realtimeError,
+    refresh: refreshRealtime 
+  } = useRealtimeSignals();
 
-  // Efeito para processar novos sinais, garantindo sempre exatamente 3 sinais
-  useEffect(() => {
-    if (!signals) return;
-    
-    const signalsArray = signals as EnrichedSignal[] | undefined;
-    if (!signalsArray) return;
-    
-    try {
-      // Primeiro, limitar a exatamente 3 sinais no dados originais para evitar duplicação
-      const limitedSignals = signalsArray.slice(0, 3);
-      
-      // Verificar se há sinais novos para adicionar, mas sempre limitar ao máximo de 3
-      const currentSignalIds = limitedSignals.map(s => s.id).join(',');
-      const displayedIds = displayedSignals.map(s => s.id).join(',');
-      
-      // Verificar se os sinais são realmente diferentes
-      if (currentSignalIds !== displayedIds) {
-        // Se não há sinais exibidos ainda, simplesmente atualizar com os novos sinais limitados
-        if (displayedSignals.length === 0) {
-          console.log(`Inicializando com ${limitedSignals.length} sinais (limitado a 3)`);
-          setDisplayedSignals(limitedSignals);
-        } else {
-          console.log('Detectada alteração nos sinais, atualizando e mantendo limite de 3');
-          
-          // Manter sinais existentes na mesma ordem, apenas adicionar novos até o limite de 3
-          const existingSignals = [...displayedSignals];
-          const newSignals = limitedSignals.filter(s => !existingSignals.some(es => es.id === s.id));
-          
-          if (newSignals.length > 0) {
-            console.log(`Adicionando ${newSignals.length} novos sinais, mantendo limite de 3`);
-            const combinedSignals = [...existingSignals, ...newSignals];
-            // Garantir sempre o limite de 3 sinais
-            const updatedSignals = combinedSignals.slice(0, 3);
-            console.log(`Total após atualização: ${updatedSignals.length} sinais`);
-            
-            // Atualizar tanto o estado local quanto o cache do React Query
-            setDisplayedSignals(updatedSignals);
-            queryClient.setQueryData(['dashboardSignals', retryCount, currentTimeSlot], updatedSignals);
-          }
-        }
-      }
-    } catch (error) {
-      console.error('Erro ao processar sinais:', error);
+  // Converter sinais do Realtime para EnrichedSignal
+  const convertRealtimeToEnriched = useCallback((rtSignals: typeof realtimeSignals): EnrichedSignal[] => {
+    if (!rtSignals || rtSignals.length === 0) {
+      console.warn('⚠️ DASHBOARD: Nenhum sinal do Realtime disponível');
+      return [];
     }
-  }, [signals, displayedSignals, queryClient, retryCount, currentTimeSlot]);
 
-  // Função para atualizar sinais (movida para antes do seu uso)
-  const handleRefresh = useCallback(() => {
-    console.log('Solicitação de atualização manual dos sinais');
-    
-    // Limpar completamente todas as caches
-        localStorage.removeItem('dashboard-signals-cache');
-        localStorage.removeItem('dashboard-signals-lastUpdated');
-        localStorage.removeItem('dashboardSignals');
-    
-    // Limpar também os timers persistentes
-    if (window.signalTimersMap) {
-      window.signalTimersMap = {};
-    }
-    
-    // Limpar sinais atuais e completamente resetar o estado
-    setDisplayedSignals([]);
-    setCachedSignals([]);
-    
-    // Reiniciar contagem para proporção de ganho/perda
-    signalProcessCount = 0;
-    
-    // Definir como atualizando para mostrar animação
-    setIsRefreshing(true);
-    setRefreshingSignals(true);
-    
-    // Gerar novos sinais completamente novos
-        setTimeout(() => {
-      const now = new Date();
-      const currentHour = now.getHours();
-      const currentMinute = now.getMinutes();
-      
-      // Encontrar horários válidos a partir de agora
-      const validTimes = calculateNextThreeValidTimes();
-      console.log('Gerando sinais com novos horários:', validTimes);
-      
-      // Gerar sinais completamente novos
-      const newSignals = generateNewSignals(validTimes);
-      
-      // Atualizar sinais e salvar no localStorage
-      setDisplayedSignals(newSignals);
-      saveSignalsToLocalStorage(newSignals, Date.now(), getInitialTimeSlot());
-      
-      // Configurar timers para os novos sinais
-      newSignals.forEach(signal => {
-        registerPersistentTimer(signal);
-      });
-      
-      // Remover estados de atualização
-      setIsRefreshing(false);
-    setTimeout(() => {
-        setRefreshingSignals(false);
-        
-        // Mostrar o badge de sucesso temporariamente
-        setRefreshButtonState('success');
-        setTimeout(() => setRefreshButtonState('default'), 3000);
-      }, 500);
-    }, 1000);
+    console.log(`✅ DASHBOARD: ${rtSignals.length} sinais recebidos do Realtime:`, {
+      'Sinais': rtSignals.map(s => `${s.symbol} ${s.entry_time}`)
+    });
+
+    // Converter para EnrichedSignal
+    const enrichedSignals: EnrichedSignal[] = rtSignals.map((signal, index) => ({
+      id: signal.id,
+      entry_time: signal.entry_time,
+      type: SignalType.TECHNICAL,
+      strength: (signal.strength as SignalStrength) || SignalStrength.STRONG,
+      timestamp: signal.created_at,
+      qualityScore: Math.round(signal.success_rate * 100),
+      symbol: signal.symbol,
+      exchange: signal.category,
+      processed: false,
+      status: 'active' as const,
+      signal: signal.signal_type,
+      reason: 'Technical Analysis',
+      price: 0,
+      entry_price: 0,
+      target_price: 0,
+      stop_loss: 0,
+      timeframe: '5m',
+      success_rate: signal.success_rate,
+      entryTimestamp: new Date(signal.created_at).getTime(),
+      expiry_time_str: signal.expiry_time,
+      gale1_time: signal.gale1_time,
+      gale2_time: signal.gale2_time,
+      position: signal.position,
+      source: 'realtime',
+      expired: false,
+      expiry: signal.expiry_time,
+      risk_reward: '2:1',
+      categoria: signal.category
+    }));
+
+    return enrichedSignals;
   }, []);
 
-  // Verificador automático de expiração de sinais que controla a rotação
-  // A rotação ocorre automaticamente quando o primeiro sinal atinge 20 minutos após seu horário de entrada
-  // O sistema verifica a cada 30 segundos se é necessário fazer a rotação, não sendo necessário um botão manual
-  const checkExpiredSignals = useCallback(() => {
-    // Verificar se displayedSignals existe e tem pelo menos um elemento
-    if (!displayedSignals || !Array.isArray(displayedSignals) || displayedSignals.length === 0) {
-      console.log('Não há sinais para verificar expiração');
-      return;
+  // FALLBACK: Função para gerar sinais locais se Realtime falhar
+  const generateFallbackSignals = useCallback((): EnrichedSignal[] => {
+    try {
+      console.warn('⚠️ DASHBOARD: Usando fallback local para gerar sinais');
+        
+      // FALLBACK: Gerar localmente se banco falhar
+      // Verificar se há cache válido
+      const cachedData = localStorage.getItem('dashboard-signals-cache');
+      if (cachedData) {
+        try {
+          const { signals: cachedSignals } = JSON.parse(cachedData);
+          const validatedSignals = validateCachedSignals(cachedSignals);
+          
+          if (validatedSignals && validatedSignals.length === 3) {
+            console.log('✅ Cache válido: usando 3 sinais do cache');
+            return validatedSignals;
+          }
+        } catch (e) {
+          console.log('⚠️ Cache corrompido: gerando novos sinais');
+        }
+        localStorage.removeItem('dashboard-signals-cache');
+      }
+      
+      // Gerar novos sinais
+      const validTimes = calculateNextThreeValidTimes();
+      
+      // Criar sinais base
+      const baseSignals: EnrichedSignal[] = validTimes.map((time, index) => {
+        // Criar data para o horário específico do sinal
+        const [hours, minutes] = time.split(':').map(Number);
+        const signalDate = new Date();
+        signalDate.setHours(hours, minutes, 0, 0);
+        
+        const selectedAsset = getRandomAsset(signalDate);
+        const expiryTime = calculateNextTime(time, 5);
+        const signalDirection: 'BUY' | 'SELL' = Math.random() > 0.5 ? 'BUY' : 'SELL';
+        
+        return {
+          id: `signal-${Date.now()}-${index}`,
+          entry_time: time,
+          type: SignalType.TECHNICAL,
+          strength: SignalStrength.STRONG,
+          timestamp: new Date().toISOString(),
+          qualityScore: 90,
+          symbol: selectedAsset,
+          exchange: ATIVOS_CATEGORIAS[selectedAsset] || inferExchangeCategory(selectedAsset),
+          processed: false,
+          status: 'active' as const,
+          signal: signalDirection,
+          reason: 'Technical Analysis',
+          price: 0,
+          entry_price: 0,
+          target_price: 0,
+          stop_loss: 0,
+          expiry_time_str: expiryTime,
+          gale1_time: expiryTime,
+          gale2_time: calculateNextTime(expiryTime, 5),
+          success_rate: 0.85 + Math.random() * 0.1,
+          expired: false,
+          timeframe: '5m',
+          expiry: '5m',
+          risk_reward: '2:1'
+        };
+      });
+
+      // Salvar no cache
+      setCachedSignals(baseSignals);
+      saveSignalsToLocalStorage(baseSignals, Date.now(), currentTimeSlot);
+      
+      console.log(`✅ Novos sinais criados: ${baseSignals.map(s => `${s.symbol} (${s.entry_time})`).join(' | ')}`);
+      return baseSignals;
+      
+    } catch (error) {
+      console.error("Erro ao buscar sinais:", error);
+      throw error;
+    }
+  }, [currentTimeSlot]);
+          
+  // ❌ USEEFFECT REMOVIDO: Estava causando loop infinito
+  // PROBLEMA: Dependia de displayedSignals E currentTimeSlot, causando re-execuções constantes
+  // SOLUÇÃO: Processamento feito apenas no useEffect do useQuery abaixo
+  
+  // Processar sinais do Realtime para EnrichedSignal
+  const signals = convertRealtimeToEnriched(realtimeSignals);
+  const isLoading = realtimeLoading;
+  const error = realtimeError;
+  const refetch = refreshRealtime;
+
+  // Efeito para processar os sinais quando disponíveis - PRIORIZAR SINAIS DA ABA TRADES
+  const hasInitializedSignals = useRef(false);
+  
+  useEffect(() => {
+    // SÓ processar na inicialização quando não houver sinais e não tiver sido inicializado
+    if (signals && displayedSignals.length === 0 && !hasInitializedSignals.current) {
+      hasInitializedSignals.current = true;
+      console.log('🚀 INICIALIZAÇÃO PRIORITÁRIA: Verificando melhor fonte de sinais');
+      
+      // PRIORIDADE 1: Verificar se temos sinais da aba Trades no localStorage
+      try {
+        const tradesData = localStorage.getItem('tradesSignals');
+        if (tradesData) {
+          const parsedData = JSON.parse(tradesData);
+          if (parsedData && parsedData.signals && Array.isArray(parsedData.signals) && 
+              parsedData.signals.length >= 3) {
+            console.log('🗡️ PRIORIDADE 1: Usando sinais da aba Trades');
+            
+            // Usar sinais da aba Trades
+            setDisplayedSignals(parsedData.signals.slice(0, 3));
+            setCachedSignals(parsedData.signals.slice(0, 3));
+            
+            // Registrar fonte de dados
+            window.displayedSignalsOwner = 'trades';
+            window.displayedSignalsRef = parsedData.signals.slice(0, 3);
+            
+            return; // Importante: sair depois de processar sinais prioritários
+          }
+        }
+      } catch (e) {
+        console.warn('⚠️ Erro ao tentar usar sinais da aba Trades:', e);
+      }
+      
+      // PRIORIDADE 2: Se não há sinais da aba Trades, usar sinais do useQuery
+      console.log('💭 PRIORIDADE 2: Usando sinais do useQuery (fallback)');
+      setDisplayedSignals(signals);
+      setCachedSignals(signals);
+      
+      // Sincronizar com a aba Signals
+      if (signals.length >= 3) {
+        // CORREÇÃO DE SINCRONIZAÇÃO: Garantir que os sinais são enviados para a aba Trades
+        saveDashboardSignalsForSync(signals);
+        console.log('✅ SINCRONIZAÇÃO INICIAL: Sinais enviados para aba Trades');
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [signals]); // Removido displayedSignals.length das dependências
+
+  // 🚫 USEEFFECTS DE SINCRONIZAÇÃO REMOVIDOS: Estavam causando interferências na rotação
+  // PROBLEMA: Executavam sempre que displayedSignals mudava, causando loops e rotações prematuras
+  // SOLUÇÃO: Implementar sincronização bidirecional inteligente
+
+  // SINCRONIZAÇÃO BIDIRECIONAL APRIMORADA: Ouvir mudanças da aba Trades e sincronizar sinais
+  useEffect(() => {
+    // Variável para evitar loops infinitos
+    let isProcessingEvent = false;
+    // Manter registro dos últimos sinais recebidos para evitar loops
+    let lastProcessedTimestamp = 0;
+    
+    // Função para atualizar sinais da Dashboard quando a aba Trades mudar
+    const handleTradesSignalsUpdate = (event: CustomEvent) => {
+      // Ignorar eventos originados pela própria dashboard para evitar loop
+      const eventDetail = event?.detail as { source?: string; signals?: EnrichedSignal[]; timestamp?: number } | undefined;
+      const src = eventDetail?.source || null;
+      if (src === 'dashboard') {
+        console.log('🔇 Ignorando evento tradesSignalsUpdated originado pela própria dashboard');
+        return;
+      }
+
+      // Evitar processamento recursivo
+      if (isProcessingEvent) {
+        console.log('🛑 Evitando processamento recursivo de eventos');
+        return;
+      }
+
+      // Evitar processamentos muito frequentes do mesmo evento/dados
+      const now = Date.now();
+      const timestamp = eventDetail?.timestamp || now;
+
+      if ((now - lastProcessedTimestamp) < 500 && timestamp <= lastProcessedTimestamp) {
+        console.log('🕒 Ignorando evento recente já processado');
+        return;
+      }
+
+      lastProcessedTimestamp = timestamp;
+      isProcessingEvent = true;
+      try {
+        // Flag para debugging
+        console.log('💡 SINCRONIZAÇÃO PRIORITÁRIA: Evento recebido da aba Trades');
+        
+        // Flag para debugging
+        window.lastSyncTimestamp = now;
+        window.lastSyncSource = 'trades';
+
+        // Verificar evento
+        if (!eventDetail) {
+          console.warn('⚠️ Evento sem detalhes');  
+          
+          // Tentar recuperar do localStorage como alternativa
+          try {
+            const storedData = localStorage.getItem('tradesSignals');
+            if (storedData) {
+              const parsedData = JSON.parse(storedData);
+              if (parsedData && parsedData.signals && Array.isArray(parsedData.signals)) {
+                console.log('💡 Usando dados do localStorage em vez do evento');
+                return handleTradesSignalsUpdate(new CustomEvent('tradesSignalsUpdated', { detail: parsedData }));
+              }
+            }
+          } catch (err) {
+            console.error('❌ Erro ao tentar recuperar do localStorage:', err);
+          }
+          return;
+        }
+
+        // Verificar sinais
+        if (!eventDetail.signals || !Array.isArray(eventDetail.signals)) {
+          console.warn('⚠️ Evento sem sinais válidos');
+          return;
+        }
+
+        // Garantir que temos pelo menos 3 sinais para sincronizar
+        if (eventDetail.signals.length < 3) {
+          console.warn(`⚠️ Aba Trades enviou apenas ${eventDetail.signals.length} sinais, insuficiente para Dashboard`);
+          return;
+        }
+
+        // Log detalhado
+        console.log('📥 SINAIS DA ABA TRADES:', 
+          eventDetail.signals.slice(0, 3).map(s => `${s.symbol} (${s.entry_time})`).join(' | '));
+
+        // VALIDAR DADOS: Verificar se os sinais têm as propriedades mínimas necessárias
+        const invalidSignals = eventDetail.signals.slice(0, 3).filter(
+          s => !s.symbol || !s.entry_time || !s.signal
+        );
+        
+        if (invalidSignals.length > 0) {
+          console.error('❌ SINAIS INVÁLIDOS da aba Trades:', invalidSignals);
+          return;
+        }
+
+        // Pegar os primeiros 3 sinais da aba Trades
+        const tradesSignals = [...eventDetail.signals.slice(0, 3)];
+        
+        // Enriquecer os sinais com propriedades necessárias para a Dashboard
+        const enrichedSignals = tradesSignals.map((signal, index) => ({
+          ...signal,
+          isDashboard: true,
+          position: index + 1,
+          dashboardPosition: index,
+          // Garantir que propriedades críticas existam
+          id: signal.id || `trades-signal-${Date.now()}-${index}`,
+          exchange: signal.exchange || inferExchangeCategory(signal.symbol),
+          expiry_time_str: signal.expiry_time_str || calculateNextTime(signal.entry_time, 5),
+          gale1_time: signal.gale1_time || calculateNextTime(signal.entry_time, 5),
+          gale2_time: signal.gale2_time || calculateNextTime(signal.entry_time, 10),
+          timeframe: signal.timeframe || '5m',
+          processed: false,
+          status: 'active' as 'active' | 'completed' | 'cancelled'
+        }));
+
+        // FORCECARR ATUALIZACAO: Guardar IDs atuais para comparar
+        const currentIds = displayedSignals.slice(0, 3).map(s => s.symbol);
+        const newIds = enrichedSignals.map(s => s.symbol);
+        
+        // Verificar se realmente há mudança de símbolos
+        const symbolsChanged = !currentIds.every((id, i) => id === newIds[i]);
+        if (symbolsChanged || currentIds.length === 0) {
+          console.log('🔄 ATUALIZAÇÃO NECESSÁRIA: Sinais diferentes detectados');
+          console.log(`   - Atuais: ${currentIds.join(', ')}`);
+          console.log(`   - Novos:  ${newIds.join(', ')}`);
+          
+          // Atualizar os sinais da Dashboard
+          setDisplayedSignals(enrichedSignals);
+          
+          // Registrar a atualização para debug
+          window.displayedSignalsRef = enrichedSignals;
+          window.displayedSignalsOwner = 'trades';
+          
+          // Salvar para persistência
+          localStorage.setItem('dashboardSignals', JSON.stringify({
+            signals: enrichedSignals,
+            timestamp: Date.now(),
+            version: '2.0-trades-sync'
+          }));
+
+          console.log('✅ Dashboard SINCRONIZADA com a aba Trades');
+        } else {
+          console.log('💯 SINAIS IDÊNTICOS: Mantendo sinais atuais');
+        }
+      } catch (error) {
+        console.error('❌ ERRO GRAVE na sincronização com aba Trades:', error);
+      } finally {
+        // Garantir que a flag seja resetada
+        isProcessingEvent = false;
+      }
+    };
+
+    // Registrar ouvinte para eventos da aba Trades
+    window.addEventListener('tradesSignalsUpdated', handleTradesSignalsUpdate as EventListener);
+    window.addEventListener('forceDashboardSync', handleTradesSignalsUpdate as EventListener);
+
+    // Verificar imediatamente se há sinais da aba Trades no localStorage
+    try {
+      // Verificar em múltiplos locais de armazenamento (robustez)
+      const possibleStorageKeys = ['tradesSignals', 'trades_signals', 'persistent-signals-navigation'];
+      
+      for (const key of possibleStorageKeys) {
+        const storedData = localStorage.getItem(key);
+        if (!storedData) continue;
+        
+        let parsedData;
+        try {
+          parsedData = JSON.parse(storedData);
+        } catch (e) {
+          console.warn(`⚠️ Erro ao analisar dados de ${key}:`, e);
+          continue;
+        }
+        
+        // Verificar onde estão os sinais na estrutura de dados
+        let signals = null;
+        if (parsedData.signals && Array.isArray(parsedData.signals)) {
+          signals = parsedData.signals;
+          console.log(`📣 Encontrados ${signals.length} sinais em '${key}.signals'`);
+        } else if (Array.isArray(parsedData)) {
+          signals = parsedData;
+          console.log(`📣 Encontrados ${signals.length} sinais em '${key}' (array direto)`);
+        } else if (parsedData.data && Array.isArray(parsedData.data)) {
+          signals = parsedData.data;
+          console.log(`📣 Encontrados ${signals.length} sinais em '${key}.data'`);
+        }
+        
+        // Se encontramos sinais válidos, usar
+        if (signals && signals.length >= 3) {
+          console.log(`🔄 Carregando ${signals.length} sinais iniciais da chave ${key}`);
+          handleTradesSignalsUpdate(new CustomEvent('tradesSignalsUpdated', { 
+            detail: { signals, timestamp: Date.now() }
+          }));
+          break; // Usar o primeiro conjunto válido encontrado
+        }
+      }
+    } catch (error) {
+      console.error('❌ Erro ao verificar sinais da aba Trades no localStorage:', error);
+    }
+
+    // VERIFICACAO AUTOMÁTICA: Verificar a cada 10 segundos
+    const intervalId = setInterval(() => {
+      try {
+        const tradesData = localStorage.getItem('tradesSignals');
+        if (!tradesData) return;
+        
+        const parsedData = JSON.parse(tradesData);
+        if (parsedData && parsedData.signals && parsedData.timestamp) {
+          // Verificar se dados são recentes (menos de 30 segundos)
+          const now = Date.now();
+          const isRecent = now - parsedData.timestamp < 30 * 1000;
+          
+          if (isRecent) {
+            // Verificar se os sinais são diferentes dos atuais
+            const newSymbols = parsedData.signals.slice(0, 3).map(s => s.symbol);
+            const currentSymbols = displayedSignals.slice(0, 3).map(s => s.symbol);
+            
+            const needsUpdate = !newSymbols.every((symbol, idx) => symbol === currentSymbols[idx]);
+            if (needsUpdate) {
+              console.log('🔄 VERIFICAÇÃO AUTOMÁTICA: Sinais diferentes detectados');
+              handleTradesSignalsUpdate(new CustomEvent('tradesSignalsUpdated', { detail: parsedData }));
+            }
+          }
+        }
+      } catch (error) {
+        // Ignore erros durante verificação automática
+      }
+    }, 10000); // Verificar a cada 10 segundos
+
+    return () => {
+      // Remover ouvintes ao desmontar
+      window.removeEventListener('tradesSignalsUpdated', handleTradesSignalsUpdate as EventListener);
+      window.removeEventListener('forceDashboardSync', handleTradesSignalsUpdate as EventListener);
+      clearInterval(intervalId);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [displayedSignals, calculateNextTime]);
+
+  // Efeito para iniciar o carregamento dos sinais - com ref para evitar loop
+  const isRefreshingRef = useRef(false);
+  
+  useEffect(() => {
+    if (!signals && !isLoading && !isRefreshingRef.current) {
+      isRefreshingRef.current = true;
+      setIsRefreshing(true);
+      refetch().finally(() => {
+        setIsRefreshing(false);
+        isRefreshingRef.current = false;
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [signals, isLoading]); // Removido refetch das dependências
+
+  // FUNÇÃO CORRIGIDA: Verificar se um sinal já excedeu 20 minutos desde a ENTRADA
+  const isSignalOutdated = useCallback((signal: EnrichedSignal): boolean => {
+    if (!signal.entry_time) return false;
+    
+    const now = new Date();
+    const [entryHour, entryMin] = signal.entry_time.split(':').map(Number);
+    
+    // Criar horário de entrada
+    const entryTime = new Date();
+    entryTime.setHours(entryHour, entryMin, 0, 0);
+    
+    // Se o horário de entrada for no futuro, ajustar para ontem
+    if (entryTime > now) {
+      entryTime.setDate(entryTime.getDate() - 1);
     }
     
+    // Calcular diferença em minutos desde a entrada
+    const timeDiffMs = now.getTime() - entryTime.getTime();
+    const minutesSinceEntry = Math.floor(timeDiffMs / (1000 * 60));
+    
+    // Sinal é considerado desatualizado se passou 20 ou mais minutos desde a entrada
+    return minutesSinceEntry >= 20;
+  }, []);
+
+  // REMOVIDO - função moveida para depois da declaração de executeSignalRotation
+
+  // REMOVIDO - função moveida para resolver ordem de declaração
+
+  // Função para forçar rotação manual
+  const forceRotation = useCallback(() => {
+    console.log('🔧 Forçando rotação manual');
+    executeSignalRotation();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // 🎯 LÓGICA ESPECÍFICA: Calcular próximo horário de rotação baseado no padrão 03→23→43→03
+  const calculateNextRotationTime = (entryTime: string): string => {
+    const [hour, minute] = entryTime.split(':').map(Number);
+    
+    // Determinar próximo horário baseado na regra específica
+    if (minute === 3) {
+      // 03 → 23 (mesmo hora)
+      return `${hour.toString().padStart(2, '0')}:23`;
+    } else if (minute === 23) {
+      // 23 → 43 (mesmo hora) 
+      return `${hour.toString().padStart(2, '0')}:43`;
+    } else if (minute === 43) {
+      // 43 → 03 (próxima hora)
+      const nextHour = (hour + 1) % 24;
+      return `${nextHour.toString().padStart(2, '0')}:03`;
+    }
+    
+    // Fallback para outros casos (não deveria acontecer)
+    console.warn(`⚠️ Horário inválido para rotação: ${entryTime}`);
+    return entryTime;
+  };
+
+  // FUNÇÃO DEFINITIVA para execução de rotação com máxima confiabilidade
+  // Esta função verifica se o primeiro sinal já passou do tempo de rotação (20 minutos)
+  // e executa a rotação seguindo a regra: 1º sinal sai, 2º→1º, 3º→2º, novo sinal→3º
+  const executeRotationDirect = () => {
     try {
+      // CAMADA 0: Verificar se é uma execução durante inicialização
       const now = new Date();
-      const currentHour = now.getHours();
-      const currentMinute = now.getMinutes();
+      const mountTime = window.lastMountTimestamp || 0;
+      const timeSinceMounting = Date.now() - mountTime;
       
-      console.log(`Verificando expiração às ${currentHour}:${currentMinute}`);
-      
-      // Verificar o primeiro sinal - apenas ele controla a rotação
-      const firstSignal = displayedSignals[0];
-      if (!firstSignal || !firstSignal.entry_time) {
-        console.log('Primeiro sinal inválido ou sem horário de entrada');
+      // Se o componente foi montado há pouco, permitir execução após um curto delay
+      // Reduzimos de 10s para 2s para não pular a verificação inicial que ocorre aos 5s
+      const MOUNT_SKIP_MS = 2000; // 2 segundos
+      if (mountTime > 0 && timeSinceMounting < MOUNT_SKIP_MS) {
+        console.log(`⏱️ Componente montado recentemente (${Math.floor(timeSinceMounting/1000)}s atrás) - ignorando verificação imediata`);
+        window.isRotating = false;
         return;
       }
       
-      // Extrair horário de entrada do primeiro sinal
-      const [entryHour, entryMin] = firstSignal.entry_time.split(':').map(Number);
+      // CAMADA 1: Verificar se já está rotacionando para evitar operações simultâneas
       
-      // Calcular diferença em minutos
-      let hourDiff = currentHour - entryHour;
-      let minuteDiff = currentMinute - entryMin;
-      
-      // Ajustar para casos de virada do dia
-      if (hourDiff < 0) hourDiff += 24;
-      const totalMinutesDiff = (hourDiff * 60) + minuteDiff;
-      
-      console.log(`Primeiro sinal ${firstSignal.symbol} (entrada: ${firstSignal.entry_time}) - Diferença: ${totalMinutesDiff} minutos`);
-      
-      // Se já passou 20 minutos ou mais desde o horário de entrada, realizar a rotação automática
-      if (totalMinutesDiff >= 20) {
-        console.log(`Primeiro sinal ${firstSignal.symbol} expirou (${totalMinutesDiff} minutos após entrada) - Iniciando rotação automática`);
-        
-        // Log dos sinais antes da rotação
-        console.log('Estado dos sinais antes da rotação:');
-        displayedSignals.forEach((signal, index) => {
-          console.log(`- Sinal ${index + 1}: ${signal.symbol} (entrada: ${signal.entry_time})`);
-        });
-        
-        // Marcar o sinal como processado se necessário
-        if (!firstSignal.processed) {
-          const updatedSignals = [...displayedSignals];
-          updatedSignals[0] = {
-            ...firstSignal,
-            processed: true,
-            result: 'success' // Maioria dos resultados são sucessos
-          };
-          
-          // Atualizar sinais
-          setDisplayedSignals(updatedSignals);
-        }
-        
-        // Acionar rotação automática
-        console.log('Iniciando rotação automática de sinais...');
-        setTimeout(() => rotateSignals(), 100);
-      } else {
-        console.log(`Primeiro sinal ainda não expirou. Faltam ${20 - totalMinutesDiff} minutos para rotação.`);
-      }
-    } catch (error) {
-      console.error('Erro ao verificar expiração de sinais:', error);
-    }
-  }, [displayedSignals, rotateSignals]);
-
-  // Função para gerar novos sinais com horários válidos
-  const generateNewSignals = (validTimes) => {
-    const timestamp = Date.now();
-    const newSignals = [];
-    
-    // Símbolos disponíveis para os sinais
-    const symbolOptions = [
-      'EUR/USD (OTC)', 'GBP/USD (OTC)', 'AUD/USD (OTC)', 'USD/CAD (OTC)', 'USD/CHF (OTC)', 
-      'NZD/USD (OTC)', 'EUR/CAD (OTC)', 'EUR/AUD (OTC)', 'USD/JPY (OTC)', 'EUR/JPY (OTC)',
-      'GBP/JPY (OTC)', 'AUD/JPY (OTC)', 'USD/MXN (OTC)', 'USD/ZAR (OTC)', 'USD/THB (OTC)',
-      'USD/CNH (OTC)', 'Gold/Silver (OTC)', 'Amazon/Alibaba (OTC)', 
-      'TRUMP Coin (OTC)', 'MELANIA Coin (OTC)', 'Amazon/Ebay (OTC)', 'Apple/Samsung (OTC)'
-    ];
-    
-    // Gerar três sinais com horários diferentes
-    for (let i = 0; i < 3; i++) {
-      // Pegar o próximo horário válido
-      const entryTime = validTimes[i];
-      
-      // Calcular horário de expiração (entrada + 5 minutos)
-      const [entryHour, entryMin] = entryTime.split(':').map(Number);
-          let expiryHour = entryHour;
-      let expiryMin = entryMin + 5;
-          
-      if (expiryMin >= 60) {
-        expiryMin -= 60;
-            expiryHour = (expiryHour + 1) % 24;
+      // Se já estiver rotacionando, abortar para evitar rotações simultâneas
+      if (window.isRotating) {
+        console.log('⚠️ Rotação já em andamento - abortando execução paralela');
+        return;
       }
       
-      const expiryTime = `${expiryHour.toString().padStart(2, '0')}:${expiryMin.toString().padStart(2, '0')}`;
+      // Indicar início da rotação com flag global
+      window.isRotating = true;
+      window.lastRotationStarted = now.getTime();
       
-      // Reentrada 1 é igual ao horário de expiração
-      const gale1Time = expiryTime;
-      
-      // Reentrada 2 é 5 minutos após a Reentrada 1
-      let gale2Hour = expiryHour;
-      let gale2Min = expiryMin + 5;
-      
-      if (gale2Min >= 60) {
-        gale2Min -= 60;
-        gale2Hour = (gale2Hour + 1) % 24;
-      }
-      
-      const gale2Time = `${gale2Hour.toString().padStart(2, '0')}:${gale2Min.toString().padStart(2, '0')}`;
-      
-      // Escolher um símbolo diferente dos já escolhidos
-      let symbolIndex;
-      let symbol;
-      
-      do {
-        symbolIndex = Math.floor(Math.random() * symbolOptions.length);
-        symbol = symbolOptions[symbolIndex];
-      } while (newSignals.some(s => s.symbol === symbol));
-      
-      // Determinar operação aleatória (COMPRA ou VENDA)
-      const operation = Math.random() > 0.5 ? 'BUY' : 'SELL';
-      
-      // Criar o sinal
-      const signal = createSignalObject({
-        symbol,
-        signal: operation,
-          entry_time: entryTime,
-        expiry: '5m',
-          expiry_time_str: expiryTime,
-          gale1_time: gale1Time,
-          gale2_time: gale2Time
-      });
-      
-      // Adicionar um ID único para o sinal
-      newSignals.push({
-        ...signal,
-        id: `signal-${timestamp}-${Math.random().toString(36).substring(2, 10)}`,
-      processed: false,
-        timeframe: '5m'
-      });
-    }
-    
-    return newSignals;
-  };
+      console.log('🔄 INICIANDO VERIFICAÇÃO DE ROTAÇÃO AUTOMÁTICA');
 
-  useEffect(() => {
-    // Configurar timers para cada sinal
-    if (displayedSignals && displayedSignals.length > 0) {
-      console.log('Configurando timers para sinais atualizados...');
-      
-      // Registrar timers para cada sinal
-      displayedSignals.forEach(signal => {
-        registerPersistentTimer(signal);
-      });
-      
-      // Verificar se algum sinal já expirou
-      checkExpiredSignals();
-      
-      // Salvar sinais no localStorage
-      saveSignalsToLocalStorage(displayedSignals, Date.now(), getInitialTimeSlot());
-    }
-  }, [displayedSignals, registerPersistentTimer, checkExpiredSignals]);
-  
-  // Configurar verificação periódica de expiração
-  useEffect(() => {
-    console.log('Configurando verificação periódica de expiração de sinais...');
-    
-    // Verificar imediatamente ao montar
-    checkExpiredSignals();
-    
-    console.log('Verificação inicial de expiração concluída, configurando intervalo periódico...');
-    
-    // Verificar a cada 30 segundos
-    const interval = setInterval(() => {
-      console.log('Executando verificação periódica de expiração...');
-    checkExpiredSignals();
-    }, 30 * 1000); // 30 segundos
-    
-    return () => {
-      console.log('Limpando intervalo de verificação de expiração...');
-      clearInterval(interval);
-    };
-  }, [checkExpiredSignals]);
+      // CAMADA 2: Verificar se há sinais para processar
+      let signalsToRotate = displayedSignals;
 
-  // Efeito para detectar quando o usuário volta à aba após ficar um tempo fora
-  useEffect(() => {
-    // Função para lidar com a visibilidade da página
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        console.log('Usuário retornou à aba. Verificando sinais...');
-        
-        // Verificar se signals está definido corretamente
-        if (!signals || !Array.isArray(signals) || signals.length === 0) {
-          console.log('Sinais indefinidos ou vazios. Tentando recuperar do localStorage...');
-          
-          try {
-            // Tentar recuperar sinais do localStorage
-            const cachedData = localStorage.getItem('dashboard-signals-cache');
-            if (cachedData) {
-              const { signals: cachedSignals } = JSON.parse(cachedData);
-              if (cachedSignals && Array.isArray(cachedSignals) && cachedSignals.length > 0) {
-                console.log('Recuperados sinais do localStorage após retorno à aba');
-                setDisplayedSignals(cachedSignals);
-              }
-            }
-          } catch (error) {
-            console.error('Erro ao recuperar sinais do localStorage após retorno à aba:', error);
+      // Se o estado React estiver vazio, tentar usar referência global (outras abas podem ter atualizado)
+      if ((!signalsToRotate || signalsToRotate.length < 3) && window.displayedSignalsRef && window.displayedSignalsRef.length >= 3) {
+        // Se a referência global existir, verificar se ela foi criada por esta instância da Dashboard
+        if (window.displayedSignalsOwner && window.displayedSignalsOwner === 'dashboard') {
+          console.log('ℹ️ Usando sinais da referência global window.displayedSignalsRef (criadas pela dashboard)');
+          signalsToRotate = window.displayedSignalsRef;
+          try { setDisplayedSignals(signalsToRotate); } catch (e) {
+            // Intentionally empty
           }
         } else {
-          console.log('Sinais existentes encontrados após retorno à aba');
+          console.warn('⚠️ Existe window.displayedSignalsRef, mas não foi marcada como criada pela dashboard. Ignorando para evitar usar sinais de outra aba.');
+        }
+      }
+
+      // CORREÇÃO ROBUSTA: Se não temos sinais no estado, tentar buscar do localStorage
+      if (!signalsToRotate || signalsToRotate.length < 3) {
+        console.log('⚠️ Estado de sinais vazio ou insuficiente, buscando do localStorage...');
+        
+        try {
+          // Tentar carregar sinais do localStorage de múltiplas chaves possíveis
+          // Priorizar a chave exata `dashboardSignals` criada pela dashboard
+          const storedData = localStorage.getItem('dashboardSignals') || localStorage.getItem('dashboard_signals') || localStorage.getItem('dashboard-signals');
+          
+          if (storedData) {
+            const parsedData = JSON.parse(storedData);
+            if (parsedData) {
+              // Verificar diversos formatos possíveis dos dados
+              let signalsArray = null;
+              
+              if (parsedData.signals && Array.isArray(parsedData.signals)) {
+                signalsArray = parsedData.signals;
+                console.log('✅ Sinais encontrados no formato signals[]:', signalsArray.length);
+              } else if (Array.isArray(parsedData)) {
+                signalsArray = parsedData;
+                console.log('✅ Sinais encontrados no formato array direto:', signalsArray.length);
+              }
+
+              // Verificar se encontramos um array válido com pelo menos 3 elementos
+              if (signalsArray && signalsArray.length >= 3) {
+                // Primeiro, verificar se os sinais salvos têm a flag isDashboard
+                const dashboardSignals = signalsArray.filter(s => s && s.isDashboard === true && s.entry_time);
+                if (dashboardSignals.length >= 3) {
+                  console.log('✅ Usando sinais marcados como Dashboard no localStorage:', dashboardSignals.length);
+                  signalsToRotate = dashboardSignals.slice(0, 3);
+                  setDisplayedSignals(signalsToRotate);
+                } else {
+                  // Se não houver sinais marcados explicitamente, recusar usar sinais vindos de outras abas
+                  console.warn('⚠️ Sinais no localStorage não carregam a flag isDashboard. Ignorando para evitar usar sinais da aba Trades.');
+                  // Não definir signalsToRotate aqui; deixaremos a verificação criar novos sinais se necessário
+                }
+              }
+            }
+          } else {
+            console.log('❌ Nenhum dado encontrado no localStorage');
+          }
+        } catch (localStorageError) {
+          console.error('❌ Erro ao recuperar sinais do localStorage:', localStorageError);
+        }
+      }
+
+      // Se ainda não temos sinais suficientes, tentar criar novos sinais
+      if (!signalsToRotate || signalsToRotate.length < 3) {
+        console.log('⚠️ Não foi possível recuperar sinais. Criando novos sinais...');
+        
+        try {
+          // Gerar 3 novos horários seguindo o padrão 03→23→43→03
+          const validTimes = calculateNextThreeValidTimes();
+          
+          // Criar 3 sinais com os horários válidos e símbolos fixos
+          const newSignals: EnrichedSignal[] = [
+            createSignalObject(validTimes[0], 1), // Worldcoin (OTC)
+            createSignalObject(validTimes[1], 2), // Pepe (OTC)
+            createSignalObject(validTimes[2], 3)  // Gold/Silver (OTC)
+          ];
+          
+          console.log('✅ Novos sinais criados com horários:', validTimes.join(', '));
+          signalsToRotate = newSignals;
+          
+          // Atualizar o estado React e salvar no localStorage
+          setDisplayedSignals(newSignals);
+          saveSignalsToLocalStorage(newSignals, Date.now(), getInitialTimeSlot());
+          saveDashboardSignalsForSync(newSignals);
+          
+          // Como acabamos de criar novos sinais, não precisamos rotacionar ainda
+          console.log('ℹ️ Sinais iniciais criados. Próxima verificação em 30 segundos.');
+          window.isRotating = false;
+          return;
+        } catch (createError) {
+          console.error('❌ Erro ao criar novos sinais:', createError);
+          window.isRotating = false;
+          return;
+        }
+      }
+
+      // CAMADA 3: Extrair o primeiro sinal (posição 1) para verificar seu horário de entrada
+      // Ordenar sinais por posição para garantir ordem correta
+      const sortedSignals = [...signalsToRotate]
+        .filter(signal => signal && [1, 2, 3].includes(signal.position))
+        .sort((a, b) => a.position - b.position);
+      
+      if (sortedSignals.length < 3) {
+        console.log(`❌ Não há 3 sinais com posições definidas (encontrados: ${sortedSignals.length})`);
+        window.isRotating = false;
+        return;
+      }
+      
+      // Usar o primeiro após ordenação OU buscar especificamente o de posição 1
+      let firstSignal = sortedSignals[0];
+      if (!firstSignal) {
+        firstSignal = signalsToRotate.find(signal => signal && signal.position === 1);
+      }
+      
+      // Verificação rigorosa do primeiro sinal e seu horário
+      if (!firstSignal || !firstSignal.entry_time || typeof firstSignal.entry_time !== 'string') {
+        console.log('❌ Primeiro sinal inválido ou sem horário de entrada:', firstSignal);
+        window.isRotating = false;
+        return;
+      }
+      
+      console.log(`ℹ️ Primeiro sinal: ${firstSignal.symbol} com entrada às ${firstSignal.entry_time}`);
+      
+      // CAMADA 4: Calcular timestamp do horário de entrada usando parseTimeString
+      // parseTimeString já aplica heurística para dias (não força para ontem horários futuros próximos)
+      const entryDate = parseTimeString(firstSignal.entry_time);
+      const entryDateTimestamp = entryDate.getTime();
+      
+      // CAMADA 5: Verificação CRÍTICA - calcular minutos desde a entrada (pode ser negativo se entrada no futuro)
+      const millisSinceEntry = now.getTime() - entryDateTimestamp;
+      const minutesSinceEntry = Math.floor(millisSinceEntry / (1000 * 60));
+
+      // Log detalhado para diagnóstico
+      console.log(`⏱️ VERIFICAÇÃO DE ROTAÇÃO: Sinal ${firstSignal.symbol} ativo há EXATOS ${minutesSinceEntry} minutos`);
+      console.log(`⏱️ Entrada (interpretada): ${entryDate.toLocaleTimeString()} | Agora: ${now.toLocaleTimeString()}`);
+
+      // Se a entrada ainda está no futuro, informar quanto falta para a entrada e para a rotação
+      if (minutesSinceEntry < 0) {
+        const minutesToEntry = Math.ceil(Math.abs(millisSinceEntry) / (1000 * 60));
+        const millisToRotation = entryDateTimestamp + SIGNAL_PROCESSING_TIME - now.getTime();
+        const minutesToRotation = Math.max(0, Math.ceil(millisToRotation / (1000 * 60)));
+        console.log(`⏱️ Entrada futura: falta ${minutesToEntry} minutos até a entrada; até rotação: ${minutesToRotation} minutos`);
+        window.isRotating = false;
+        return;
+      }
+
+      // VERIFICAÇÃO CRÍTICA: Rotação EXATAMENTE após 20 minutos desde a entrada
+      const shouldRotate = minutesSinceEntry >= Math.floor(SIGNAL_PROCESSING_TIME / (1000 * 60));
+
+      if (!shouldRotate) {
+        console.log(`⏱️ Ainda não é hora de rotacionar - faltam ${Math.max(0, Math.floor((SIGNAL_PROCESSING_TIME / (1000 * 60)) - minutesSinceEntry))} minutos`);
+        window.isRotating = false;
+        return;
+      }
+      
+      // CAMADA 6: Executar rotação real
+      console.log('🔄 EXECUTANDO ROTAÇÃO DE SINAIS (20+ minutos desde entrada do primeiro sinal)');
+      
+      // Extrair os 3 sinais atuais para realizar a rotação
+      const currentSignals = [...signalsToRotate].filter(signal => [1, 2, 3].includes(signal.position));
+      currentSignals.sort((a, b) => a.position - b.position);
+      
+      if (currentSignals.length < 3) {
+        console.log('❌ Não há sinais suficientes para rotação');
+        window.isRotating = false;
+        return;
+      }
+      
+      console.log('\n--- ANTES DA ROTAÇÃO ---');
+      currentSignals.forEach((signal, index) => {
+        console.log(`${index + 1}. ${signal.symbol} - ${signal.entry_time}`);
+      });
+      
+      // Remover o primeiro sinal (que será substituído pelo segundo)
+      const [firstToRemove, secondToFirst, thirdToSecond] = currentSignals;
+      
+      // Verificar qual será o próximo horário válido para o novo sinal (posição 3)
+      const nextEntryTime = getNextValidTime(now.getHours() + ':' + now.getMinutes(), firstToRemove.entry_time);
+      console.log(`⏱️ Próximo horário válido para novo sinal: ${nextEntryTime}`);
+      // Gerar novo terceiro sinal escolhendo símbolo que não esteja nas 2 primeiras posições
+      const existingSymbols = [secondToFirst.symbol, thirdToSecond.symbol];
+      const chosenSymbol = pickNextSymbol(existingSymbols);
+      const newThirdSignal = createSignalObject(nextEntryTime, 3, chosenSymbol);
+      
+      // Atualizar posições dos sinais remanescentes
+      secondToFirst.position = 1;
+      thirdToSecond.position = 2;
+      
+      // Criar nova lista de sinais com a rotação aplicada
+      const updatedSignals: EnrichedSignal[] = displayedSignals.map(signal => {
+        if (signal.id === firstToRemove.id) return null; // Remover primeiro sinal
+        if (signal.id === secondToFirst.id) return { ...signal, position: 1 }; // Segundo → Primeiro
+        if (signal.id === thirdToSecond.id) return { ...signal, position: 2 }; // Terceiro → Segundo
+        return signal;
+      }).filter(Boolean) as EnrichedSignal[]; // Remover null (primeiro sinal)
+      
+      // Adicionar o novo terceiro sinal
+      updatedSignals.push(newThirdSignal);
+      
+      console.log('\n--- DEPOIS DA ROTAÇÃO ---');
+      updatedSignals
+        .filter(s => [1, 2, 3].includes(s.position))
+        .sort((a, b) => a.position - b.position)
+        .forEach((signal, index) => {
+          console.log(`${index + 1}. ${signal.symbol} - ${signal.entry_time}`);
+        });
+      
+      // Atualizar estado com a nova lista de sinais
+      console.log('\n✅ Atualizando sinais na dashboard com rotação:');
+      console.log(`   1º removido: ${firstToRemove.symbol}`);
+      console.log(`   2º → 1º: ${secondToFirst.symbol}`);
+      console.log(`   3º → 2º: ${thirdToSecond.symbol}`);
+      console.log(`   Novo 3º: ${newThirdSignal.symbol} (${nextEntryTime})`);
+      console.log('='.repeat(50));
+      
+      // Garantir que cada sinal tenha a propriedade position correta (1, 2, 3)
+      const finalSignals = updatedSignals.map((signal, index) => ({
+        ...signal,
+        position: index + 1,
+        dashboardPosition: index
+      }));
+      
+      // Atualizar estado e persistir
+      setDisplayedSignals(finalSignals);
+      
+      // Salvar no localStorage e disparar eventos
+      saveSignalsToLocalStorage(finalSignals, Date.now(), getInitialTimeSlot());
+      
+      // CORREÇÃO DE SINCRONIZAÇÃO: Garantir que os sinais são enviados para a aba Trades
+      saveDashboardSignalsForSync(finalSignals);
+      console.log('✅ SINCRONIZAÇÃO: Sinais enviados para aba Trades');
+      
+      console.log('🔄 ROTAÇÃO CONCLUÍDA COM SUCESSO:');
+      finalSignals.forEach((signal, idx) => {
+        console.log(`   • Posição ${idx+1}: ${signal.symbol} (${signal.entry_time})`);
+      });
+    } catch (error) {
+      console.error('❌ ERRO durante rotação:', error);
+    } finally {
+      // Garantir que a flag de rotação seja sempre limpa no final
+      window.isRotating = false;
+    }
+  };
+
+  // Disponibilizar função para acesso global
+  Object.defineProperty(window, 'executeRotationDirect', {
+    value: executeRotationDirect,
+    writable: true,
+    configurable: true
+  });
+
+  // TIMER ÚNICO E DEFINITIVO: Sistema de rotação automática ULTRA-ROBUSTO
+  useEffect(() => {
+    // LIMPEZA COMPLETA: Remover TODOS os timers existentes para garantir que não há duplicação
+    console.log('🧹 LIMPEZA GLOBAL: Removendo todos os timers existentes');
+    
+    // Limpar timer de rotação principal
+    if (window.dashboardRotationTimer) {
+      console.log('🧹 Limpando timer de rotação principal');
+      clearInterval(window.dashboardRotationTimer);
+      window.dashboardRotationTimer = null;
+    }
+    
+    // Limpar timer de monitoramento
+    if (window.rotationMonitorInterval) {
+      console.log('🧹 Limpando timer de monitoramento');
+      clearInterval(window.rotationMonitorInterval);
+      window.rotationMonitorInterval = null;
+    }
+    
+    // Limpar qualquer outro timer global que possa estar interferindo
+    Object.keys(window).forEach(key => {
+      if (key.includes('timer') || key.includes('Timer') || key.includes('Interval')) {
+        try {
+          const value = window[key];
+          if (typeof value === 'number') {
+            console.log(`🧹 Limpando timer global: ${key}`);
+            clearTimeout(value);
+            clearInterval(value);
+            window[key] = null;
+          }
+        } catch (e) {
+          // Ignorar erros de limpeza
+        }
+      }
+    });
+    
+    console.log('⏰ TIMER ÚNICO: Iniciando timer de rotação a cada 30 segundos');
+    
+    // VERIFICAÇÃO INICIAL: Executar após 5 segundos para dar tempo de carregar
+    const initialCheck = setTimeout(() => {
+      console.log('🔍 Verificação inicial de rotação (5s após montagem)');
+      if (window.signalsCardMounted) {
+        executeRotationDirect();
+      }
+    }, 5000);
+    
+    // TIMER ÚNICO: Verificar a cada 30 segundos
+    const mainTimer = setInterval(() => {
+      try {
+        if (!window.signalsCardMounted) return;
+        
+        // Log detalhado apenas a cada 5 verificações para não poluir o console
+        const now = Date.now();
+        const lastCheck = window.lastRotationCheck || 0;
+        const checkInterval = now - lastCheck;
+        
+        if (checkInterval > 150000) { // Log detalhado a cada 2.5 minutos
+          console.log('⏰ VERIFICAÇÃO DETALHADA: Verificando rotação automática');
+          window.lastRotationCheck = now;
+        } else {
+          console.log('⏰ Verificando rotação...');
         }
         
-        // Verificar se há sinais expirados
-        setTimeout(() => {
-          checkExpiredSignals();
-        }, 1000);
+        // Executar verificação de rotação
+        executeRotationDirect();
+        
+        // Garantir sincronização com a aba Trades mesmo sem rotação
+        if (displayedSignals && displayedSignals.length >= 3) {
+          // Sincronizar a cada 2 minutos para garantir que as abas estão atualizadas
+          const shouldSync = checkInterval > 120000;
+          if (shouldSync) {
+            console.log('🔄 Sincronização periódica com aba Trades');
+            saveDashboardSignalsForSync(displayedSignals);
+          }
+        }
+      } catch (error) {
+        console.error('❌ Erro na verificação periódica de rotação:', error);
+      }
+    }, 30000); // 30 segundos - balanceando precisão e performance
+    
+    // Salvar referência global para acesso externo
+    window.dashboardRotationTimer = mainTimer;
+    window.signalsCardMounted = true;
+    window.lastMountTimestamp = Date.now();
+    
+    // Limpeza completa ao desmontar
+    return () => {
+      console.log('🧹 Desmontando componente - limpando todos os timers');
+      clearTimeout(initialCheck);
+      clearInterval(mainTimer);
+      
+      // Limpar referências globais
+      window.dashboardRotationTimer = null;
+      window.signalsCardMounted = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Sem dependências para evitar recriação do timer
+  
+  // SISTEMA REMOVIDO: Substituído pelo timer único acima
+  // Este useEffect duplicado foi removido para evitar conflitos de timers
+  
+  // TIMER DE MONITORAMENTO REMOVIDO: Substituído pelo timer único acima
+  // Este useEffect foi removido para evitar conflitos de timers
+
+  // ... existing code ...
+
+  // FUNÇÃO PARA GERAR NOVOS SINAIS COM HORÁRIOS VÁLIDOS
+  const generateNewSignals = useCallback((validTimes: string[]): EnrichedSignal[] => {
+    console.log('🔄 GERANDO NOVOS SINAIS com horários:', validTimes);
+    
+    return validTimes.map((time, index) => {
+      const assetSymbol = getRandomAsset(); // Retorna string
+      const entryTime = time;
+      const expiryTime = calculateNextTime(time, 5); // 5 minutos após entrada
+      const gale1Time = expiryTime; // Primeira reentrada no horário de expiração
+      const gale2Time = calculateNextTime(expiryTime, 5); // Segunda reentrada 5 minutos após expiração
+      
+      return {
+        id: `signal-${Date.now()}-${index}`,
+          entry_time: entryTime,
+        type: SignalType.TECHNICAL,
+        strength: SignalStrength.STRONG,
+        timestamp: new Date().toISOString(),
+        qualityScore: 90,
+        symbol: assetSymbol,
+        exchange: inferExchangeCategory(assetSymbol),
+        processed: false,
+        status: 'active' as 'active' | 'completed' | 'cancelled',
+        signal: Math.random() > 0.5 ? ('BUY' as const) : ('SELL' as const),
+        reason: 'Technical Analysis',
+        price: 0,
+        entry_price: 0,
+        target_price: 0,
+        stop_loss: 0,
+          expiry_time_str: expiryTime,
+          gale1_time: gale1Time,
+        gale2_time: gale2Time,
+        success_rate: 0.85 + Math.random() * 0.1,
+        expired: false,
+        timeframe: '5m',
+        expiry: '5m',
+        risk_reward: '2:1',
+        isDashboard: true,
+        dashboardPosition: index,
+        entryTimestamp: Date.now() // Adicionar timestamp de entrada
+      } as EnrichedSignal;
+    });
+  }, []);
+
+  // Função para atualizar sinais (movida após as outras declarações)
+  const handleRefresh = useCallback(() => {
+    console.log('Solicitação de atualização manual dos sinais');
+
+    // Verificar se há pelo menos um sinal atrasado (>20 min após entrada)
+    const hasOutdated = displayedSignals.some(isSignalOutdated);
+
+    if (!hasOutdated) {
+      toast.info('Os sinais atuais ainda são válidos. Aguarde a próxima rotação.', { duration: 4000 });
+      return;
+    }
+
+    // Prosseguir com a atualização completa apenas se houver sinais atrasados
+
+    // Limpar completamente todas as caches
+    localStorage.removeItem('dashboard-signals-cache');
+    localStorage.removeItem('dashboard-signals-lastUpdated');
+    localStorage.removeItem('dashboardSignals');
+    localStorage.removeItem('dashboard_signals');
+
+    // Limpar timers persistentes
+    if (window.signalTimersMap) {
+      window.signalTimersMap = {};
+    }
+
+    // Resetar estados
+    setDisplayedSignals([]);
+    setCachedSignals([]);
+    signalProcessCount = 0;
+
+    setIsRefreshing(true);
+    setRefreshingSignals(true);
+
+    setTimeout(() => {
+      const validTimes = calculateNextThreeValidTimes();
+      console.log('Gerando sinais novos após refresh manual:', validTimes);
+
+      const newSignals = generateNewSignals(validTimes);
+
+      setDisplayedSignals(newSignals);
+      saveSignalsToLocalStorage(newSignals, Date.now(), getInitialTimeSlot());
+
+      newSignals.forEach(registerPersistentTimer);
+
+      setIsRefreshing(false);
+      setTimeout(() => {
+        setRefreshingSignals(false);
+        setRefreshButtonState('success');
+        setTimeout(() => setRefreshButtonState('idle'), 3000);
+      }, 500);
+    }, 500);
+  }, [displayedSignals, isSignalOutdated, generateNewSignals, registerPersistentTimer]);
+
+  // EFEITO DE PRESERVAÇÃO DESABILITADO: Interferia com rotação
+  // useEffect(() => {
+  //   if (!displayedSignals || displayedSignals.length === 0) return;
+    
+  //   // Verificar se os sinais têm timestamp de entrada
+  //   const signalsWithoutTimestamp = displayedSignals.filter(signal => !signal.entryTimestamp);
+    
+  //   if (signalsWithoutTimestamp.length > 0) {
+  //     // Adicionar timestamp de entrada para sinais que não têm
+  //     const updatedSignals = displayedSignals.map(signal => ({
+  //       ...signal,
+  //       entryTimestamp: signal.entryTimestamp || (() => {
+  //         // Calcular timestamp baseado no horário de entrada
+  //         const [hours, minutes] = signal.entry_time.split(':').map(Number);
+  //         const entryDate = new Date();
+  //         entryDate.setHours(hours, minutes, 0, 0);
+          
+  //         // Se o horário for no futuro, usar timestamp atual
+  //         const now = new Date();
+  //         return entryDate > now ? Date.now() : entryDate.getTime();
+  //       })()
+  //     }));
+      
+  //     setDisplayedSignals(updatedSignals);
+  //     saveDashboardSignalsForSync(updatedSignals);
+  //   }
+  // }, [displayedSignals, saveDashboardSignalsForSync]);
+
+
+
+
+
+  // 🔒 EFEITO BLOQUEADOR: Impede mudanças de sinais durante período fixo
+  useEffect(() => {
+    // Interceptar qualquer tentativa de mudança dos sinais
+    const originalSetDisplayedSignals = setDisplayedSignals;
+    
+    // Substituir temporariamente a função para aplicar filtro
+    // Sistema simplificado - usar setDisplayedSignals direto
+    
+  }, []);
+
+  // ❌ SINCRONIZAÇÃO COM PÁGINA SIGNALS REMOVIDA: Evitar interferências na rotação
+  // A sincronização será feita apenas durante a rotação controlada
+
+  // Sincronizar entryTimestamp DESABILITADO: Interferia com rotação
+  // useEffect(() => {
+  //   if (displayedSignals && displayedSignals.length > 0) {
+  //     const updatedSignals = displayedSignals.map(signal => ({
+  //       ...signal,
+  //       entryTimestamp: (() => {
+  //         const [hours, minutes] = signal.entry_time.split(':').map(Number);
+  //         const entryDate = new Date();
+  //         entryDate.setHours(hours, minutes, 0, 0);
+          
+  //         // Se o horário for no futuro, usar timestamp atual
+  //         const now = new Date();
+  //         return entryDate > now ? Date.now() : entryDate.getTime();
+  //       })()
+  //     }));
+      
+  //     setDisplayedSignals(updatedSignals);
+  //     saveDashboardSignalsForSync(updatedSignals);
+  //   }
+  // }, [displayedSignals, saveDashboardSignalsForSync]);
+
+  // Efeito para inicializar consistentemente o localStorage na montagem
+  useEffect(() => {
+    try {
+      console.log('🚀 Inicializando SignalsCard - verificando consistência do localStorage');
+      
+      // Marcar componente como montado
+      window.signalsCardMounted = true;
+      window.lastMountTimestamp = Date.now();
+      
+      // Verificar se há dados no localStorage com diferentes chaves e padronizar
+      const dashboardDataOld = localStorage.getItem('dashboard-signals');
+      const dashboardDataNew = localStorage.getItem('dashboardSignals');
+      
+      // Se temos dados na chave antiga e não na nova, migrar
+      if (dashboardDataOld && !dashboardDataNew) {
+        console.log('🔄 Migrando dados de localStorage da chave antiga para nova');
+        localStorage.setItem('dashboardSignals', dashboardDataOld);
+      }
+      
+      // Se temos dados na chave nova, verificar se são válidos
+      if (dashboardDataNew) {
+        try {
+          const { signals, timestamp } = JSON.parse(dashboardDataNew);
+          
+          // Verificar se os dados são válidos
+          if (Array.isArray(signals) && signals.length >= 3 && timestamp) {
+            const dataAge = Date.now() - timestamp;
+            
+            // Se os dados são recentes (menos de 2 horas)
+            if (dataAge < 2 * 60 * 60 * 1000) {
+              console.log('✅ Dados do localStorage válidos e recentes');
+              setDisplayedSignals(signals);
+            } else {
+              console.log('⚠️ Dados do localStorage muito antigos - serão renovados');
+              // Os sinais serão renovados no fluxo normal da aplicação
+            }
+          } else {
+            console.log('⚠️ Dados do localStorage inválidos - serão renovados');
+            // Os sinais serão renovados no fluxo normal da aplicação
+          }
+        } catch (error) {
+          console.error('❌ Erro ao processar dados do localStorage:', error);
+          // Os sinais serão renovados no fluxo normal da aplicação
+        }
+      }
+      
+      // Remover chave antiga para evitar confusão
+      if (dashboardDataOld) {
+        localStorage.removeItem('dashboard-signals');
+      }
+    } catch (error) {
+      console.error('❌ Erro durante inicialização do componente:', error);
+    }
+    
+    return () => {
+      // Limpar flag de componente montado ao desmontar
+      window.signalsCardMounted = false;
+      console.log('🧹 SignalsCard desmontado - flag removida');
+    };
+  }, []);
+
+  const [traderLink, setTraderLink] = useState<string>('');
+  
+  // Carregar o link do trader no início
+  useEffect(() => {
+    const loadTraderLink = async () => {
+      try {
+        const link = await traderLinkService.getCurrentTraderLink();
+        console.log('📌 SignalsCard - Link do trader carregado:', link);
+        setTraderLink(link);
+      } catch (error) {
+        console.error('❌ SignalsCard - Erro ao carregar link do trader:', error);
+        // Em caso de erro, manter o link padrão
+        setTraderLink('https://trade.avalonbroker.io/register?aff=385853&aff_model=revenue&afftrack=mesnagensfree');
       }
     };
     
-    // Adicionar listener para mudanças de visibilidade
-    document.addEventListener('visibilitychange', handleVisibilityChange);
+    loadTraderLink();
+  }, []);
+  
+  // ... existing code ...
+  
+  // Função para abrir o link do trader
+  const openTraderLink = useCallback((event: React.MouseEvent) => {
+    event.preventDefault();
+    if (!traderLink) {
+      console.warn('⚠️ SignalsCard - Tentativa de abrir link do trader, mas o link ainda não foi carregado');
+      // Fallback para o link padrão caso o traderLink ainda não tenha sido carregado
+      window.open('https://trade.avalonbroker.io/register?aff=385853&aff_model=revenue&afftrack=mesnagensfree', '_blank');
+      return;
+    }
+    console.log('🔗 SignalsCard - Abrindo link do trader:', traderLink);
+    window.open(traderLink, '_blank');
+  }, [traderLink]);
+  
+  // ... rest of existing code ...
+
+  // Função para forçar rotação de sinais e sincronização com a aba Trades
+  const forceRotationAndSync = () => {
+    console.log('⚙️ FORÇANDO ROTAÇÃO MANUAL dos sinais na dashboard');
     
-    // Remover listener quando o componente for desmontado
+    // Executar rotação diretamente
+    executeRotationDirect();
+    
+    // Verificação pós-rotação
+    setTimeout(() => {
+      try {
+        const dashboardData = localStorage.getItem('dashboardSignals');
+        if (dashboardData) {
+          const { signals, timestamp } = JSON.parse(dashboardData);
+          if (signals && Array.isArray(signals) && signals.length >= 3) {
+            console.log('✅ VERIFICAÇÃO PÓS-ROTAÇÃO: Sinais rotacionados com sucesso');
+            console.log('📡 SINCRONIZAÇÃO FORÇADA: Disparando eventos de sincronização');
+            
+            // Forçar sincronização com a aba Trades
+            saveDashboardSignalsForSync(signals);
+            
+            console.log('✅ ROTAÇÃO E SINCRONIZAÇÃO FORÇADAS CONCLUÍDAS');
+          }
+        }
+      } catch (error) {
+        console.error('❌ ERRO durante verificação pós-rotação:', error);
+      }
+    }, 500); // Pequeno delay para garantir que a rotação foi concluída
+  };
+
+  // Remover exposição global de funções para evitar interferências de scripts externos
+
+  // Função ultra-robusta para garantir a inicialização correta dos sinais
+  const ensureCorrectSignalsInitialization = useCallback(() => {
+    try {
+      console.log('🚀 INICIANDO SISTEMA DE SINAIS - Verificação completa');
+      
+      // Flag para controlar se temos sinais válidos
+      let hasValidSignals = false;
+      
+      // VERIFICAÇÃO 1: Verificar se já temos sinais válidos no estado
+      if (displayedSignals && displayedSignals.length >= 3) {
+        console.log('✅ Sinais já existem no estado do componente');
+        hasValidSignals = true;
+      }
+      
+      // VERIFICAÇÃO 2: Se não temos sinais no estado, verificar localStorage
+      if (!hasValidSignals) {
+        console.log('🔍 Verificando localStorage por sinais válidos');
+        try {
+          // Tentar carregar de diferentes chaves no localStorage
+          const sources = [
+            'dashboardSignals',
+            'dashboard_signals',
+            'dashboard_signals_fixed'
+          ];
+          
+          for (const source of sources) {
+            const storedData = localStorage.getItem(source);
+            if (!storedData) continue;
+            
+            let parsedData;
+            try {
+              parsedData = JSON.parse(storedData);
+            } catch (e) {
+              console.log(`⚠️ Erro ao analisar dados de ${source}:`, e);
+              continue;
+            }
+            
+            // Verificar se temos sinais válidos
+            if (parsedData && parsedData.signals && Array.isArray(parsedData.signals) && parsedData.signals.length >= 3) {
+              console.log(`✅ Sinais encontrados em ${source}:`, parsedData.signals.length);
+              
+              // Verificar se os sinais estão no formato correto (posição 1, 2, 3)
+              const validPositions = parsedData.signals.filter(s => [1, 2, 3].includes(s.position));
+              if (validPositions.length >= 3) {
+                // Atualizar estado React com os sinais encontrados
+                const filteredSignals = validPositions.sort((a, b) => a.position - b.position).slice(0, 3);
+                console.log('✅ Carregando sinais do localStorage:', filteredSignals.map(s => `${s.position}: ${s.symbol} (${s.entry_time})`));
+                
+                // Atualizar estado
+                setDisplayedSignals(filteredSignals);
+                
+                // Verificar se primeiro sinal já passou do tempo de rotação
+                const firstSignal = filteredSignals.find(s => s.position === 1);
+                if (firstSignal && firstSignal.entry_time) {
+                  const [hours, minutes] = firstSignal.entry_time.split(':').map(Number);
+                  const entryDate = new Date();
+                  entryDate.setHours(hours, minutes, 0, 0);
+                  
+                  // Se o horário for no futuro, considerar que é de ontem
+                  const now = new Date();
+                  if (entryDate > now) {
+                    entryDate.setDate(entryDate.getDate() - 1);
+                  }
+                  
+                  const millisSinceEntry = now.getTime() - entryDate.getTime();
+                  const minutesSinceEntry = Math.floor(millisSinceEntry / (1000 * 60));
+                  
+                  console.log(`⏱️ Primeiro sinal está ativo há ${minutesSinceEntry} minutos`);
+                  
+                  // Se já passou 20 minutos, devemos executar uma rotação imediatamente
+                  if (minutesSinceEntry >= 20) {
+                    console.log('⚠️ Sinais existentes já passaram do tempo de rotação! Forçando rotação...');
+                    // Atrasar a rotação para dar tempo dos estados serem atualizados
+                    setTimeout(() => {
+                      if (window.signalsCardMounted) {
+                        executeRotationDirect();
+                      }
+                    }, 1000);
+                  }
+                }
+                
+                hasValidSignals = true;
+                break;
+              }
+            }
+          }
+        } catch (error) {
+          console.error('❌ Erro ao analisar dados do localStorage:', error);
+          hasValidSignals = false;
+        }
+      }
+      
+      // Se não há sinais válidos, inicializar com novos sinais
+      if (!hasValidSignals) {
+        console.log('🆕 Nenhum sinal válido encontrado. Criando novos sinais com o padrão correto...');
+        
+        // Gerar 3 novos horários seguindo o padrão 03→23→43→03
+        const validTimes = calculateNextThreeValidTimes();
+        
+        // Criar 3 sinais com os horários válidos e símbolos fixos
+        const newSignals: EnrichedSignal[] = [
+          createSignalObject(validTimes[0], 1), // Worldcoin (OTC)
+          createSignalObject(validTimes[1], 2), // Pepe (OTC)
+          createSignalObject(validTimes[2], 3)  // Gold/Silver (OTC)
+        ];
+        
+        // Atualizar estado e localStorage
+        console.log('✅ Novos sinais criados com horários:', validTimes.join(', '));
+        setDisplayedSignals(newSignals);
+        saveSignalsToLocalStorage(newSignals, Date.now(), getInitialTimeSlot());
+        
+        // Sincronizar com a aba Signals
+        saveDashboardSignalsForSync(newSignals);
+      }
+
+      // Atualizar referência global para debug
+      window.displayedSignalsRef = displayedSignals;
+
+    } catch (error) {
+      console.error('❌ Erro durante inicialização dos sinais:', error);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Timer automático ULTRA-ESTÁVEL para rotação de sinais  
+  useEffect(() => {
+    // Timer único que verifica periodicamente SEM depender de displayedSignals
+    console.log('⏰ Timer de rotação ULTRA-ESTÁVEL ativado - verificando a cada 30 segundos');
+    
+    // CORREÇÃO: Verificar e limpar qualquer timer existente para evitar duplicações
+    if (window.dashboardRotationTimer) {
+      console.log('🧹 Limpando timer de rotação anterior');
+      clearInterval(window.dashboardRotationTimer);
+      window.dashboardRotationTimer = null;
+    }
+    
+    // Inicialização imediata dos sinais com delay para garantir montagem completa
+    setTimeout(() => {
+      console.log('🚀 Inicialização inicial dos sinais (após 100ms)');
+      ensureCorrectSignalsInitialization();
+    }, 100);
+    
+    // CORREÇÃO: Verificação inicial após 5 segundos apenas para diagnóstico, SEM executar rotação
+    const initialCheck = setTimeout(() => {
+      console.log('🔍 Verificação inicial de diagnóstico (5s após montagem)');
+      
+      // Verificar estado dos sinais sem executar rotação
+      try {
+        // Verificar se temos sinais
+        if (!displayedSignals || displayedSignals.length < 3) {
+          console.log('⚠️ Diagnóstico: Sinais insuficientes ou não carregados');
+          return;
+        }
+        
+        // Verificar primeiro sinal
+        const firstSignal = displayedSignals.find(signal => signal.position === 1);
+        if (!firstSignal || !firstSignal.entry_time) {
+          console.log('⚠️ Diagnóstico: Primeiro sinal inválido ou sem horário de entrada');
+          return;
+        }
+        
+        // Calcular tempo desde entrada
+        const [entryHour, entryMin] = firstSignal.entry_time.split(':').map(Number);
+        const entryDate = new Date();
+        entryDate.setHours(entryHour, entryMin, 0, 0);
+        
+        // Se o horário for no futuro, considerar que é de ontem
+        const now = new Date();
+        if (entryDate > now) {
+          entryDate.setDate(entryDate.getDate() - 1);
+        }
+        
+        const millisSinceEntry = now.getTime() - entryDate.getTime();
+        const minutesSinceEntry = Math.floor(millisSinceEntry / (1000 * 60));
+        
+        console.log(`⏱️ DIAGNÓSTICO: Sinal ${firstSignal.symbol} ativo há ${minutesSinceEntry} minutos`);
+        console.log(`⏱️ Próxima rotação programada para: ${20 - minutesSinceEntry} minutos depois`);
+        
+        // NÃO executar rotação, apenas diagnóstico
+      } catch (error) {
+        console.error('❌ Erro durante diagnóstico inicial:', error);
+      }
+    }, 5000);
+
+    // CORREÇÃO: Usar intervalo de 30 segundos para evitar sobrecarga
+    const interval = setInterval(() => {
+      try {
+        // Verificar se o componente ainda está montado usando flag global
+        if (!window.signalsCardMounted) {
+          console.log('🛑 Timer ignorado - componente desmontado');
+          return;
+        }
+
+        // DIAGNÓSTICO: Monitorar tempo desde última execução
+        const now = Date.now();
+        const lastCheck = window.lastRotationCheck || 0;
+        const timeSinceLastCheck = now - lastCheck;
+        
+        if (lastCheck > 0 && timeSinceLastCheck > 60000) {
+          console.warn(`⚠️ Timer atrasado! Última verificação há ${Math.floor(timeSinceLastCheck/1000)}s (deveria ser ~30s)`);
+        }
+        
+        window.lastRotationCheck = now;
+        
+        // Executar verificação de rotação
+        executeRotationDirect();
+        
+      } catch (error) {
+        console.error('❌ ERRO durante verificação periódica:', error);
+      }
+    }, 30 * 1000); // 30 segundos para verificações periódicas - tempo ideal para não sobrecarregar
+
+    // Guardar referência global ao timer para diagnóstico e limpeza
+    window.dashboardRotationTimer = interval;
+    
+    // Definir flag de componente montado
+    window.signalsCardMounted = true;
+    
+    // Limpar timer ao desmontar
     return () => {
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.signalsCardMounted = false;
+      clearInterval(interval);
+      clearTimeout(initialCheck);
+      
+      // Limpar referência global
+      if (window.dashboardRotationTimer === interval) {
+        window.dashboardRotationTimer = null;
+      }
+      
+      console.log('⏰ Timer de rotação ULTRA-ESTÁVEL desativado');
     };
-  }, [signals, checkExpiredSignals]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Sem dependências para garantir que o timer seja criado apenas uma vez
 
   if (isLoading) {
     return (
@@ -2262,7 +4254,7 @@ const SignalsCard = () => {
                   : 'Ocorreu um erro ao buscar os sinais. Tente novamente mais tarde.'}
               </p>
               <Button
-                onClick={() => fetchSignals()}
+                onClick={() => refetch()}
                 variant="outline"
                 className="gap-1 text-xs bg-black/40 border-white/10"
               >
@@ -2327,13 +4319,13 @@ const SignalsCard = () => {
                           <div className="flex items-center text-xs text-white/60">
                             <Clock className="h-3 w-3 mr-1 text-white/50" />
                             <span className="mr-1">Entrada:</span>
-                            <span className="font-medium">{signal.entry_time || '--:--'}</span>
+                            <span className="font-medium">{convertTimeToSelected(signal.entry_time) || '--:--'}</span>
                           </div>
                           
                           <div className="flex items-center text-xs text-white/60">
                             <Clock className="h-3 w-3 mr-1 text-white/50" />
                             <span className="mr-1">Expiração:</span>
-                            <span className="font-medium">{signal.expiry_time_str || '--:--'}</span>
+                            <span className="font-medium">{convertTimeToSelected(signal.expiry_time_str) || '--:--'}</span>
                             <span className="ml-1 text-[10px] text-white/40">
                               ({signal.expiry || '5m'})
                             </span>
@@ -2342,13 +4334,13 @@ const SignalsCard = () => {
                           <div className="flex items-center text-xs text-white/60">
                             <RefreshCw className="h-3 w-3 mr-1 text-white/50" />
                             <span className="mr-1">Reentrada 1:</span>
-                            <span className="font-medium">{signal.gale1_time || '--:--'}</span>
+                            <span className="font-medium">{convertTimeToSelected(signal.gale1_time) || '--:--'}</span>
                           </div>
                           
                           <div className="flex items-center text-xs text-white/60">
                             <RefreshCw className="h-3 w-3 mr-1 text-white/50" />
                             <span className="mr-1">Reentrada 2:</span>
-                            <span className="font-medium">{signal.gale2_time || '--:--'}</span>
+                            <span className="font-medium">{convertTimeToSelected(signal.gale2_time) || '--:--'}</span>
                           </div>
                         </div>
                       </div>
@@ -2361,6 +4353,7 @@ const SignalsCard = () => {
                           Potencial: {calculatePotential(signal)}
                         </div>
                         <button 
+                          onClick={openTraderLink}
                           className="mt-2 px-2 py-1 text-xs rounded bg-gradient-to-r from-indigo-600/50 to-indigo-800/50 hover:from-indigo-600/70 hover:to-indigo-800/70 text-white border border-indigo-800/60"
                         >
                           Realizar trade
@@ -2416,7 +4409,7 @@ const SignalsCard = () => {
             <Button 
               variant="outline" 
               size="sm"
-              onClick={() => fetchSignals()}
+              onClick={() => refetch()}
               className="text-xs bg-white/5 border-white/10 hover:bg-white/10"
             >
               <RefreshCw className="h-3.5 w-3.5 mr-2" />
@@ -2476,7 +4469,7 @@ const SignalsCard = () => {
                   : 'Ocorreu um erro ao buscar os sinais. Tente novamente mais tarde.'}
               </p>
               <Button
-                onClick={() => fetchSignals()}
+                onClick={() => refetch()}
                 variant="outline"
                 className="gap-1 text-xs bg-black/40 border-white/10"
               >
@@ -2541,13 +4534,13 @@ const SignalsCard = () => {
                           <div className="flex items-center text-xs text-white/60">
                             <Clock className="h-3 w-3 mr-1 text-white/50" />
                             <span className="mr-1">Entrada:</span>
-                            <span className="font-medium">{signal.entry_time || '--:--'}</span>
+                            <span className="font-medium">{convertTimeToSelected(signal.entry_time) || '--:--'}</span>
                           </div>
                           
                           <div className="flex items-center text-xs text-white/60">
                             <Clock className="h-3 w-3 mr-1 text-white/50" />
                             <span className="mr-1">Expiração:</span>
-                            <span className="font-medium">{signal.expiry_time_str || '--:--'}</span>
+                            <span className="font-medium">{convertTimeToSelected(signal.expiry_time_str) || '--:--'}</span>
                             <span className="ml-1 text-[10px] text-white/40">
                               ({signal.expiry || '5m'})
                             </span>
@@ -2556,13 +4549,13 @@ const SignalsCard = () => {
                           <div className="flex items-center text-xs text-white/60">
                             <RefreshCw className="h-3 w-3 mr-1 text-white/50" />
                             <span className="mr-1">Reentrada 1:</span>
-                            <span className="font-medium">{signal.gale1_time || '--:--'}</span>
+                            <span className="font-medium">{convertTimeToSelected(signal.gale1_time) || '--:--'}</span>
                           </div>
                           
                           <div className="flex items-center text-xs text-white/60">
                             <RefreshCw className="h-3 w-3 mr-1 text-white/50" />
                             <span className="mr-1">Reentrada 2:</span>
-                            <span className="font-medium">{signal.gale2_time || '--:--'}</span>
+                            <span className="font-medium">{convertTimeToSelected(signal.gale2_time) || '--:--'}</span>
                           </div>
                         </div>
                       </div>
@@ -2575,6 +4568,7 @@ const SignalsCard = () => {
                           Potencial: {calculatePotential(signal)}
                         </div>
                         <button 
+                          onClick={openTraderLink}
                           className="mt-2 px-2 py-1 text-xs rounded bg-gradient-to-r from-indigo-600/50 to-indigo-800/50 hover:from-indigo-600/70 hover:to-indigo-800/70 text-white border border-indigo-800/60"
                         >
                           Realizar trade
@@ -2596,7 +4590,7 @@ const SignalsCard = () => {
   return (
     <Card className="h-full overflow-hidden flex flex-col shadow-md border border-white/5 
                  bg-black/20 
-                 transition-all duration-300 signals-card-container">
+                 transition-all duration-300 signals-card-container" data-component="signals-card">
       <CardHeader className="relative pb-2 border-b border-white/10 signal-header-gradient">
         <div className="absolute left-4 top-1/2 -translate-y-1/2">
           <CardTitle className="text-sm font-light tracking-wide text-white/90 flex items-center gap-2">
@@ -2613,13 +4607,9 @@ const SignalsCard = () => {
             {/* Botão de sucesso com fadeIn/fadeOut */}
             <div 
               className={cn(
-                "relative",
-                refreshButtonState === 'success' ? 'opacity-100' : 'opacity-0'
+                "relative transition-opacity duration-300 ease-out",
+                refreshButtonState === 'success' ? 'opacity-100' : 'opacity-0 absolute'
               )}
-              style={{ 
-                transition: 'opacity 0.3s ease-out',
-                position: refreshButtonState !== 'success' ? 'absolute' : 'relative'
-              }}
             >
               <Badge variant="outline" className="bg-green-950/30 text-green-400 border-green-500/30 flex items-center px-2 py-1">
                 <Check className="h-3.5 w-3.5 mr-1.5" />
@@ -2629,13 +4619,9 @@ const SignalsCard = () => {
             
             <div 
               className={cn(
-                "relative",
-                refreshButtonState !== 'success' ? 'opacity-100' : 'opacity-0'
+                "relative transition-opacity duration-300 ease-out",
+                refreshButtonState !== 'success' ? 'opacity-100' : 'opacity-0 absolute'
               )}
-              style={{ 
-                transition: 'opacity 0.3s ease-out',
-                position: refreshButtonState === 'success' ? 'absolute' : 'relative'
-              }}
             >
               <Button 
                 size="sm" 
@@ -2662,7 +4648,6 @@ const SignalsCard = () => {
         
         <div className="h-8"></div>
       </CardHeader>
-      
       <CardContent className="p-0 overflow-y-auto flex-grow custom-scrollbar">
         <div className="relative">
           {/* Efeito de brilho decorativo no topo */}
@@ -2718,16 +4703,11 @@ const SignalsCard = () => {
                 <div 
                   key={signal.id || index} 
                   className={cn(
-                    "relative group signal-item-hover",
+                    "relative group signal-item-hover animate-signal-fade-in",
                     !isCompra && "signal-venda-hover",
                     refreshingSignals ? "opacity-0" : "opacity-100"
                   )}
-                  style={{
-                    opacity: refreshingSignals ? 0 : 1,
-                    transition: 'opacity 0.5s ease-out, transform 0.3s ease-out',
-                    transitionDelay: `${delay}ms`,
-                    animation: `fade-in-up 0.5s ease-out ${delay}ms backwards`
-                  }}
+                  data-delay={delay}
                 >
                   {/* Linha de acento */}
                   <div className={`signal-accent-line ${isCompra ? 'compra-accent' : 'venda-accent'}`}></div>
@@ -2753,7 +4733,12 @@ const SignalsCard = () => {
                           <h3 className="font-medium text-base">{signal.symbol}</h3>
                           <div className="flex items-center mt-0.5 text-xs text-white/60 signal-time-badge">
                             <Tag className="h-3 w-3 mr-1" />
-                            <span>Digital</span>
+                            <span>{signal.exchange || inferExchangeCategory(signal.symbol)}</span>
+                            {index === 0 && rotationTimerState && (
+                              <span className="ml-2 text-xs text-white/70">
+                                • até rotação {Math.max(0, Math.floor(rotationTimerState.secondsRemaining / 60))}m {Math.max(0, rotationTimerState.secondsRemaining % 60)}s
+                              </span>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -2818,7 +4803,7 @@ const SignalsCard = () => {
                           ? 'text-green-400 hover:text-green-300 hover:border-green-400/30' 
                           : 'text-red-500 hover:text-red-400 hover:border-red-500/30'
                         }`}
-                        onClick={() => window.open('https://trade.xxbroker.com/register?aff=751924&aff_model=revenue&afftrack=', '_blank')}
+                        onClick={openTraderLink}
                       >
                         <LineChart className="w-3.5 h-3.5 mr-1.5" />
                         <span>{t('dashboard.signals.trade')}</span>

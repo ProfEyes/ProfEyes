@@ -12,8 +12,8 @@ export interface User {
   created_at: string;
   last_sign_in_at?: string;
   role?: string;
-  user_metadata?: Record<string, any>;
-  app_metadata?: Record<string, any>;
+  user_metadata?: Record<string, unknown>;
+  app_metadata?: Record<string, unknown>;
 }
 
 export interface Session {
@@ -30,30 +30,60 @@ export type UserProfile = Database['public']['Tables']['user_profiles']['Row'];
 export type UserProfileInsert = Database['public']['Tables']['user_profiles']['Insert'];
 export type UserProfileUpdate = Database['public']['Tables']['user_profiles']['Update'];
 
-// Tabela notification_settings
-export type NotificationSettings = Database['public']['Tables']['notification_settings']['Row'];
-export type NotificationSettingsInsert = Database['public']['Tables']['notification_settings']['Insert'];
-export type NotificationSettingsUpdate = Database['public']['Tables']['notification_settings']['Update'];
+// Tipos genéricos para tabelas não definidas no schema atual
+// Nota: As tabelas abaixo podem não existir no schema do Supabase
+// Se necessário, adicione-as ao arquivo database.types.ts
 
-// Tabela trading_preferences
-export type TradingPreferences = Database['public']['Tables']['trading_preferences']['Row'];
-export type TradingPreferencesInsert = Database['public']['Tables']['trading_preferences']['Insert'];
-export type TradingPreferencesUpdate = Database['public']['Tables']['trading_preferences']['Update'];
+export interface NotificationSettings {
+  user_id: string;
+  email_notifications?: boolean;
+  push_notifications?: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+export type NotificationSettingsInsert = Partial<NotificationSettings>;
+export type NotificationSettingsUpdate = Partial<NotificationSettings>;
 
-// Tabela user_management_logs
-export type UserManagementLog = Database['public']['Tables']['user_management_logs']['Row'];
-export type UserManagementLogInsert = Database['public']['Tables']['user_management_logs']['Insert'];
-export type UserManagementLogUpdate = Database['public']['Tables']['user_management_logs']['Update'];
+export interface TradingPreferences {
+  user_id: string;
+  preferred_broker?: string;
+  preferred_trader_link?: string;
+  created_at?: string;
+  updated_at?: string;
+}
+export type TradingPreferencesInsert = Partial<TradingPreferences>;
+export type TradingPreferencesUpdate = Partial<TradingPreferences>;
 
-// Tabela auth_tokens
-export type AuthToken = Database['public']['Tables']['auth_tokens']['Row'];
-export type AuthTokenInsert = Database['public']['Tables']['auth_tokens']['Insert'];
-export type AuthTokenUpdate = Database['public']['Tables']['auth_tokens']['Update'];
+export interface UserManagementLog {
+  id: string;
+  user_id: string;
+  action: string;
+  performed_by?: string;
+  created_at?: string;
+}
+export type UserManagementLogInsert = Partial<UserManagementLog>;
+export type UserManagementLogUpdate = Partial<UserManagementLog>;
 
-// Tabela user_sessions
-export type UserSession = Database['public']['Tables']['user_sessions']['Row'];
-export type UserSessionInsert = Database['public']['Tables']['user_sessions']['Insert'];
-export type UserSessionUpdate = Database['public']['Tables']['user_sessions']['Update'];
+export interface AuthToken {
+  id: string;
+  user_id: string;
+  token: string;
+  expires_at?: string;
+  created_at?: string;
+}
+export type AuthTokenInsert = Partial<AuthToken>;
+export type AuthTokenUpdate = Partial<AuthToken>;
+
+export interface UserSession {
+  id: string;
+  user_id: string;
+  device_id?: string;
+  ip_address?: string;
+  created_at?: string;
+  expires_at?: string;
+}
+export type UserSessionInsert = Partial<UserSession>;
+export type UserSessionUpdate = Partial<UserSession>;
 
 // Estado de autenticação
 export interface AuthState {
@@ -70,7 +100,7 @@ export interface AuthContextType extends AuthState {
   signInWithEmail: (email: string, password: string, remember?: boolean) => Promise<{
     error: Error | null;
   }>;
-  signUp: (email: string, password: string, birthdate?: string) => Promise<{
+  signUp: (email: string, password: string, birthdate?: string, displayName?: string, investorType?: string) => Promise<{
     error: Error | null;
   }>;
   signOut: () => Promise<void>;

@@ -13,7 +13,7 @@ const BASE_URL_US = 'https://api.binance.us'; // Para usuários dos EUA
 // WebSocket connections
 let priceWebSocket: WebSocket | null = null;
 let symbolSubscriptions: Set<string> = new Set();
-let priceUpdateListeners: Map<string, ((price: { symbol: string, price: string }) => void)[]> = new Map();
+const priceUpdateListeners: Map<string, ((price: { symbol: string, price: string }) => void)[]> = new Map();
 
 // Variáveis para controle de reconexão
 let reconnectAttempts = 0;

@@ -4,6 +4,13 @@ import { ArrowUpRight, ArrowDownRight, RefreshCw } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 
+// Tipo extendido de MarketData com propriedades opcionais
+interface ExtendedMarketData extends MarketData {
+  volume24h?: string;
+  dayLow?: string;
+  dayHigh?: string;
+}
+
 interface MarketOverviewProps {
   marketData: MarketData[];
   isLoading: boolean;
@@ -50,6 +57,8 @@ export function MarketOverview({ marketData, isLoading }: MarketOverviewProps) {
       });
       setPrevPrices(newPrevPrices);
     }
+    // prevPrices não pode ser incluído nas dependências pois causaria loop infinito
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [marketData]);
 
   const renderMarketCard = (data: MarketData) => {
@@ -74,7 +83,7 @@ export function MarketOverview({ marketData, isLoading }: MarketOverviewProps) {
             )}
           </CardTitle>
           <CardDescription>
-            {(data as any).volume24h && parseInt((data as any).volume24h) > 0 ? `Vol: ${parseInt((data as any).volume24h).toLocaleString()}` : ''}
+            {(data as ExtendedMarketData).volume24h && parseInt((data as ExtendedMarketData).volume24h) > 0 ? `Vol: ${parseInt((data as ExtendedMarketData).volume24h).toLocaleString()}` : ''}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -90,8 +99,8 @@ export function MarketOverview({ marketData, isLoading }: MarketOverviewProps) {
             <span className="text-sm">({data.changePercent})</span>
           </div>
           <div className="text-xs text-muted-foreground mt-2 flex justify-between">
-            <span>L: {(data as any).dayLow || '-'}</span>
-            <span>H: {(data as any).dayHigh || '-'}</span>
+            <span>L: {(data as ExtendedMarketData).dayLow || '-'}</span>
+            <span>H: {(data as ExtendedMarketData).dayHigh || '-'}</span>
           </div>
         </CardContent>
       </Card>

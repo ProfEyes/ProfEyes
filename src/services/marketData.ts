@@ -1,4 +1,4 @@
-﻿import { supabase } from "@/integrations/supabase/client";
+import { supabase } from "@/lib/supabase";
 import { MarketData as MarketDataType, TradingSignal as TradingSignalType } from "./types";
 import { getHistoricalKlines, getLatestPrices, getCurrentPrice, get24hStats, get24hPriceChange } from "./getSimulatedPrices";
 import { determineDayTradeTrend, generateDayTradePattern, generateOrderBookAnalysis } from "./utils/tradingUtils";
@@ -39,7 +39,7 @@ export interface MarketData {
   volume?: number;
   high?: number;
   low?: number;
-  news?: any[];
+  news?: Record<string, unknown>[];
   isCrypto: boolean;
   historicalData?: {
     timestamps: number[];
@@ -136,7 +136,7 @@ function getSimulatedNews(symbol: string) {
       summary: 'Nossos analistas estão avaliando as condições de mercado atuais. Atualizações em breve.',
       url: '#',
       image: 'https://placehold.co/600x400?text=Market+Analysis',
-      source: 'ProfEyes Analytics',
+              source: 'Trending Analytics',
       datetime: Date.now(),
       related: symbol
     },
@@ -145,7 +145,7 @@ function getSimulatedNews(symbol: string) {
       summary: 'Projeções de longo prazo e fatores que podem influenciar o desempenho futuro.',
       url: '#',
       image: 'https://placehold.co/600x400?text=Future+Outlook',
-      source: 'ProfEyes Research',
+              source: 'Trending Research',
       datetime: Date.now() - 86400000, // 1 dia atrás
       related: symbol
     },
@@ -404,15 +404,16 @@ export {
 
 // Agora apenas exportando o que precisamos sem usar aliases
 // As duplicações serão evitadas no arquivo index.ts
-export { 
-  updateSignalStatus
-} from './tradingSignals';
+// Arquivos tradingSignals.ts e tradingSignals_fixed.ts foram removidos
+// export {
+//   updateSignalStatus
+// } from './tradingSignals';
 
-export { 
-  replaceCompletedSignal,
-  fetchTradingSignals,
-  comprehensiveAnalyzeAsset
-} from './tradingSignals_fixed';
+// export {
+//   replaceCompletedSignal,
+//   fetchTradingSignals,
+//   comprehensiveAnalyzeAsset
+// } from './tradingSignals_fixed';
 
 export { analyzeSentiment } from './sentimentAnalysis';
 

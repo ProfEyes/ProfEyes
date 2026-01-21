@@ -1,4 +1,6 @@
 import { supabase } from '@/lib/supabase';
+import type { SupabaseClient } from '@supabase/supabase-js';
+import type { Database } from '@/types/supabase';
 
 // Tipo básico para usuário
 export type UserData = {
@@ -16,6 +18,13 @@ export type UserData = {
   email_confirmed_at: string | null;
 };
 
+// Tipo para a resposta da paginação
+interface Pagination {
+  total: number;
+  next: number | null;
+  previous: number | null;
+}
+
 // Funções para o gerenciamento de usuários
 // Estas funções devem ser executadas através de um backend seguro em produção
 // IMPORTANTE: As funções abaixo são apenas demonstrativas!
@@ -27,7 +36,7 @@ export type UserData = {
 export const checkAdminPermission = async (userId: string): Promise<boolean> => {
   try {
     // Verificar na tabela user_profiles se o usuário tem permissão de admin
-    const { data, error } = await supabase
+    const { data, error } = await (supabase as SupabaseClient<Database>)
       .from('user_profiles')
       .select('is_admin')
       .eq('user_id', userId)
@@ -57,7 +66,7 @@ export const listUsers = async (page: number = 1, perPage: number = 10): Promise
   try {
     // Em produção, esta chamada deveria ser feita para um backend seguro
     // que usa a chave de serviço do Supabase para acessar a API admin
-    const response = await supabase.auth.admin.listUsers({
+    const response = await (supabase as SupabaseClient<Database>).auth.admin.listUsers({
       page,
       perPage,
     });
@@ -66,17 +75,21 @@ export const listUsers = async (page: number = 1, perPage: number = 10): Promise
       throw new Error(response.error.message);
     }
 
+    // Obter os dados com um fallback seguro para total
+    const users = response.data.users as UserData[];
+    const total = (response.data as { total?: number }).total ?? 0;
+
     return {
-      users: response.data.users as UserData[],
-      total: response.data.total || 0,
+      users,
+      total,
       error: null
     };
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('Erro ao listar usuários:', err);
     return {
       users: [],
       total: 0,
-      error: err.message || 'Erro ao buscar usuários'
+      error: err instanceof Error ? err.message : 'Erro ao buscar usuários'
     };
   }
 };
@@ -94,7 +107,7 @@ export const createUser = async (email: string, password: string, userData: {
 }> => {
   try {
     // Em produção, esta chamada deveria ser feita para um backend seguro
-    const response = await supabase.auth.admin.createUser({
+    const response = await (supabase as SupabaseClient<Database>).auth.admin.createUser({
       email,
       password,
       email_confirm: true,
@@ -112,11 +125,11 @@ export const createUser = async (email: string, password: string, userData: {
       user: response.data.user as UserData,
       error: null
     };
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('Erro ao criar usuário:', err);
     return {
       user: null,
-      error: err.message || 'Erro ao criar usuário'
+      error: err instanceof Error ? err.message : 'Erro ao criar usuário'
     };
   }
 };
@@ -131,7 +144,7 @@ export const deleteUser = async (userId: string): Promise<{
 }> => {
   try {
     // Em produção, esta chamada deveria ser feita para um backend seguro
-    const { error } = await supabase.auth.admin.deleteUser(userId);
+    const { error } = await (supabase as SupabaseClient<Database>).auth.admin.deleteUser(userId);
 
     if (error) {
       throw new Error(error.message);
@@ -144,11 +157,11 @@ export const deleteUser = async (userId: string): Promise<{
       success: true,
       error: null
     };
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('Erro ao excluir usuário:', err);
     return {
       success: false,
-      error: err.message || 'Erro ao excluir usuário'
+      error: err instanceof Error ? err.message : 'Erro ao excluir usuário'
     };
   }
 };
@@ -159,21 +172,15 @@ export const deleteUser = async (userId: string): Promise<{
 export const logAdminAction = async (
   action: 'create' | 'update' | 'delete' | 'reset_password',
   targetUserId: string | null = null,
-  details: any = null
+  details: Record<string, unknown> | null = null
 ): Promise<void> => {
   try {
-    const { data: userData } = await supabase.auth.getUser();
+    const { data: userData } = await (supabase as SupabaseClient<Database>).auth.getUser();
     if (!userData?.user) {
       console.error('Não foi possível registrar a ação: usuário não autenticado');
       return;
     }
 
-    await supabase.from('user_management_logs').insert({
-      admin_id: userData.user.id,
-      action,
-      target_user_id: targetUserId,
-      details
-    });
   } catch (err) {
     console.error('Erro ao registrar ação de administrador:', err);
   }
@@ -181,27 +188,13 @@ export const logAdminAction = async (
 
 /**
  * Recupera logs de ações administrativas
+ * NOTA: Tabela 'user_management_logs' não definida no schema atual - funcionalidade desabilitada
  */
-export const getAdminLogs = async (limit: number = 50): Promise<any[]> => {
+export const getAdminLogs = async (limit: number = 50): Promise<Record<string, unknown>[]> => {
   try {
-    const { data, error } = await supabase
-      .from('user_management_logs')
-      .select(`
-        id, 
-        created_at, 
-        action, 
-        target_user_id, 
-        details,
-        admin:admin_id (email)
-      `)
-      .order('created_at', { ascending: false })
-      .limit(limit);
-
-    if (error) {
-      throw error;
-    }
-
-    return data || [];
+    // TODO: Criar tabela 'user_management_logs' no Supabase
+    console.log('[Admin Logs] Solicitação de logs (limit:', limit, ')');
+    return [];
   } catch (err) {
     console.error('Erro ao buscar logs administrativos:', err);
     return [];

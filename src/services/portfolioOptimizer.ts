@@ -29,6 +29,16 @@ interface OptimizedPortfolio {
   risk: number;
 }
 
+interface NewsItem {
+  title: string;
+  description?: string;
+  source?: string;
+  url?: string;
+  publishedAt?: string;
+  sentiment?: 'positive' | 'negative' | 'neutral';
+  impact?: number;
+}
+
 // Lista de ações brasileiras por setor
 const BRAZILIAN_STOCKS = {
   technology: ['TOTS3', 'LWSA3', 'CASH3', 'IFCM3'],
@@ -178,7 +188,7 @@ export async function generateOptimalPortfolio(
 ): Promise<OptimizedPortfolio> {
   try {
     // Determinar quantos ativos incluir com base no valor investido
-    let baseAssetCount = 15; // Mínimo de 15 ativos
+    const baseAssetCount = 15; // Mínimo de 15 ativos
     let additionalAssets = 0;
     
     // Adicionar mais ativos com base no valor investido
@@ -204,7 +214,7 @@ export async function generateOptimalPortfolio(
     console.log(`Ações preferidas disponíveis: ${availablePreferredStocks.join(', ')}`);
     
     // Selecionar as ações com base no perfil de risco
-    let selectedStocks: any[] = [];
+    let selectedStocks: Asset[] = [];
     let stockPool = [...brazilianStocks];
     
     // Incluir ativos preferidos disponíveis primeiro
@@ -215,7 +225,12 @@ export async function generateOptimalPortfolio(
           symbol: stockInfo.symbol,
           price: 0, // Será atualizado com dados reais
           weight: 0, // Será calculado depois
-          type: 'STOCK'
+          type: 'ACAO',
+          recommendation: '',
+          technicalScore: 0,
+          fundamentalScore: 0,
+          sentimentScore: 0,
+          totalScore: 0
         });
         // Remover do pool para evitar duplicatas
         stockPool = stockPool.filter(s => s.symbol !== preferredSymbol);
@@ -231,7 +246,12 @@ export async function generateOptimalPortfolio(
         symbol: stockInfo.symbol,
         price: 0, // Será atualizado com dados reais
         weight: 0, // Será calculado depois
-        type: 'STOCK'
+        type: 'ACAO',
+        recommendation: '',
+        technicalScore: 0,
+        fundamentalScore: 0,
+        sentimentScore: 0,
+        totalScore: 0
       });
       
       // Remover do pool para evitar duplicatas
@@ -275,7 +295,7 @@ export async function generateOptimalPortfolio(
     }
     
     // Selecionar as criptomoedas
-    let selectedCryptos: Asset[] = [];
+    const selectedCryptos: Asset[] = [];
     let cryptoPool = [...cryptoAssets];
     
     // Incluir criptomoedas preferidas primeiro
@@ -290,7 +310,12 @@ export async function generateOptimalPortfolio(
           symbol: cryptoInfo.symbol,
           price: generateCryptoPrice(cryptoInfo.symbol),
           weight: 0, // Será calculado depois
-          type: 'CRYPTO'
+          type: 'CRIPTO',
+          recommendation: '',
+          technicalScore: 0,
+          fundamentalScore: 0,
+          sentimentScore: 0,
+          totalScore: 0
         });
         // Remover do pool para evitar duplicatas
         cryptoPool = cryptoPool.filter(c => c.symbol !== preferredSymbol);
@@ -306,7 +331,12 @@ export async function generateOptimalPortfolio(
         symbol: cryptoInfo.symbol,
         price: generateCryptoPrice(cryptoInfo.symbol),
         weight: 0, // Será calculado depois
-        type: 'CRYPTO'
+        type: 'CRIPTO',
+        recommendation: '',
+        technicalScore: 0,
+        fundamentalScore: 0,
+        sentimentScore: 0,
+        totalScore: 0
       });
       
       // Remover do pool para evitar duplicatas
@@ -323,7 +353,7 @@ export async function generateOptimalPortfolio(
     // Distribuição de pesos para ações
     if (selectedStocks.length > 0) {
       // Distribuição baseada no perfil de risco
-      let stockWeights: number[] = [];
+      const stockWeights: number[] = [];
       
       if (riskLevel === 'BAIXO') {
         // Perfil conservador: maior peso para blue chips
@@ -362,7 +392,7 @@ export async function generateOptimalPortfolio(
     // Distribuição de pesos para criptomoedas
     if (selectedCryptos.length > 0) {
       // Distribuição baseada no perfil de risco
-      let cryptoWeights: number[] = [];
+      const cryptoWeights: number[] = [];
       
       if (riskLevel === 'BAIXO') {
         // Perfil conservador: maior peso para criptomoedas estabelecidas
@@ -536,7 +566,7 @@ async function analyzeSentiment(stocks: string[]): Promise<Map<string, number>> 
   const news = await getMarketNews(stocks);
   
   // Agrupar notícias por ativo
-  const newsPerStock = new Map<string, any[]>();
+  const newsPerStock = new Map<string, NewsItem[]>();
   stocks.forEach(symbol => {
     const stockNews = news.filter(n => 
       n.title.includes(symbol) || 

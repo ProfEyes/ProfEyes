@@ -174,15 +174,14 @@ export const sendNotification = (options: NotificationOptions): void => {
       }
     }
     
-    // Sempre exibe um toast
-    toast(title, {
-      description: body,
-      icon: 
-        priority === 'high' ? '🔴' : 
-        priority === 'medium' ? '🟠' : '🔵',
-      position: 'top-right',
-      duration: priority === 'high' ? 8000 : 5000,
-    });
+    // Sempre exibe um toast (usar API específica para evitar passar objeto como child)
+    if (priority === 'high') {
+      toast.error(title, { description: body, icon: '🔴', position: 'top-right', duration: 8000 });
+    } else if (priority === 'medium') {
+      toast(title, { description: body, icon: '🟠', position: 'top-right', duration: 5000 });
+    } else {
+      toast.info(title, { description: body, icon: '🔵', position: 'top-right', duration: 5000 });
+    }
     
   } catch (error) {
     console.error('Erro ao enviar notificação:', error);

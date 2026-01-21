@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useUserStore } from "@/stores/userStore";
 import { Camera, Loader2 } from "lucide-react";
@@ -9,7 +9,74 @@ import { supabase } from "@/lib/supabase";
 export function UserAvatar() {
   const { user, updateUser } = useUserStore();
   const [isUploading, setIsUploading] = useState(false);
+  const [displayName, setDisplayName] = useState<string>("");
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Efeito para carregar e sincronizar dados do usuário
+  useEffect(() => {
+    // Função para carregar dados do usuário
+    const loadUserData = () => {
+      // Verificar o localStorage primeiro (mais atualizado)
+      const storedName = localStorage.getItem("user-name");
+      const storedAvatar = localStorage.getItem("user-avatar");
+      
+      // Preferir dados do localStorage se disponíveis
+      if (storedName) {
+        setDisplayName(storedName);
+      } else if (user?.name) {
+        setDisplayName(user.name);
+      }
+      
+      if (storedAvatar) {
+        setAvatarUrl(storedAvatar);
+      } else if (user?.avatar_url) {
+        setAvatarUrl(user.avatar_url);
+      } else if (user?.photoURL) {
+        setAvatarUrl(user.photoURL);
+      }
+    };
+    
+    // Carregar dados iniciais
+    loadUserData();
+    
+    // Configurar listeners para atualizações
+    const handleNameUpdated = (event: Event) => {
+      const { userName } = (event as CustomEvent).detail;
+      if (userName) {
+        setDisplayName(userName);
+      }
+    };
+    
+    const handleAvatarUpdated = (event: Event) => {
+      const { avatarUrl: newAvatarUrl } = (event as CustomEvent).detail;
+      if (newAvatarUrl) {
+        setAvatarUrl(newAvatarUrl);
+      }
+    };
+    
+    const handleStorageChange = (event: StorageEvent) => {
+      if (event.key === "user-name" && event.newValue) {
+        setDisplayName(event.newValue);
+      } else if (event.key === "user-avatar" && event.newValue) {
+        setAvatarUrl(event.newValue);
+      }
+    };
+    
+    // Adicionar listeners para eventos
+    window.addEventListener('username-updated', handleNameUpdated);
+    window.addEventListener('avatar-updated', handleAvatarUpdated);
+    window.addEventListener('storage', handleStorageChange);
+    window.addEventListener('profile-updated', loadUserData);
+    
+    return () => {
+      // Remover listeners
+      window.removeEventListener('username-updated', handleNameUpdated);
+      window.removeEventListener('avatar-updated', handleAvatarUpdated);
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('profile-updated', loadUserData);
+    };
+  }, [user]);
 
   const handleImageClick = () => {
     fileInputRef.current?.click();
@@ -42,7 +109,7 @@ export function UserAvatar() {
       const fileName = `avatar-${Date.now()}.${fileExt}`;
       
       // Verificar se o usuário está usando Supabase Storage ou armazenamento local
-      let avatarUrl;
+      let newAvatarUrl;
       
       if (supabase) {
         // Criar um objeto File a partir do Blob redimensionado
@@ -70,14 +137,26 @@ export function UserAvatar() {
           .from('avatars')
           .getPublicUrl(data.path);
           
-        avatarUrl = urlData.publicUrl;
+        newAvatarUrl = urlData.publicUrl;
       } else {
         // Fallback: usar URL de objeto local (temporário)
-        avatarUrl = URL.createObjectURL(resizedImageBlob);
+        newAvatarUrl = URL.createObjectURL(resizedImageBlob);
       }
       
+      // Atualizar localStorage
+      localStorage.setItem('user-avatar', newAvatarUrl);
+      
+      // Atualizar estado local
+      setAvatarUrl(newAvatarUrl);
+      
       // Atualizar o estado do usuário com a nova URL
-      updateUser({ ...user, avatar_url: avatarUrl });
+      updateUser({ ...user, avatar_url: newAvatarUrl });
+      
+      // Disparar evento para notificar outros componentes
+      window.dispatchEvent(new CustomEvent('avatar-updated', { 
+        detail: { avatarUrl: newAvatarUrl }
+      }));
+      
       toast.success('Foto de perfil atualizada com sucesso!');
     } catch (error) {
       toast.error('Erro ao atualizar a foto de perfil');
@@ -94,14 +173,14 @@ export function UserAvatar() {
         onClick={handleImageClick}
       >
         <AvatarImage 
-          src={user?.avatar_url || user?.photoURL} 
-          alt={user?.name || "User avatar"} 
+          src={avatarUrl} 
+          alt={displayName || "Usuário"} 
         />
         <AvatarFallback>
           {isUploading ? (
             <Loader2 className="h-4 w-4 animate-spin" />
           ) : (
-            user?.name?.charAt(0) || "U"
+            displayName?.charAt(0) || user?.name?.charAt(0) || "U"
           )}
         </AvatarFallback>
         
@@ -118,6 +197,7 @@ export function UserAvatar() {
         className="hidden"
         accept="image/*"
         onChange={handleImageChange}
+        aria-label="Upload de foto de perfil"
       />
     </div>
   );

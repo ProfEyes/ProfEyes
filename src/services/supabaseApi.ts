@@ -1,14 +1,18 @@
 import { supabase } from '@/lib/supabase';
+import type { SupabaseClient } from '@supabase/supabase-js';
+import type { Database } from '@/types/supabase';
 import { NewsArticle } from './newsApi';
 import { LiveStream, StreamComment } from '@/contexts/LiveStreamContext';
+import type { RealtimeChannel } from '@supabase/supabase-js';
+import type { TradingSignal, MarketNews } from './types';
 
 // Função para buscar notícias do mercado do Supabase
-export async function fetchMarketNewsFromSupabase(limit: number = 10, category?: string): Promise<any[]> {
+export async function fetchMarketNewsFromSupabase(limit: number = 10, category?: string): Promise<MarketNews[]> {
   try {
     console.log(`Buscando notícias do mercado no Supabase (limite: ${limit}, categoria: ${category || 'todas'})`);
 
     // Construir a query
-    let query = supabase.from('market_news').select('*');
+    let query = (supabase as SupabaseClient<Database>).from('market_news').select('*');
     
     if (category) {
       query = query.eq('category', category);
@@ -47,7 +51,7 @@ export async function saveNewsToSupabase(news: NewsArticle[]): Promise<void> {
     }));
 
     // Inserir notícias no Supabase
-    const { error } = await supabase.from('market_news').insert(formattedNews);
+    const { error } = await (supabase as SupabaseClient<Database>).from('market_news').insert(formattedNews);
 
     if (error) {
       console.error('Erro ao salvar notícias no Supabase:', error);
@@ -58,12 +62,11 @@ export async function saveNewsToSupabase(news: NewsArticle[]): Promise<void> {
 }
 
 // Função para buscar sinais de trading do Supabase
-export async function fetchTradingSignals(limit: number = 15): Promise<any[]> {
+export async function fetchTradingSignals(limit: number = 15): Promise<TradingSignal[]> {
   try {
     console.log(`Buscando sinais de trading (limite: ${limit})`);
     
-    const { data, error } = await supabase
-      .from('trading_signals')
+    const { data, error } = await (supabase as SupabaseClient<Database>).from('trading_signals')
       .select('*')
       .order('created_at', { ascending: false })
       .limit(limit);
@@ -84,12 +87,11 @@ export async function fetchTradingSignals(limit: number = 15): Promise<any[]> {
 export async function fetchTradingSignalsByType(
   type: 'buy' | 'sell',
   limit: number = 10
-): Promise<any[]> {
+): Promise<TradingSignal[]> {
   try {
     console.log(`Buscando sinais de trading do tipo ${type} (limite: ${limit})`);
     
-    const { data, error } = await supabase
-      .from('trading_signals')
+    const { data, error } = await (supabase as SupabaseClient<Database>).from('trading_signals')
       .select('*')
       .eq('type', type)
       .order('created_at', { ascending: false })
@@ -111,12 +113,11 @@ export async function fetchTradingSignalsByType(
 export async function fetchStrongTradingSignals(
   successRateThreshold: number = 0.75,
   limit: number = 5
-): Promise<any[]> {
+): Promise<TradingSignal[]> {
   try {
     console.log(`Buscando sinais de trading fortes (taxa de sucesso > ${successRateThreshold}, limite: ${limit})`);
     
-    const { data, error } = await supabase
-      .from('trading_signals')
+    const { data, error } = await (supabase as SupabaseClient<Database>).from('trading_signals')
       .select('*')
       .gte('success_rate', successRateThreshold)
       .eq('status', 'active')
@@ -138,8 +139,7 @@ export async function fetchStrongTradingSignals(
 // Função para atualizar o status de um sinal de trading
 export async function updateTradingSignalStatus(id: string, status: string): Promise<void> {
   try {
-    const { error } = await supabase
-      .from('trading_signals')
+    const { error } = await (supabase as SupabaseClient<Database>).from('trading_signals')
       .update({ status, updated_at: new Date().toISOString() })
       .eq('id', id);
     
@@ -153,7 +153,7 @@ export async function updateTradingSignalStatus(id: string, status: string): Pro
 
 // Função para criar tabelas no Supabase
 export async function createTables() {
-  const { error: tradingSignalsError } = await supabase.rpc('create_table', {
+  const { error: tradingSignalsError } = await (supabase as SupabaseClient<Database>).rpc('create_table', {
     name: 'trading_signals',
     definition: `
       CREATE TABLE IF NOT EXISTS trading_signals (
@@ -183,7 +183,7 @@ export async function createTables() {
     console.error('Error creating trading_signals table:', tradingSignalsError)
   }
 
-  const { error: marketNewsError } = await supabase.rpc('create_table', {
+  const { error: marketNewsError } = await (supabase as SupabaseClient<Database>).rpc('create_table', {
     name: 'market_news',
     definition: `
       CREATE TABLE IF NOT EXISTS market_news (
@@ -206,7 +206,7 @@ export async function createTables() {
   }
   
   // Criar tabela para live streams
-  const { error: liveStreamsError } = await supabase.rpc('create_table', {
+  const { error: liveStreamsError } = await (supabase as SupabaseClient<Database>).rpc('create_table', {
     name: 'live_streams',
     definition: `
       CREATE TABLE IF NOT EXISTS live_streams (
@@ -233,7 +233,7 @@ export async function createTables() {
   }
 
   // Criar tabela para comentários de streams
-  const { error: streamCommentsError } = await supabase.rpc('create_table', {
+  const { error: streamCommentsError } = await (supabase as SupabaseClient<Database>).rpc('create_table', {
     name: 'stream_comments',
     definition: `
       CREATE TABLE IF NOT EXISTS stream_comments (
@@ -261,8 +261,7 @@ export async function createTables() {
 
 export async function fetchLiveStreams(): Promise<LiveStream[]> {
   try {
-    const { data, error } = await supabase
-      .from('live_streams')
+    const { data, error } = await (supabase as SupabaseClient<Database>).from('live_streams')
       .select('*')
       .order('created_at', { ascending: false });
     
@@ -280,8 +279,7 @@ export async function fetchLiveStreams(): Promise<LiveStream[]> {
 
 export async function fetchStreamComments(streamId: string): Promise<StreamComment[]> {
   try {
-    const { data, error } = await supabase
-      .from('stream_comments')
+    const { data, error } = await (supabase as SupabaseClient<Database>).from('stream_comments')
       .select('*')
       .eq('stream_id', streamId)
       .order('created_at', { ascending: true });
@@ -300,8 +298,7 @@ export async function fetchStreamComments(streamId: string): Promise<StreamComme
 
 export async function createLiveStream(stream: Partial<LiveStream>): Promise<LiveStream | null> {
   try {
-    const { data, error } = await supabase
-      .from('live_streams')
+    const { data, error } = await (supabase as SupabaseClient<Database>).from('live_streams')
       .insert([{
         ...stream,
         created_at: new Date().toISOString(),
@@ -324,8 +321,7 @@ export async function createLiveStream(stream: Partial<LiveStream>): Promise<Liv
 
 export async function updateLiveStream(id: string, updates: Partial<LiveStream>): Promise<LiveStream | null> {
   try {
-    const { data, error } = await supabase
-      .from('live_streams')
+    const { data, error } = await (supabase as SupabaseClient<Database>).from('live_streams')
       .update({
         ...updates,
         updated_at: new Date().toISOString()
@@ -348,10 +344,9 @@ export async function updateLiveStream(id: string, updates: Partial<LiveStream>)
 
 export async function endLiveStream(id: string): Promise<boolean> {
   try {
-    const { error } = await supabase
-      .from('live_streams')
+    const { error } = await (supabase as SupabaseClient<Database>).from('live_streams')
       .update({
-        is_active: false,
+        status: 'ended',
         ended_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       })
@@ -371,8 +366,7 @@ export async function endLiveStream(id: string): Promise<boolean> {
 
 export async function addStreamComment(comment: Partial<StreamComment>): Promise<StreamComment | null> {
   try {
-    const { data, error } = await supabase
-      .from('stream_comments')
+    const { data, error } = await (supabase as SupabaseClient<Database>).from('stream_comments')
       .insert([{
         ...comment,
         created_at: new Date().toISOString()
@@ -392,14 +386,13 @@ export async function addStreamComment(comment: Partial<StreamComment>): Promise
   }
 }
 
-export async function subscribeToLiveStreams(callback: (streams: LiveStream[]) => void): Promise<any> {
-  return supabase
+export async function subscribeToLiveStreams(callback: (streams: LiveStream[]) => void): Promise<RealtimeChannel> {
+  return (supabase as SupabaseClient<Database>)
     .channel('live_streams_channel')
     .on('postgres_changes', 
       { event: '*', schema: 'public', table: 'live_streams' }, 
       async () => {
-        const { data } = await supabase
-          .from('live_streams')
+        const { data } = await (supabase as SupabaseClient<Database>).from('live_streams')
           .select('*')
           .order('created_at', { ascending: false });
         
@@ -412,8 +405,8 @@ export async function subscribeToLiveStreams(callback: (streams: LiveStream[]) =
 export async function subscribeToStreamComments(
   streamId: string, 
   callback: (comments: StreamComment[]) => void
-): Promise<any> {
-  return supabase
+): Promise<RealtimeChannel> {
+  return (supabase as SupabaseClient<Database>)
     .channel(`stream_comments_${streamId}`)
     .on('postgres_changes', 
       { 
@@ -423,8 +416,7 @@ export async function subscribeToStreamComments(
         filter: `stream_id=eq.${streamId}`
       }, 
       async () => {
-        const { data } = await supabase
-          .from('stream_comments')
+        const { data } = await (supabase as SupabaseClient<Database>).from('stream_comments')
           .select('*')
           .eq('stream_id', streamId)
           .order('created_at', { ascending: true });

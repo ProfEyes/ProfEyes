@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { Play, Pause, Volume2, VolumeX, Maximize, Minimize, Eye, EyeOff, Volume1, Plus, Minus, RefreshCw } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useNavigate } from "react-router-dom";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -107,7 +107,6 @@ interface VideoPlayerProps {
   controls?: boolean;
   size?: "small" | "normal";
   canHide?: boolean;
-  allowDetails?: boolean;
 }
 
 export function VideoPlayer({
@@ -120,7 +119,6 @@ export function VideoPlayer({
   controls = true,
   size = "normal",
   canHide = false,
-  allowDetails = false,
 }: VideoPlayerProps) {
   const { t } = useLanguage();
   const navigate = useNavigate();
@@ -134,9 +132,9 @@ export function VideoPlayer({
   const [volume, setVolume] = useState(50);
   const [lastVolume, setLastVolume] = useState(50); // Guardar último volume usado
   const [isHidden, setIsHidden] = useState(false);
-  const [showDialog, setShowDialog] = useState(false);
+
   const [hasError, setHasError] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(videoKey !== "video.main"); // Nunca iniciar com loading para o vídeo do dashboard
   const [isDraggingVolume, setIsDraggingVolume] = useState(false);
   const [showVolumeBar, setShowVolumeBar] = useState(false); // Controlar visibilidade da barra
   const volumeBarRef = useRef<HTMLDivElement>(null);
@@ -146,6 +144,24 @@ export function VideoPlayer({
   const preventLoadRef = useRef<boolean>(false); // Nova ref para prevenir carregamento automático
   const [currentFrameUrl, setCurrentFrameUrl] = useState<string | null>(null); // Estado para armazenar o frame atual como URL
   const [showingAfterHidden, setShowingAfterHidden] = useState(false);
+  
+  // Novos estados para controles avançados
+  const [isDraggingProgress, setIsDraggingProgress] = useState(false);
+  const [showProgressPreview, setShowProgressPreview] = useState(false);
+  const [progressPreviewTime, setProgressPreviewTime] = useState(0);
+  const [progressPreviewPosition, setProgressPreviewPosition] = useState(0);
+  const [previewThumbnail, setPreviewThumbnail] = useState<string | null>(null);
+  const progressBarRef = useRef<HTMLDivElement>(null);
+  const [showControls, setShowControls] = useState(false);
+  const controlsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const thumbnailCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const thumbnailTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const wasPlayingBeforeSeekRef = useRef<boolean>(false);
+  const seekTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const lastVisibleTimeRef = useRef<number | null>(null); // Nova ref para armazenar a posição do vídeo quando a página fica invisível
+  const [isUserSeeking, setIsUserSeeking] = useState(false); // Flag para prevenir updateTime durante seeking
+  
+
 
   // Obtém o caminho do vídeo e do poster baseado no idioma atual
   const src = t(videoKey);
@@ -154,6 +170,72 @@ export function VideoPlayer({
 
   // Verificar se é o vídeo do dashboard para usar layout diferente
   const isDashboardVideo = videoKey === "video.main";
+
+  // ===== FUNÇÕES AUXILIARES PARA SEEKING TOTALMENTE CORRIGIDO =====
+  
+  // CORREÇÃO: Detecção ULTRA-SIMPLIFICADA de pause manual
+  const isUserPaused = () => {
+    // Usar apenas a ref como fonte única de verdade
+    return userPausedRef.current;
+  };
+
+  // CORREÇÃO: Preservar estado para seeking - SEMPRE preservar o estado atual
+  const preservePlayStateForSeeking = () => {
+    const video = videoRef.current;
+    if (!video) return false;
+    
+    // CAPTURAR APENAS o estado atual do vídeo (sem verificar se foi pausado manualmente)
+    const isActuallyPlaying = !video.paused && !video.ended && video.readyState >= 2;
+    wasPlayingBeforeSeekRef.current = isActuallyPlaying;
+    
+    console.log(`📍 [SEEK-PRESERVE] Era ${isActuallyPlaying ? 'TOCANDO' : 'PAUSADO'}`);
+    return isActuallyPlaying;
+  };
+
+  // Função SIMPLIFICADA para restaurar estado após seeking
+  const restorePlayStateAfterSeeking = () => {
+    const video = videoRef.current;
+    if (!video) return;
+    
+    const wasPlayingBefore = wasPlayingBeforeSeekRef.current;
+    const isCurrentlyPaused = video.paused;
+    
+    console.log(`🎯 [SEEK-RESTORE] Era tocando: ${wasPlayingBefore} | Atualmente pausado: ${isCurrentlyPaused}`);
+    
+    // REGRA SIMPLES: Restaurar exatamente o estado que estava antes do seeking
+    if (wasPlayingBefore && isCurrentlyPaused) {
+      console.log('▶️ [SEEK-RESTORE] Restaurando reprodução após seeking');
+      video.play()
+        .then(() => {
+          setIsPlaying(true);
+          console.log('✅ [SEEK-RESTORE] Reprodução restaurada');
+        })
+        .catch(err => {
+          console.warn('⚠️ [SEEK-RESTORE] Falha ao restaurar:', err);
+          setIsPlaying(false);
+        });
+    } else if (!wasPlayingBefore && !isCurrentlyPaused) {
+      console.log('⏸️ [SEEK-RESTORE] Pausando vídeo (estava pausado antes)');
+      video.pause();
+      setIsPlaying(false);
+    } else {
+      // Estados já estão corretos, só sincronizar
+      setIsPlaying(!isCurrentlyPaused);
+      console.log(`🔄 [SEEK-RESTORE] Estados já sincronizados: ${!isCurrentlyPaused ? 'tocando' : 'pausado'}`);
+    }
+  };
+
+  // Função para atualizar o botão de play/pause na tela cheia
+  const updateFullscreenPlayButton = (playing: boolean) => {
+    const playPauseButton = document.getElementById('fullscreen-play-pause-button');
+    if (playPauseButton) {
+      playPauseButton.innerHTML = playing 
+        ? '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-white"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>'
+        : '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-white"><polygon points="5,3 19,12 5,21"></polygon></svg>';
+    }
+  };
+
+
 
   // Função para tentar reproduzir o vídeo com várias tentativas
   const attemptPlayVideo = async (video: HTMLVideoElement, maxAttempts = 5) => {
@@ -195,31 +277,37 @@ export function VideoPlayer({
     return tryPlay();
   };
 
+  // Efeito principal para configurar os event listeners do vídeo
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
 
-    // Quando o componente é montado, verificar se havia um estado de pausa salvo anteriormente
-    const wasPreviouslyPaused = localStorage.getItem(`video-paused-${videoKey}`);
-    if (wasPreviouslyPaused === 'true') {
+    // Restaurar estado anterior SIMPLIFICADO
+    const wasPreviouslyPaused = localStorage.getItem(`video-paused-${videoKey}`) === 'true';
+    const savedPosition = localStorage.getItem(`video-position-${videoKey}`);
+    
+    if (wasPreviouslyPaused) {
+      console.log('📋 [INIT] Restaurando estado pausado anterior');
       userPausedRef.current = true;
-      preventLoadRef.current = true;
       video.setAttribute("data-user-paused", "true");
+      setIsPlaying(false);
       
-      // Restaurar a posição do vídeo se houver uma salva
-      const savedPosition = localStorage.getItem(`video-position-${videoKey}`);
+      // Restaurar posição se disponível
       if (savedPosition) {
         const position = parseFloat(savedPosition);
-        console.log(`Restaurando vídeo para posição salva: ${position}`);
-        video.currentTime = position;
-        video.setAttribute("data-pause-position", position.toString());
+        if (!isNaN(position)) {
+          video.currentTime = position;
+          console.log(`📍 [INIT] Posição restaurada: ${position}s`);
+        }
       }
-      
-      // Não iniciar reprodução automática se o vídeo estava pausado anteriormente
-      setIsPlaying(false);
     }
 
-    const updateTime = () => setCurrentTime(video.currentTime);
+    const updateTime = () => {
+      // Não atualizar posição da barra durante seeking pelo usuário
+      if (!isUserSeeking && !isDraggingProgress) {
+        setCurrentTime(video.currentTime);
+      }
+    };
     
     const updateDuration = () => {
       // Não atualizar a duração se o vídeo estiver pausado pelo usuário
@@ -232,29 +320,34 @@ export function VideoPlayer({
       console.log(`Duração do vídeo ${videoKey} carregada:`, video.duration);
     };
     
-    const handlePlay = () => {
+        const handlePlay = () => {
+      console.log('🎵 [EVENT-PLAY] Vídeo iniciou reprodução');
       setIsPlaying(true);
-      // Se o vídeo está sendo reproduzido, remover o estado de pausa
-      userPausedRef.current = false;
-      preventLoadRef.current = false;
-      video.removeAttribute("data-user-paused");
-      localStorage.removeItem(`video-paused-${videoKey}`);
+      setIsLoading(false);
+      updateFullscreenPlayButton(true);
     };
-    
+
     const handlePause = () => {
+      console.log('⏸️ [EVENT-PAUSE] Vídeo pausou');
       setIsPlaying(false);
-      // Quando o vídeo é pausado programaticamente, não consideramos como pausa de usuário
-      // O atributo data-user-paused é definido apenas pelo método togglePlay
+      updateFullscreenPlayButton(false);
     };
     
     const handleLoadStart = () => {
-      // Verificar se o vídeo foi pausado pelo usuário ou está sendo mostrado após estar oculto
-      if (userPausedRef.current || preventLoadRef.current || showingAfterHidden) {
-        console.log(`Evento loadstart ignorado porque o vídeo ${videoKey} foi pausado pelo usuário ou está sendo exibido após estar oculto`);
+      // Vídeo da dashboard nunca mostra loading
+      if (videoKey === "video.main") {
+        setIsLoading(false);
         return;
       }
       
-      console.log(`Iniciando carregamento do vídeo ${videoKey}`);
+      // Se pausado manualmente, não mostrar loading
+      if (userPausedRef.current || video.hasAttribute("data-user-paused")) {
+        console.log('🚫 [LOAD-START] Ignorado - vídeo pausado manualmente');
+        setIsLoading(false);
+        return;
+      }
+      
+      console.log('⏳ [LOAD-START] Iniciando carregamento');
       setIsLoading(true);
     };
     
@@ -267,15 +360,57 @@ export function VideoPlayer({
     };
     
     const handleLoadedData = () => {
-      if (userPausedRef.current || preventLoadRef.current) {
-        console.log(`Evento loadeddata bloqueado porque o vídeo ${videoKey} foi pausado pelo usuário`);
+      // Nunca mostrar carregamento para o vídeo do dashboard
+      if (videoKey === "video.main") {
+        setIsLoading(false);
+        return;
+      }
+      
+      // Verificar se há uma posição salva anteriormente
+      const hasLastPosition = localStorage.getItem(`video-last-position-${videoKey}`) !== null;
+      
+      if (userPausedRef.current || 
+          preventLoadRef.current || 
+          videoRef.current?.hasAttribute("data-user-paused") || 
+          videoRef.current?.hasAttribute("data-shown-after-hidden") ||
+          hasLastPosition) {
+        console.log(`Evento loadeddata bloqueado porque o vídeo ${videoKey} foi pausado pelo usuário ou estamos voltando para uma página já visitada`);
+        setIsLoading(false);
+        
+        // Se temos uma posição salva, restaurar para essa posição
+        if (hasLastPosition && videoRef.current) {
+          const lastPosition = localStorage.getItem(`video-last-position-${videoKey}`);
+          if (lastPosition) {
+            const position = parseFloat(lastPosition);
+            if (!isNaN(position) && isFinite(position)) {
+              videoRef.current.currentTime = position;
+              setCurrentTime(position);
+              console.log(`Restaurando vídeo ${videoKey} para posição salva: ${position}`);
+            }
+          }
+        }
+        
         return;
       }
       console.log(`Vídeo ${videoKey} carregado completamente`);
+      setIsLoading(false);
     };
     
     const handleCanPlay = () => {
-      if (userPausedRef.current || preventLoadRef.current) {
+      // Nunca mostrar carregamento para o vídeo do dashboard
+      if (videoKey === "video.main") {
+        setIsLoading(false);
+        return;
+      }
+      
+      // Verificar se há uma posição salva anteriormente
+      const hasLastPosition = localStorage.getItem(`video-last-position-${videoKey}`) !== null;
+      const wasPlaying = localStorage.getItem(`video-was-playing-${videoKey}`) === 'true';
+      
+      if (userPausedRef.current || 
+          preventLoadRef.current || 
+          videoRef.current?.hasAttribute("data-user-paused") || 
+          videoRef.current?.hasAttribute("data-shown-after-hidden")) {
         console.log(`Evento canplay ignorado porque o vídeo ${videoKey} foi pausado pelo usuário`);
         setIsLoading(false);
         return;
@@ -285,15 +420,35 @@ export function VideoPlayer({
       setIsLoading(false);
       
       // Verificar várias condições antes de iniciar a reprodução automática
+      const isMainVideo = (videoKey as string) === "video.main";
       if (autoPlay && 
-          videoKey === "video.main" && 
-          !video.hasAttribute("data-autoplay-handled") && 
+          isMainVideo && 
+          !videoRef.current?.hasAttribute("data-autoplay-handled") && 
           !userPausedRef.current && 
           !preventLoadRef.current && 
-          !video.hasAttribute("data-user-paused")) {
+          !videoRef.current?.hasAttribute("data-user-paused")) {
         
-        video.setAttribute("data-autoplay-handled", "true");
-        attemptPlayVideo(video);
+        if (videoRef.current) {
+          videoRef.current.setAttribute("data-autoplay-handled", "true");
+          attemptPlayVideo(videoRef.current);
+        }
+      }
+      
+      // Se estamos voltando para uma página já visitada e o vídeo estava reproduzindo antes
+      if (hasLastPosition && wasPlaying && !userPausedRef.current && videoRef.current) {
+        // Restaurar posição
+        const lastPosition = localStorage.getItem(`video-last-position-${videoKey}`);
+        if (lastPosition) {
+          const position = parseFloat(lastPosition);
+          if (!isNaN(position) && isFinite(position)) {
+            videoRef.current.currentTime = position;
+            setCurrentTime(position);
+            console.log(`Restaurando vídeo ${videoKey} para posição salva: ${position} e continuando reprodução`);
+            
+            // Continuar reprodução se estava reproduzindo antes
+            attemptPlayVideo(videoRef.current);
+          }
+        }
       }
     };
     
@@ -301,6 +456,18 @@ export function VideoPlayer({
       console.error(`Erro ao carregar o vídeo ${videoKey}:`, video.error);
       setHasError(true);
       setIsLoading(false);
+    };
+    
+    const handleSeeking = () => {
+      // Durante o seeking, verificar se deve preservar estado (se ainda não foi feito)
+      if (!wasPlayingBeforeSeekRef.current) {
+        preservePlayStateForSeeking();
+      }
+    };
+    
+    const handleSeeked = () => {
+      // Após terminar o seeking, restaurar reprodução apenas se apropriado
+      restorePlayStateAfterSeeking();
     };
     
     const handleFullscreenChange = () => {
@@ -347,14 +514,27 @@ export function VideoPlayer({
     video.addEventListener('error', handleError);
     video.addEventListener('play', handlePlay);
     video.addEventListener('pause', handlePause);
+    video.addEventListener('seeking', handleSeeking);
+    video.addEventListener('seeked', handleSeeked);
     document.addEventListener('fullscreenchange', handleFullscreenChange);
     
     return () => {
       // Salvar o estado de pausa do usuário quando o componente é desmontado
       if (userPausedRef.current) {
         localStorage.setItem(`video-paused-${videoKey}`, 'true');
+        
+        // Salvar também a posição atual para restaurar quando voltar
+        if (video.currentTime > 0) {
+          localStorage.setItem(`video-position-${videoKey}`, video.currentTime.toString());
+        }
       } else {
+        // Se o vídeo não estava pausado pelo usuário, limpar todos os dados
         localStorage.removeItem(`video-paused-${videoKey}`);
+        localStorage.removeItem(`video-position-${videoKey}`);
+        
+        // Salvar o estado atual e posição para restaurar ao navegar de volta
+        localStorage.setItem(`video-last-position-${videoKey}`, video.currentTime.toString());
+        localStorage.setItem(`video-was-playing-${videoKey}`, (!video.paused).toString());
       }
       
       video.removeEventListener('timeupdate', updateTime);
@@ -366,6 +546,8 @@ export function VideoPlayer({
       video.removeEventListener('error', handleError);
       video.removeEventListener('play', handlePlay);
       video.removeEventListener('pause', handlePause);
+      video.removeEventListener('seeking', handleSeeking);
+      video.removeEventListener('seeked', handleSeeked);
       document.removeEventListener('fullscreenchange', handleFullscreenChange);
     };
   }, [videoKey, autoPlay]);
@@ -374,6 +556,12 @@ export function VideoPlayer({
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
+    
+    // Para o vídeo do dashboard, nunca mostrar carregamento
+    if (videoKey === "video.main") {
+      setIsLoading(false);
+      return;
+    }
     
     // Se o vídeo estava pausado pelo usuário, não redefina o tempo
     if (userPausedRef.current || video.hasAttribute("data-user-paused")) {
@@ -406,15 +594,16 @@ export function VideoPlayer({
     // Aplicar volume sem alterar o estado de reprodução
     video.volume = volume / 100;
     
-    // Inicia o vídeo automaticamente em loop silencioso se for o vídeo principal
-    // Apenas na primeira vez (montagem do componente)
-    if (videoKey === "video.main" && autoPlay && !video.hasAttribute("data-initialized") && isPlaying) {
+    // CORREÇÃO: Inicialização específica para vídeo da dashboard
+    if (isDashboardVideo && autoPlay && !video.hasAttribute("data-initialized")) {
+      console.log('🎬 [INIT-DASHBOARD] Configurando vídeo da dashboard');
       video.loop = true;
       video.muted = true;
       video.setAttribute("data-initialized", "true");
       
-      // Tentar reproduzir imediatamente e garantir que comece a reproduzir
-      if (video.readyState >= 3) { // HAVE_FUTURE_DATA or HAVE_ENOUGH_DATA
+      // Só tentar reproduzir se não foi pausado manualmente
+      if (!isUserPaused() && video.readyState >= 3) {
+        console.log('▶️ [INIT-DASHBOARD] Iniciando reprodução automática');
         attemptPlayVideo(video);
       }
     }
@@ -489,28 +678,59 @@ export function VideoPlayer({
       setIsPlaying(false);
     }
 
-    const updateTime = () => setCurrentTime(video.currentTime);
+    const updateTime = () => {
+      // Não atualizar posição da barra durante seeking pelo usuário
+      if (!isUserSeeking && !isDraggingProgress) {
+        setCurrentTime(video.currentTime);
+      }
+    };
     const updateDuration = () => {
       setDuration(video.duration);
       console.log(`Duração do vídeo ${videoKey} carregada:`, video.duration);
     };
     const handlePlay = () => {
+      // Atualizar o estado de reprodução
       setIsPlaying(true);
-      // Se o vídeo está sendo reproduzido, remover o estado de pausa
-      userPausedRef.current = false;
-      preventLoadRef.current = false;
-      video.removeAttribute("data-user-paused");
-      localStorage.removeItem(`video-paused-${videoKey}`);
+      // Garantir que não mostre carregamento quando o vídeo está reproduzindo
+      setIsLoading(false);
+      
+      // Quando o vídeo começa a reproduzir, podemos limpar as flags de pausa
+      // mas apenas se não tiver sido pausado pelo usuário
+      if (!userPausedRef.current && !video.hasAttribute("data-user-paused")) {
+        preventLoadRef.current = false;
+      }
+      
+      // Atualizar botão de tela cheia se existir
+      updateFullscreenPlayButton(true);
     };
     const handlePause = () => {
       setIsPlaying(false);
       // Quando o vídeo é pausado programaticamente, não consideramos como pausa de usuário
       // O atributo data-user-paused é definido apenas pelo método togglePlay
+      
+      // Atualizar botão de tela cheia se existir
+      updateFullscreenPlayButton(false);
     };
+    
     const handleLoadStart = () => {
-      // Verificar se o vídeo foi pausado pelo usuário ou está sendo mostrado após estar oculto
-      if (userPausedRef.current || preventLoadRef.current || showingAfterHidden) {
-        console.log(`Evento loadstart ignorado porque o vídeo ${videoKey} foi pausado pelo usuário ou está sendo exibido após estar oculto`);
+      // Nunca mostrar carregamento para o vídeo do dashboard
+      if (videoKey === "video.main") {
+        setIsLoading(false);
+        return;
+      }
+      
+      // Verificar se o vídeo foi pausado pelo usuário, está sendo mostrado após estar oculto,
+      // ou se estamos voltando para uma página que já foi visitada
+      const hasLastPosition = localStorage.getItem(`video-last-position-${videoKey}`) !== null;
+      
+      if (userPausedRef.current || 
+          preventLoadRef.current || 
+          showingAfterHidden || 
+          videoRef.current?.hasAttribute("data-user-paused") || 
+          videoRef.current?.hasAttribute("data-shown-after-hidden") ||
+          hasLastPosition) {
+        console.log(`Evento loadstart ignorado porque o vídeo ${videoKey} foi pausado pelo usuário, está sendo exibido após estar oculto, ou estamos voltando para uma página já visitada`);
+        setIsLoading(false);
         return;
       }
       
@@ -518,19 +738,58 @@ export function VideoPlayer({
       setIsLoading(true);
     };
     const handleCanPlay = () => {
+      // Nunca mostrar carregamento para o vídeo do dashboard
+      if (videoKey === "video.main") {
+        setIsLoading(false);
+        return;
+      }
+      
+      // Verificar se há uma posição salva anteriormente
+      const hasLastPosition = localStorage.getItem(`video-last-position-${videoKey}`) !== null;
+      const wasPlaying = localStorage.getItem(`video-was-playing-${videoKey}`) === 'true';
+      
+      if (userPausedRef.current || 
+          preventLoadRef.current || 
+          videoRef.current?.hasAttribute("data-user-paused") || 
+          videoRef.current?.hasAttribute("data-shown-after-hidden")) {
+        console.log(`Evento canplay ignorado porque o vídeo ${videoKey} foi pausado pelo usuário`);
+        setIsLoading(false);
+        return;
+      }
+      
       console.log(`Vídeo ${videoKey} pode ser reproduzido agora`);
       setIsLoading(false);
       
       // Verificar várias condições antes de iniciar a reprodução automática
+      const isMainVideo = (videoKey as string) === "video.main";
       if (autoPlay && 
-          videoKey === "video.main" && 
-          !video.hasAttribute("data-autoplay-handled") && 
+          isMainVideo && 
+          !videoRef.current?.hasAttribute("data-autoplay-handled") && 
           !userPausedRef.current && 
           !preventLoadRef.current && 
-          !video.hasAttribute("data-user-paused")) {
+          !videoRef.current?.hasAttribute("data-user-paused")) {
         
-        video.setAttribute("data-autoplay-handled", "true");
-        attemptPlayVideo(video);
+        if (videoRef.current) {
+          videoRef.current.setAttribute("data-autoplay-handled", "true");
+          attemptPlayVideo(videoRef.current);
+        }
+      }
+      
+      // Se estamos voltando para uma página já visitada e o vídeo estava reproduzindo antes
+      if (hasLastPosition && wasPlaying && !userPausedRef.current && videoRef.current) {
+        // Restaurar posição
+        const lastPosition = localStorage.getItem(`video-last-position-${videoKey}`);
+        if (lastPosition) {
+          const position = parseFloat(lastPosition);
+          if (!isNaN(position) && isFinite(position)) {
+            videoRef.current.currentTime = position;
+            setCurrentTime(position);
+            console.log(`Restaurando vídeo ${videoKey} para posição salva: ${position} e continuando reprodução`);
+            
+            // Continuar reprodução se estava reproduzindo antes
+            attemptPlayVideo(videoRef.current);
+          }
+        }
       }
     };
     const handleError = (e: Event) => {
@@ -586,10 +845,22 @@ export function VideoPlayer({
       // Salvar o estado de pausa do usuário quando o componente é desmontado
       if (userPausedRef.current) {
         localStorage.setItem(`video-paused-${videoKey}`, 'true');
+        
+        // Salvar também a posição atual para restaurar quando voltar
+        if (video.currentTime > 0) {
+          localStorage.setItem(`video-position-${videoKey}`, video.currentTime.toString());
+        }
       } else {
+        // Se o vídeo não estava pausado pelo usuário, limpar todos os dados
         localStorage.removeItem(`video-paused-${videoKey}`);
+        localStorage.removeItem(`video-position-${videoKey}`);
+        
+        // Salvar o estado atual e posição para restaurar ao navegar de volta
+        localStorage.setItem(`video-last-position-${videoKey}`, video.currentTime.toString());
+        localStorage.setItem(`video-was-playing-${videoKey}`, (!video.paused).toString());
       }
       
+      // Remover todos os event listeners
       video.removeEventListener('timeupdate', updateTime);
       video.removeEventListener('loadedmetadata', updateDuration);
       video.removeEventListener('loadstart', handleLoadStart);
@@ -710,7 +981,7 @@ export function VideoPlayer({
     document.addEventListener('mouseup', handleDragEnd);
   };
 
-  // Toggle play/pause sem afetar o volume
+  // Toggle play/pause ULTRA-SIMPLIFICADO - CORREÇÃO DEFINITIVA
   const togglePlay = (e?: React.MouseEvent) => {
     if (e) {
       e.preventDefault();
@@ -720,71 +991,76 @@ export function VideoPlayer({
     const video = videoRef.current;
     if (!video) return;
 
-    console.log(`Tentando ${isPlaying ? 'pausar' : 'reproduzir'} o vídeo`);
-
-    if (isPlaying) {
-      // Pausar o vídeo e garantir que o estado seja atualizado
-      video.pause();
-      video.loop = false; // Desativa o loop quando pausado
-      // Guardar atributo para saber que o usuário pausou manualmente
-      video.setAttribute("data-user-paused", "true");
-      userPausedRef.current = true; // Armazenar o estado de pausa do usuário na ref
-      preventLoadRef.current = true; // Prevenir carregamento quando pausado
-      
-      // Armazenar a posição atual do vídeo para despausar do mesmo ponto
-      const currentPosition = video.currentTime;
-      video.setAttribute("data-pause-position", currentPosition.toString());
-      
-      // Capturar o frame atual do vídeo e salvar como uma imagem
-      captureVideoFrame(video);
-      
-      setIsPlaying(false);
-      // Não mostrar o indicador de carregamento quando pausado
-      setIsLoading(false);
-      
-      // Salvar o estado de pausa imediatamente no localStorage
-      localStorage.setItem(`video-paused-${videoKey}`, 'true');
-      localStorage.setItem(`video-position-${videoKey}`, currentPosition.toString());
-      
-      console.log(`Vídeo pausado manualmente na posição ${currentPosition}`);
-    } else {
-      // Reproduzir o vídeo a partir do ponto pausado
-      video.loop = isDashboardVideo; // Reativa o loop somente quando é dashboard
-      
-      // Verificar se há uma posição salva para restaurar
-      const savedPosition = video.getAttribute("data-pause-position");
-      if (savedPosition) {
-        const position = parseFloat(savedPosition);
-        console.log(`Restaurando vídeo para posição salva: ${position}`);
-        video.currentTime = position;
+    console.log(`🎬 [TOGGLE] Estado atual: ${video.paused ? 'PAUSADO' : 'TOCANDO'}`);
+    
+    // LÓGICA ULTRA-SIMPLIFICADA: Se pausado -> tocar, Se tocando -> pausar
+    if (video.paused) {
+      // DESPAUSAR: Iniciar reprodução
+      // Configurar loop apenas para vídeo da dashboard
+      if (isDashboardVideo) {
+        video.loop = true;
       }
       
-      // Nunca mostrar animação de carregamento quando despausando manualmente
+      video.play()
+        .then(() => {
+          console.log('✅ [PLAY] Vídeo iniciado com sucesso');
+          setIsPlaying(true);
+          setIsLoading(false);
+          // Limpar estados de pausa manual
+          video.removeAttribute("data-user-paused");
+          userPausedRef.current = false;
+          localStorage.removeItem(`video-paused-${videoKey}`);
+        })
+        .catch(err => {
+          console.error('❌ [PLAY] Erro ao iniciar vídeo:', err);
+          setIsPlaying(false);
+          setIsLoading(false);
+        });
+    } else {
+      // PAUSAR: Parar reprodução
+      video.pause();
+      console.log('⏸️ [PAUSE] Vídeo pausado');
+      setIsPlaying(false);
       setIsLoading(false);
       
-      // Primeiro reproduzir o vídeo e depois remover os atributos para garantir que não haja reload
-      video.play().then(() => {
-        setIsPlaying(true);
-        
-        // Só remover atributos após o vídeo ter começado a tocar
-        // Remover atributo de pausa manual
-        video.removeAttribute("data-user-paused");
-        userPausedRef.current = false; // Limpar o estado de pausa do usuário na ref
-        preventLoadRef.current = false; // Permitir carregamento novamente
-        
-        // Limpar o frame capturado quando retorna a reprodução
-        setCurrentFrameUrl(null);
-        
-        // Remover o estado de pausa do localStorage por último
-        localStorage.removeItem(`video-paused-${videoKey}`);
-        
-        console.log('Vídeo reproduzido com sucesso a partir do ponto pausado');
-      }).catch(err => {
-        console.error("Erro ao reproduzir o vídeo:", err);
-        attemptPlayVideo(video);
-      });
+      // Desativar loop temporariamente quando pausado manualmente
+      if (isDashboardVideo) {
+        video.loop = false;
+      }
+      
+      // Marcar como pausado manualmente
+      video.setAttribute("data-user-paused", "true");
+      userPausedRef.current = true;
+      
+      // Salvar posição e estado
+      localStorage.setItem(`video-paused-${videoKey}`, 'true');
+      localStorage.setItem(`video-position-${videoKey}`, video.currentTime.toString());
     }
   };
+
+  // CORREÇÃO: Efeito de sincronização estado React <-> HTML Video
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    const syncStateWithVideo = () => {
+      const videoIsPlaying = !video.paused && !video.ended && video.readyState > 2;
+      if (isPlaying !== videoIsPlaying) {
+        console.log(`🔄 [SYNC] Estado dessincronizado! React: ${isPlaying} | Video: ${videoIsPlaying} - Corrigindo...`);
+        setIsPlaying(videoIsPlaying);
+      }
+    };
+
+    // Sincronizar imediatamente
+    syncStateWithVideo();
+
+    // Sincronizar a cada 2 segundos para capturar mudanças não detectadas
+    const syncInterval = setInterval(syncStateWithVideo, 2000);
+
+    return () => {
+      clearInterval(syncInterval);
+    };
+  }, [isPlaying]);
 
   // Função para capturar o frame atual do vídeo
   const captureVideoFrame = (video: HTMLVideoElement) => {
@@ -809,6 +1085,297 @@ export function VideoPlayer({
       setCurrentFrameUrl(null);
     }
   };
+
+  const generateThumbnail = (video: HTMLVideoElement, time: number): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      // Usar o canvas ref se disponível, senão criar um novo
+      let canvas = thumbnailCanvasRef.current;
+      if (!canvas) {
+        canvas = document.createElement('canvas');
+        canvas.width = 160;
+        canvas.height = 90;
+        thumbnailCanvasRef.current = canvas;
+      }
+      
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        reject(new Error('Não foi possível obter contexto do canvas'));
+        return;
+      }
+      
+      // Criar um vídeo temporário para buscar o frame
+      const tempVideo = document.createElement('video');
+      tempVideo.src = video.src;
+      tempVideo.muted = true;
+      tempVideo.preload = 'metadata';
+      tempVideo.currentTime = time;
+      
+      const handleSeeked = () => {
+        try {
+          ctx.drawImage(tempVideo, 0, 0, canvas!.width, canvas!.height);
+          const dataURL = canvas!.toDataURL('image/jpeg', 0.7);
+          
+          tempVideo.removeEventListener('seeked', handleSeeked);
+          tempVideo.removeEventListener('error', handleError);
+          tempVideo.remove();
+          
+          resolve(dataURL);
+        } catch (error) {
+          tempVideo.removeEventListener('seeked', handleSeeked);
+          tempVideo.removeEventListener('error', handleError);
+          tempVideo.remove();
+          reject(error);
+        }
+      };
+      
+      const handleError = (error: Event) => {
+        tempVideo.removeEventListener('seeked', handleSeeked);
+        tempVideo.removeEventListener('error', handleError);
+        tempVideo.remove();
+        reject(new Error('Erro ao gerar thumbnail'));
+      };
+      
+      tempVideo.addEventListener('seeked', handleSeeked);
+      tempVideo.addEventListener('error', handleError);
+    });
+  };
+
+  // Funções para controles avançados de tempo - TOTALMENTE CORRIGIDAS
+  const skipTime = (seconds: number) => {
+    const video = videoRef.current;
+    if (!video) return;
+    
+    // Preservar estado ANTES de qualquer mudança
+    const wasPlaying = preservePlayStateForSeeking();
+    
+    // Calcular novo tempo
+    const newTime = Math.max(0, Math.min(video.currentTime + seconds, duration));
+    
+    console.log(`[SKIP] ⏭️ ${seconds}s: ${video.currentTime.toFixed(2)}→${newTime.toFixed(2)} | era ${wasPlaying ? 'TOCANDO' : 'PAUSADO'}`);
+    
+    // Mudar posição IMEDIATAMENTE
+    video.currentTime = newTime;
+    setCurrentTime(newTime);
+    
+    // Aplicar nova lógica: manter estado original (pausado continua pausado)
+    restorePlayStateAfterSeeking();
+  };
+
+  const jumpToTime = (time: number) => {
+    const video = videoRef.current;
+    if (!video) return;
+    
+    // Preservar estado ANTES de qualquer mudança  
+    const wasPlaying = preservePlayStateForSeeking();
+    
+    // Calcular tempo limitado
+    const clampedTime = Math.max(0, Math.min(time, duration));
+    
+    console.log(`[JUMP] 🎯 Para ${clampedTime.toFixed(2)}s | era ${wasPlaying ? 'TOCANDO' : 'PAUSADO'}`);
+    
+    // Mudar posição IMEDIATAMENTE
+    video.currentTime = clampedTime;
+    setCurrentTime(clampedTime);
+    
+    // Aplicar nova lógica: manter estado original (pausado continua pausado)
+    restorePlayStateAfterSeeking();
+  };
+
+  // Função auxiliar para seeking direto (clique único) - ULTRA-RESPONSIVA
+  const seekToPosition = (clientX: number) => {
+    if (!progressBarRef.current || !duration) return;
+    
+    const video = videoRef.current;
+    if (!video) return;
+    
+    const rect = progressBarRef.current.getBoundingClientRect();
+    const percentage = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+    const newTime = percentage * duration;
+    
+    console.log(`[SEEK] 🎯 Direto para ${newTime.toFixed(2)}s | era ${wasPlayingBeforeSeekRef.current ? 'TOCANDO' : 'PAUSADO'}`);
+    
+    // Atualizar posição IMEDIATAMENTE
+    video.currentTime = newTime;
+    setCurrentTime(newTime);
+    
+    // NÃO restaurar estado aqui - será feito no mouseUp
+  };
+
+  // Manipuladores da barra de progresso - MELHORADOS
+  const handleProgressMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!progressBarRef.current || !duration) return;
+    
+    e.preventDefault();
+    e.stopPropagation();
+    
+    const video = videoRef.current;
+    if (!video) return;
+    
+    // SEMPRE preservar o estado atual antes de qualquer seeking
+    preservePlayStateForSeeking();
+    
+    // Para clique simples: seeking direto e responsivo
+    seekToPosition(e.clientX);
+    
+    // Marcar como arrastando para eventos subsequentes
+    setIsDraggingProgress(true);
+  };
+
+  const handleProgressMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!progressBarRef.current || !duration) return;
+    
+    const rect = progressBarRef.current.getBoundingClientRect();
+    const percentage = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+    const previewTime = percentage * duration;
+    
+    setProgressPreviewTime(previewTime);
+    setProgressPreviewPosition(e.clientX - rect.left);
+    setShowProgressPreview(true);
+    
+    // Debounce suave para geração de thumbnail em tempo real
+    if (thumbnailTimeoutRef.current) {
+      clearTimeout(thumbnailTimeoutRef.current);
+    }
+    
+    thumbnailTimeoutRef.current = setTimeout(async () => {
+      if (videoRef.current) {
+        try {
+          const thumbnail = await generateThumbnail(videoRef.current, previewTime);
+          setPreviewThumbnail(thumbnail);
+        } catch (error) {
+          console.warn('Erro ao gerar thumbnail:', error);
+          setPreviewThumbnail(null);
+        }
+      }
+    }, 100);
+    
+    // Durante o arrastar, atualizar posição do vídeo SEM log excessivo
+    if (isDraggingProgress && videoRef.current) {
+      videoRef.current.currentTime = previewTime;
+      setCurrentTime(previewTime);
+    }
+  };
+
+  const handleProgressMouseLeave = () => {
+    setShowProgressPreview(false);
+    setPreviewThumbnail(null);
+    
+    // Limpar timeout de thumbnail quando sair da área
+    if (thumbnailTimeoutRef.current) {
+      clearTimeout(thumbnailTimeoutRef.current);
+      thumbnailTimeoutRef.current = null;
+    }
+  };
+
+  const handleProgressMouseUp = () => {
+    console.log(`[PROGRESS] 🏁 Finalizando drag | era ${wasPlayingBeforeSeekRef.current ? 'TOCANDO' : 'PAUSADO'}`);
+    
+    setIsDraggingProgress(false);
+    
+    // Restaurar estado IMEDIATAMENTE (sem timeout que causa bugs)
+    restorePlayStateAfterSeeking();
+  };
+
+  // Auto-hide dos controles
+  const resetControlsTimeout = () => {
+    if (controlsTimeoutRef.current) {
+      clearTimeout(controlsTimeoutRef.current);
+    }
+    
+    setShowControls(true);
+    
+    if (isPlaying && !isDashboardVideo) {
+      controlsTimeoutRef.current = setTimeout(() => {
+        setShowControls(false);
+      }, 3000);
+    }
+  };
+
+  const handleMouseMove = () => {
+    resetControlsTimeout();
+  };
+
+  const handleMouseEnter = () => {
+    if (controlsTimeoutRef.current) {
+      clearTimeout(controlsTimeoutRef.current);
+    }
+    setShowControls(true);
+  };
+
+
+
+  const handleMouseLeave = () => {
+    if (controlsTimeoutRef.current) {
+      clearTimeout(controlsTimeoutRef.current);
+    }
+    setShowControls(false);
+  };
+
+  // Cleanup dos timeouts
+  useEffect(() => {
+    return () => {
+      if (controlsTimeoutRef.current) {
+        clearTimeout(controlsTimeoutRef.current);
+      }
+      if (thumbnailTimeoutRef.current) {
+        clearTimeout(thumbnailTimeoutRef.current);
+      }
+      if (seekTimeoutRef.current) {
+        clearTimeout(seekTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  // Gerenciar visibilidade dos controles
+  useEffect(() => {
+    if (isPlaying && !isDashboardVideo) {
+      resetControlsTimeout();
+    } else {
+      // Não mostrar controles automaticamente, apenas no hover
+      if (controlsTimeoutRef.current) {
+        clearTimeout(controlsTimeoutRef.current);
+      }
+    }
+  }, [isPlaying, isDashboardVideo]);
+
+  // Event listeners globais para arrastar - TOTALMENTE CORRIGIDOS
+  useEffect(() => {
+    const handleGlobalMouseUp = () => {
+      console.log(`[GLOBAL] 🌍 Finalizando drag | era ${wasPlayingBeforeSeekRef.current ? 'TOCANDO' : 'PAUSADO'}`);
+      
+      setIsDraggingProgress(false);
+      
+      // Restaurar estado IMEDIATAMENTE (sem timeout que causa conflitos)
+      restorePlayStateAfterSeeking();
+    };
+
+    const handleGlobalMouseMove = (e: MouseEvent) => {
+      if (isDraggingProgress && progressBarRef.current && duration) {
+        e.preventDefault();
+        
+        // Durante arrastar: apenas atualizar posição (SEM preservar/restaurar estado)
+        const rect = progressBarRef.current.getBoundingClientRect();
+        const percentage = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+        const newTime = percentage * duration;
+        
+        const video = videoRef.current;
+        if (video) {
+          video.currentTime = newTime;
+          setCurrentTime(newTime);
+        }
+      }
+    };
+
+    if (isDraggingProgress) {
+      document.addEventListener('mouseup', handleGlobalMouseUp);
+      document.addEventListener('mousemove', handleGlobalMouseMove);
+    }
+
+    return () => {
+      document.removeEventListener('mouseup', handleGlobalMouseUp);
+      document.removeEventListener('mousemove', handleGlobalMouseMove);
+    };
+  }, [isDraggingProgress, duration]);
 
   // Mostrar a barra de volume ao passar o mouse sobre o botão de volume
   const handleVolumeHover = () => {
@@ -946,10 +1513,32 @@ export function VideoPlayer({
               playerRef.current.style.backgroundColor = 'black';
             }
             
-            // Adicionar o botão de saída da tela cheia no canto inferior direito
+            // Adicionar container com controles na tela cheia (botão de saída e play/pause)
+            const controlsContainer = document.createElement('div');
+            controlsContainer.id = 'fullscreen-controls-container';
+            controlsContainer.className = 'absolute bottom-6 right-6 flex gap-3 z-50';
+            
+            // Botão de play/pause
+            const playPauseButton = document.createElement('button');
+            playPauseButton.id = 'fullscreen-play-pause-button';
+            playPauseButton.className = 'p-3 rounded-md bg-black/60 hover:bg-black/80 transition-colors transform hover:scale-110 transition-transform duration-200';
+            playPauseButton.innerHTML = isPlaying 
+              ? '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-white"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>'
+              : '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-white"><polygon points="5,3 19,12 5,21"></polygon></svg>';
+            playPauseButton.onclick = (e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              togglePlay();
+              // Atualizar o ícone do botão
+              playPauseButton.innerHTML = !isPlaying 
+                ? '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-white"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>'
+                : '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-white"><polygon points="5,3 19,12 5,21"></polygon></svg>';
+            };
+            
+            // Botão de saída da tela cheia
             const exitButton = document.createElement('button');
             exitButton.id = 'exit-fullscreen-button';
-            exitButton.className = 'absolute bottom-6 right-6 p-2 rounded-md bg-black/60 hover:bg-black/80 transition-colors transform hover:scale-110 transition-transform duration-200 z-50';
+            exitButton.className = 'p-3 rounded-md bg-black/60 hover:bg-black/80 transition-colors transform hover:scale-110 transition-transform duration-200';
             exitButton.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-white"><path d="M8 3v3a2 2 0 0 1-2 2H3"></path><path d="M21 8h-3a2 2 0 0 1-2-2V3"></path><path d="M3 16h3a2 2 0 0 1 2 2v3"></path><path d="M16 21v-3a2 2 0 0 1 2-2h3"></path></svg>';
             exitButton.onclick = (e) => {
               e.preventDefault();
@@ -957,13 +1546,17 @@ export function VideoPlayer({
               document.exitFullscreen();
             };
             
-            // Remover se já existir
-            const existingButton = document.getElementById('exit-fullscreen-button');
-            if (existingButton) {
-              existingButton.remove();
+            // Remover container se já existir
+            const existingContainer = document.getElementById('fullscreen-controls-container');
+            if (existingContainer) {
+              existingContainer.remove();
             }
             
-            playerRef.current.appendChild(exitButton);
+            // Adicionar botões ao container
+            controlsContainer.appendChild(playPauseButton);
+            controlsContainer.appendChild(exitButton);
+            
+            playerRef.current.appendChild(controlsContainer);
           })
           .catch(err => {
             console.error("Erro ao entrar em tela cheia:", err);
@@ -998,10 +1591,10 @@ export function VideoPlayer({
               playerRef.current.style.backgroundColor = '';
             }
             
-            // Remover o botão de saída
-            const exitButton = document.getElementById('exit-fullscreen-button');
-            if (exitButton) {
-              exitButton.remove();
+            // Remover o container de controles da tela cheia
+            const controlsContainer = document.getElementById('fullscreen-controls-container');
+            if (controlsContainer) {
+              controlsContainer.remove();
             }
           })
           .catch(err => {
@@ -1011,14 +1604,14 @@ export function VideoPlayer({
     }
   };
 
-  // Adicionar um ouvinte para o evento fullscreenchange para garantir que o botão seja removido
+  // Adicionar um ouvinte para o evento fullscreenchange para garantir que os controles sejam removidos
   useEffect(() => {
     const handleFullScreenChange = () => {
-      // Se saiu da tela cheia, remover o botão
+      // Se saiu da tela cheia, remover o container de controles
       if (!document.fullscreenElement) {
-        const exitButton = document.getElementById('exit-fullscreen-button');
-        if (exitButton) {
-          exitButton.remove();
+        const controlsContainer = document.getElementById('fullscreen-controls-container');
+        if (controlsContainer) {
+          controlsContainer.remove();
         }
       }
     };
@@ -1034,9 +1627,19 @@ export function VideoPlayer({
     const video = videoRef.current;
     if (!video) return;
 
+    // Preservar estado antes do seek
+    const wasPlaying = preservePlayStateForSeeking();
+    
     const newTime = parseFloat(e.target.value);
+    
+    console.log(`[SEEK] 🎚️ Para ${newTime.toFixed(2)}s | era ${wasPlaying ? 'TOCANDO' : 'PAUSADO'}`);
+    
+    // Mudar posição IMEDIATAMENTE
     video.currentTime = newTime;
     setCurrentTime(newTime);
+    
+    // Aplicar nova lógica: manter estado original (pausado continua pausado)
+    restorePlayStateAfterSeeking();
   };
 
   const formatTime = (time: number) => {
@@ -1050,10 +1653,28 @@ export function VideoPlayer({
     if (isHidden) {
       setShowingAfterHidden(true);
       
-      // Resetar o estado após um curto período para não afetar futuros carregamentos
+      // Garantir que não mostre o indicador de carregamento
+      setIsLoading(false);
+      
+      // Adicionar atributo para evitar que o indicador de carregamento seja mostrado
+      if (videoRef.current) {
+        videoRef.current.setAttribute("data-user-paused", "true");
+        userPausedRef.current = true;
+        preventLoadRef.current = true;
+      }
+      
+      // Resetar o estado após um período maior para garantir que o carregamento não apareça
       setTimeout(() => {
         setShowingAfterHidden(false);
-      }, 1000);
+        
+        // Só remover os atributos se o vídeo estiver reproduzindo
+        const video = videoRef.current;
+        if (video && isPlaying && !video.paused) {
+          video.removeAttribute("data-user-paused");
+          userPausedRef.current = false;
+          preventLoadRef.current = false;
+        }
+      }, 3000);
     }
     
     setIsHidden(!isHidden);
@@ -1068,9 +1689,6 @@ export function VideoPlayer({
       if (video) {
         // Remover atributos que possam impedir o carregamento/reprodução normal
         video.removeAttribute("data-prevent-load");
-        userPausedRef.current = false;
-        preventLoadRef.current = false;
-        video.removeAttribute("data-user-paused");
         video.removeAttribute("data-reloading");
         
         // Garantir que o som esteja ativo conforme as configurações
@@ -1093,16 +1711,13 @@ export function VideoPlayer({
     }
   };
 
+  // Clique no vídeo - ULTRA-SIMPLIFICADO
   const handleVideoClick = () => {
-    if (allowDetails) {
-      setShowDialog(true);
-    }
+    console.log('🖱️ [CLICK] Clique no vídeo detectado');
+    togglePlay();
   };
 
-  const goToInstructions = () => {
-    setShowDialog(false);
-    navigate('/instructions');
-  };
+
   
   const reloadVideo = () => {
     const video = videoRef.current;
@@ -1189,6 +1804,107 @@ export function VideoPlayer({
       }
     }
   }, [src, autoPlay, showingAfterHidden]);
+
+  // Adicionar um atributo personalizado para rastrear quando o vídeo foi mostrado após oculto
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    // Adicionar um atributo personalizado para rastrear quando o vídeo foi mostrado após oculto
+    if (showingAfterHidden) {
+      video.setAttribute("data-shown-after-hidden", "true");
+      // Garantir que o indicador de carregamento não seja mostrado
+      setIsLoading(false);
+    }
+
+    // Limpar o atributo após um período
+    const cleanupTimer = setTimeout(() => {
+      if (video && !userPausedRef.current && !preventLoadRef.current) {
+        video.removeAttribute("data-shown-after-hidden");
+      }
+    }, 5000);
+
+    return () => {
+      clearTimeout(cleanupTimer);
+    };
+  }, [showingAfterHidden]);
+
+  // Novo useEffect para lidar com visibilidade da página
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    // Função para salvar o estado do vídeo quando o usuário sai da página
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        // Página está invisível - salvar estado atual
+        const isPaused = video.paused;
+        const currentPosition = video.currentTime;
+        
+        // Salvar a posição atual para restaurar quando voltar
+        lastVisibleTimeRef.current = currentPosition;
+        
+        // Salvar no localStorage para persistência entre navegações
+        localStorage.setItem(`video-last-position-${videoKey}`, currentPosition.toString());
+        localStorage.setItem(`video-was-playing-${videoKey}`, (!isPaused).toString());
+        
+        console.log(`Página ficou invisível. Vídeo ${videoKey} estava ${isPaused ? 'pausado' : 'reproduzindo'} na posição ${currentPosition}`);
+        
+        // Se o vídeo estava reproduzindo, pausar para economizar recursos
+        if (!isPaused && !isDashboardVideo) {
+          video.pause();
+        }
+      } else {
+        // Página está visível novamente - restaurar estado
+        const wasPlaying = localStorage.getItem(`video-was-playing-${videoKey}`) === 'true';
+        const lastPosition = localStorage.getItem(`video-last-position-${videoKey}`);
+        const userPaused = localStorage.getItem(`video-paused-${videoKey}`) === 'true';
+        
+        // Se o usuário pausou manualmente, não restaurar reprodução
+        if (userPaused || userPausedRef.current || video.hasAttribute("data-user-paused")) {
+          console.log(`Página visível novamente. Vídeo ${videoKey} permanece pausado por ação do usuário`);
+          return;
+        }
+        
+        // Restaurar posição se disponível
+        if (lastPosition) {
+          const position = parseFloat(lastPosition);
+          if (!isNaN(position) && isFinite(position)) {
+            video.currentTime = position;
+            setCurrentTime(position);
+            console.log(`Restaurando vídeo ${videoKey} para posição ${position}`);
+          }
+        }
+        
+        // Restaurar estado de reprodução se estava reproduzindo antes
+        if (wasPlaying && !userPaused) {
+          console.log(`Restaurando reprodução do vídeo ${videoKey}`);
+          attemptPlayVideo(video);
+        }
+      }
+    };
+
+    // Registrar o evento de visibilidade
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    
+    // Verificar se há uma posição salva ao montar o componente
+    const lastPosition = localStorage.getItem(`video-last-position-${videoKey}`);
+    const userPaused = localStorage.getItem(`video-paused-${videoKey}`) === 'true';
+    
+    if (lastPosition && !userPaused && !userPausedRef.current) {
+      const position = parseFloat(lastPosition);
+      if (!isNaN(position) && isFinite(position)) {
+        video.currentTime = position;
+        setCurrentTime(position);
+        console.log(`Restaurando vídeo ${videoKey} para última posição conhecida: ${position}`);
+      }
+    }
+
+    // Limpar evento ao desmontar
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [videoKey, isDashboardVideo]);
 
   // Se o vídeo estiver oculto, mostrar apenas um botão para revelar
   if (isHidden && canHide) {
@@ -1305,12 +2021,20 @@ export function VideoPlayer({
           <div 
             ref={playerRef}
             className="relative w-full overflow-hidden bg-black/90 rounded-lg flex-1"
+            onMouseMove={handleMouseMove}
+            onMouseEnter={handleMouseEnter}
+            onMouseLeave={handleMouseLeave}
           >
             <div 
               className="relative w-full h-full cursor-pointer" 
               onClick={handleVideoClick}
             >
-              {isLoading && !videoRef.current?.hasAttribute("data-reloading") && !userPausedRef.current && !preventLoadRef.current && !isHidden && !showingAfterHidden && (
+              {isLoading && !videoRef.current?.hasAttribute("data-reloading") && 
+                !userPausedRef.current && !preventLoadRef.current && 
+                !isHidden && !showingAfterHidden && 
+                !videoRef.current?.hasAttribute("data-user-paused") && 
+                !videoRef.current?.hasAttribute("data-shown-after-hidden") && 
+                videoKey !== "video.main" && (
                 <div className="absolute inset-0 flex items-center justify-center bg-black/50 z-10">
                   <div className="flex flex-col items-center">
                     <RefreshCw className="h-8 w-8 text-white animate-spin mb-2" />
@@ -1360,6 +2084,100 @@ export function VideoPlayer({
                 onPlay={() => setIsPlaying(true)}
                 onPause={() => setIsPlaying(false)}
               />
+              
+              {/* Controles avançados overlay para dashboard */}
+              <div className={`absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 via-black/50 to-transparent transition-opacity duration-300 ${showControls ? 'opacity-100' : 'opacity-0'}`}>
+                {/* Barra de progresso avançada */}
+                <div className="px-4 pt-6 pb-3">
+                  {/* Área de hover expandida (invisível) */}
+                  <div 
+                    className="relative py-4 cursor-pointer"
+                    onMouseDown={handleProgressMouseDown}
+                    onMouseMove={handleProgressMouseMove}
+                    onMouseLeave={handleProgressMouseLeave}
+                    onMouseUp={handleProgressMouseUp}
+                  >
+                    {/* Barra visual */}
+                    <div 
+                      ref={progressBarRef}
+                      className="relative h-2 bg-white/20 rounded-full group hover:h-3 transition-all duration-200"
+                    >
+                    {/* Barra de progresso preenchida */}
+                    <div 
+                      className="absolute left-0 top-0 h-full bg-gradient-to-r from-white to-white/90 rounded-full transition-all duration-150"
+                      style={{ width: duration > 0 ? `${(currentTime / duration) * 100}%` : '0%' }}
+                    />
+                    
+                    {/* Thumb da barra de progresso */}
+                    <div 
+                      className="absolute top-1/2 -translate-y-1/2 w-4 h-4 bg-white rounded-full shadow-lg opacity-0 group-hover:opacity-100 transition-all duration-200 -ml-2"
+                      style={{ left: duration > 0 ? `${(currentTime / duration) * 100}%` : '0%' }}
+                    />
+                    
+                      {/* Preview do tempo e thumbnail ao passar o mouse */}
+                      {showProgressPreview && (
+                        <div 
+                          className="absolute bottom-full mb-6 bg-black/90 backdrop-blur-sm text-white text-xs rounded-lg overflow-hidden shadow-xl border border-white/10 transform -translate-x-1/2"
+                          style={{ left: `${progressPreviewPosition}px` }}
+                        >
+                          {/* Thumbnail do vídeo */}
+                          {previewThumbnail && (
+                            <div className="w-40 h-24 overflow-hidden">
+                              <img 
+                                src={previewThumbnail} 
+                                alt="Preview do vídeo"
+                                className="w-full h-full object-cover"
+                              />
+                            </div>
+                          )}
+                          {/* Tempo */}
+                          <div className="px-3 py-2 text-center font-mono">
+                            {formatTime(progressPreviewTime)}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  
+                  {/* Controles inferiores */}
+                  <div className="flex items-center justify-between mt-2">
+                    <div className="flex items-center gap-3">
+                      {/* Botões de controle de tempo */}
+                      <button
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          skipTime(-10);
+                        }}
+                        className="p-1.5 rounded-full bg-white/10 hover:bg-white/20 transition-colors"
+                        aria-label="Retroceder 10 segundos"
+                      >
+                        <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 24 24">
+                          <path d="M12.5,3C17.15,3 21.08,6.03 22.47,10.22L20.1,11C19.05,7.81 16.04,5.5 12.5,5.5C10.54,5.5 8.77,6.22 7.38,7.38L10,10H3V3L5.6,5.6C7.45,4 9.85,3 12.5,3M10,12V22H8V14H6V12H10M18,14V20C18,21.11 17.11,22 16,22H14A2,2 0 0,1 12,20V14A2,2 0 0,1 14,12H16C17.11,12 18,12.9 18,14M14,14V20H16V14H14Z"/>
+                        </svg>
+                      </button>
+                      
+                      <button
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          skipTime(10);
+                        }}
+                        className="p-1.5 rounded-full bg-white/10 hover:bg-white/20 transition-colors"
+                        aria-label="Avançar 10 segundos"
+                      >
+                        <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 24 24">
+                          <path d="M10,12V22H8V14H6V12H10M18,14V20C18,21.11 17.11,22 16,22H14A2,2 0 0,1 12,20V14A2,2 0 0,1 14,12H16C17.11,12 18,12.9 18,14M14,14V20H16V14H14M11.5,3C14.15,3 16.55,4 18.4,5.6L21,3V10H14L16.62,7.38C15.23,6.22 13.46,5.5 11.5,5.5C7.96,5.5 4.95,7.81 3.9,11L1.53,10.22C2.92,6.03 6.85,3 11.5,3Z"/>
+                        </svg>
+                      </button>
+                      
+                      <span className="text-xs text-white/70 font-mono">
+                        {formatTime(currentTime)} / {formatTime(duration)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
           
@@ -1389,32 +2207,7 @@ export function VideoPlayer({
           </div>
         </div>
         
-        {/* Diálogo para confirmação de ir para página de instruções */}
-        <Dialog open={showDialog} onOpenChange={setShowDialog}>
-          <DialogContent className="bg-black/90 border border-white/10 text-white">
-            <DialogHeader>
-              <DialogTitle>Ver vídeo em detalhes?</DialogTitle>
-              <DialogDescription className="text-white/70">
-                Gostaria de ver o vídeo com mais detalhes na seção de instruções?
-              </DialogDescription>
-            </DialogHeader>
-            <DialogFooter>
-              <Button 
-                variant="outline" 
-                onClick={() => setShowDialog(false)}
-                className="border-white/10 bg-black/40 hover:bg-white/10"
-              >
-                Não
-              </Button>
-              <Button 
-                onClick={goToInstructions}
-                className="bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700"
-              >
-                Sim, ver detalhes
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+        
       </>
     );
   }
@@ -1426,12 +2219,20 @@ export function VideoPlayer({
       <div 
         ref={playerRef}
         className={`relative ${size === "small" ? "w-full max-w-md mx-auto h-40" : "w-full"} overflow-hidden bg-black/90 rounded-lg ${className}`}
+        onMouseMove={handleMouseMove}
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={handleMouseLeave}
       >
         <div 
           className="relative w-full h-full cursor-pointer" 
           onClick={handleVideoClick}
         >
-          {isLoading && !videoRef.current?.hasAttribute("data-reloading") && !userPausedRef.current && !preventLoadRef.current && !isHidden && !showingAfterHidden && (
+          {isLoading && !videoRef.current?.hasAttribute("data-reloading") && 
+            !userPausedRef.current && !preventLoadRef.current && 
+            !isHidden && !showingAfterHidden && 
+            !videoRef.current?.hasAttribute("data-user-paused") && 
+            !videoRef.current?.hasAttribute("data-shown-after-hidden") && 
+            videoKey !== "video.main" && (
             <div className="absolute inset-0 flex items-center justify-center bg-black/50 z-10">
               <div className="flex flex-col items-center">
                 <RefreshCw className="h-8 w-8 text-white animate-spin mb-2" />
@@ -1473,41 +2274,172 @@ export function VideoPlayer({
         </div>
         
         {controls && (
-          <div className="absolute bottom-0 left-0 right-0 p-2 bg-gradient-to-t from-black/80 to-transparent z-20">
-            <div className="flex flex-col gap-2">
-              <input
-                type="range"
-                min={0}
-                max={duration || 100}
-                value={currentTime}
-                onChange={handleSeek}
-                className="w-full h-1 bg-white/20 rounded-full outline-none appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:rounded-full"
-              />
+          <div className={`absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 via-black/60 to-transparent z-20 transition-opacity duration-300 ${showControls ? 'opacity-100' : 'opacity-0'}`}>
+            <div className="p-4 space-y-3">
+              {/* Barra de progresso avançada */}
+              <div className="space-y-2">
+                {/* Área de hover expandida (invisível) */}
+                <div 
+                  className="relative py-4 cursor-pointer"
+                  onMouseDown={handleProgressMouseDown}
+                  onMouseMove={handleProgressMouseMove}
+                  onMouseLeave={handleProgressMouseLeave}
+                  onMouseUp={handleProgressMouseUp}
+                >
+                  {/* Barra visual */}
+                  <div 
+                    ref={progressBarRef}
+                    className="relative h-2 bg-white/20 rounded-full group hover:h-3 transition-all duration-200"
+                  >
+                  {/* Barra de progresso preenchida */}
+                  <div 
+                    className="absolute left-0 top-0 h-full bg-gradient-to-r from-white to-white/90 rounded-full transition-all duration-150"
+                    style={{ width: duration > 0 ? `${(currentTime / duration) * 100}%` : '0%' }}
+                  />
+                  
+                  {/* Thumb da barra de progresso */}
+                  <div 
+                    className="absolute top-1/2 -translate-y-1/2 w-4 h-4 bg-white rounded-full shadow-lg opacity-0 group-hover:opacity-100 transition-all duration-200 -ml-2 border-2 border-black/20"
+                    style={{ left: duration > 0 ? `${(currentTime / duration) * 100}%` : '0%' }}
+                  />
+                  
+                    {/* Preview do tempo e thumbnail ao passar o mouse */}
+                    {showProgressPreview && (
+                      <div 
+                        className="absolute bottom-full mb-6 bg-black/90 backdrop-blur-sm text-white text-sm rounded-lg overflow-hidden shadow-xl border border-white/10 transform -translate-x-1/2"
+                        style={{ left: `${progressPreviewPosition}px` }}
+                      >
+                        {/* Thumbnail do vídeo */}
+                        {previewThumbnail && (
+                          <div className="w-40 h-24 overflow-hidden">
+                            <img 
+                              src={previewThumbnail} 
+                              alt="Preview do vídeo"
+                              className="w-full h-full object-cover"
+                            />
+                          </div>
+                        )}
+                        {/* Tempo */}
+                        <div className="px-3 py-2 text-center font-mono">
+                          {formatTime(progressPreviewTime)}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+                
+                {/* Marcadores de tempo (opcional - para vídeos longos) */}
+                {duration > 300 && ( // Só mostra se o vídeo for maior que 5 minutos
+                  <div className="flex justify-between text-xs text-white/40">
+                    {Array.from({ length: Math.min(6, Math.floor(duration / 60)) }, (_, i) => {
+                      const minute = (i + 1) * Math.floor(duration / Math.min(5, Math.floor(duration / 60)));
+                      return (
+                        <span 
+                          key={i} 
+                          className="cursor-pointer hover:text-white/60" 
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            jumpToTime(minute);
+                          }}
+                        >
+                          {Math.floor(minute / 60)}:{String(Math.floor(minute % 60)).padStart(2, '0')}
+                        </span>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
               
+              {/* Controles principais */}
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-3">
+                  {/* Controles de tempo avançados */}
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        skipTime(-30);
+                      }}
+                      className="p-2 rounded-full bg-white/10 hover:bg-white/20 transition-colors group"
+                      aria-label="Retroceder 30 segundos"
+                    >
+                      <svg className="w-5 h-5 text-white group-hover:scale-110 transition-transform" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M12.5,3C17.15,3 21.08,6.03 22.47,10.22L20.1,11C19.05,7.81 16.04,5.5 12.5,5.5C10.54,5.5 8.77,6.22 7.38,7.38L10,10H3V3L5.6,5.6C7.45,4 9.85,3 12.5,3M10,12V22H8V14H6V12H10M18,14V20C18,21.11 17.11,22 16,22H14A2,2 0 0,1 12,20V14A2,2 0 0,1 14,12H16C17.11,12 18,12.9 18,14M14,14V20H16V14H14Z"/>
+                      </svg>
+                    </button>
+                    
+                    <button
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        skipTime(-10);
+                      }}
+                      className="p-1.5 rounded-full bg-white/10 hover:bg-white/20 transition-colors group"
+                      aria-label="Retroceder 10 segundos"
+                    >
+                      <svg className="w-4 h-4 text-white group-hover:scale-110 transition-transform" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M12.5,3C17.15,3 21.08,6.03 22.47,10.22L20.1,11C19.05,7.81 16.04,5.5 12.5,5.5C10.54,5.5 8.77,6.22 7.38,7.38L10,10H3V3L5.6,5.6C7.45,4 9.85,3 12.5,3M10,12V22H8V14H6V12H10M18,14V20C18,21.11 17.11,22 16,22H14A2,2 0 0,1 12,20V14A2,2 0 0,1 14,12H16C17.11,12 18,12.9 18,14M14,14V20H16V14H14Z"/>
+                      </svg>
+                    </button>
+                  </div>
+                  
+                  {/* Play/Pause */}
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
                       togglePlay(e);
                     }}
-                    className="p-1.5 rounded-full bg-white/10 hover:bg-white/20 transition-colors"
+                    className="p-3 rounded-full bg-white/15 hover:bg-white/25 transition-all duration-200 group hover:scale-110"
                     aria-label={isPlaying ? "Pausar" : "Reproduzir"}
                   >
                     {isPlaying ? (
-                      <Pause className="w-4 h-4 text-white" />
+                      <Pause className="w-5 h-5 text-white" />
                     ) : (
-                      <Play className="w-4 h-4 text-white" />
+                      <Play className="w-5 h-5 text-white ml-0.5" />
                     )}
                   </button>
                   
+                  {/* Controles de tempo avançados - direita */}
                   <div className="flex items-center gap-1">
+                    <button
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        skipTime(10);
+                      }}
+                      className="p-1.5 rounded-full bg-white/10 hover:bg-white/20 transition-colors group"
+                      aria-label="Avançar 10 segundos"
+                    >
+                      <svg className="w-4 h-4 text-white group-hover:scale-110 transition-transform" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M10,12V22H8V14H6V12H10M18,14V20C18,21.11 17.11,22 16,22H14A2,2 0 0,1 12,20V14A2,2 0 0,1 14,12H16C17.11,12 18,12.9 18,14M14,14V20H16V14H14M11.5,3C14.15,3 16.55,4 18.4,5.6L21,3V10H14L16.62,7.38C15.23,6.22 13.46,5.5 11.5,5.5C7.96,5.5 4.95,7.81 3.9,11L1.53,10.22C2.92,6.03 6.85,3 11.5,3Z"/>
+                      </svg>
+                    </button>
+                    
+                    <button
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        skipTime(30);
+                      }}
+                      className="p-2 rounded-full bg-white/10 hover:bg-white/20 transition-colors group"
+                      aria-label="Avançar 30 segundos"
+                    >
+                      <svg className="w-5 h-5 text-white group-hover:scale-110 transition-transform" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M10,12V22H8V14H6V12H10M18,14V20C18,21.11 17.11,22 16,22H14A2,2 0 0,1 12,20V14A2,2 0 0,1 14,12H16C17.11,12 18,12.9 18,14M14,14V20H16V14H14M11.5,3C14.15,3 16.55,4 18.4,5.6L21,3V10H14L16.62,7.38C15.23,6.22 13.46,5.5 11.5,5.5C7.96,5.5 4.95,7.81 3.9,11L1.53,10.22C2.92,6.03 6.85,3 11.5,3Z"/>
+                      </svg>
+                    </button>
+                  </div>
+                  
+                  {/* Volume */}
+                  <div className="flex items-center gap-2">
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
                         toggleVolumeBar(e);
                       }}
-                      className="p-1.5 rounded-full bg-white/10 hover:bg-white/20 transition-colors"
+                      className="p-2 rounded-full bg-white/10 hover:bg-white/20 transition-colors"
                       aria-label={isMuted ? "Ativar som" : "Ajustar volume"}
                     >
                       {isMuted ? (
@@ -1520,13 +2452,14 @@ export function VideoPlayer({
                     </button>
                     
                     {!isMuted && (
-                      <>
+                      <div className="flex items-center gap-1">
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
                             changeVolume(-10);
                           }}
                           className="p-1 rounded-full bg-white/10 hover:bg-white/20 transition-colors"
+                          aria-label="Diminuir volume"
                         >
                           <Minus className="w-3 h-3 text-white" />
                         </button>
@@ -1536,31 +2469,36 @@ export function VideoPlayer({
                             changeVolume(10);
                           }}
                           className="p-1 rounded-full bg-white/10 hover:bg-white/20 transition-colors"
+                          aria-label="Aumentar volume"
                         >
                           <Plus className="w-3 h-3 text-white" />
                         </button>
-                      </>
+                      </div>
                     )}
                   </div>
                   
-                  <span className="text-xs text-white/70">
+                  {/* Tempo */}
+                  <div className="bg-black/40 px-3 py-1 rounded-md">
+                    <span className="text-sm text-white/90 font-mono">
                     {formatTime(currentTime)} / {formatTime(duration)}
                   </span>
+                  </div>
                 </div>
                 
+                {/* Controles do lado direito */}
                 <div className="flex items-center gap-2">
                   <button
                     onClick={reloadVideo}
-                    className="p-1.5 rounded-full bg-white/10 hover:bg-white/20 transition-colors"
+                    className="p-2 rounded-full bg-white/10 hover:bg-white/20 transition-colors group"
                     aria-label="Recarregar vídeo"
                   >
-                    <RefreshCw className="w-4 h-4 text-white" />
+                    <RefreshCw className="w-4 h-4 text-white group-hover:rotate-180 transition-transform duration-500" />
                   </button>
                   
                   {canHide && (
                     <button
                       onClick={toggleHideVideo}
-                      className="p-1.5 rounded-full bg-white/10 hover:bg-white/20 transition-colors"
+                      className="p-2 rounded-full bg-white/10 hover:bg-white/20 transition-colors"
                       aria-label="Ocultar vídeo"
                     >
                       <EyeOff className="w-4 h-4 text-white" />
@@ -1569,13 +2507,13 @@ export function VideoPlayer({
                   
                   <button
                     onClick={toggleFullScreen}
-                    className="p-1.5 rounded-full bg-white/10 hover:bg-white/20 transition-colors"
+                    className="p-2 rounded-full bg-white/10 hover:bg-white/20 transition-colors group"
                     aria-label={isFullScreen ? "Sair da tela cheia" : "Entrar em tela cheia"}
                   >
                     {isFullScreen ? (
-                      <Minimize className="w-4 h-4 text-white" />
+                      <Minimize className="w-4 h-4 text-white group-hover:scale-90 transition-transform" />
                     ) : (
-                      <Maximize className="w-4 h-4 text-white" />
+                      <Maximize className="w-4 h-4 text-white group-hover:scale-110 transition-transform" />
                     )}
                   </button>
                 </div>
@@ -1585,32 +2523,7 @@ export function VideoPlayer({
         )}
       </div>
       
-      {/* Diálogo para confirmação de ir para página de instruções */}
-      <Dialog open={showDialog} onOpenChange={setShowDialog}>
-        <DialogContent className="bg-black/90 border border-white/10 text-white">
-          <DialogHeader>
-            <DialogTitle>Ver vídeo em detalhes?</DialogTitle>
-            <DialogDescription className="text-white/70">
-              Gostaria de ver o vídeo com mais detalhes na seção de instruções?
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button 
-              variant="outline" 
-              onClick={() => setShowDialog(false)}
-              className="border-white/10 bg-black/40 hover:bg-white/10"
-            >
-              Não
-            </Button>
-            <Button 
-              onClick={goToInstructions}
-              className="bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700"
-            >
-              Sim, ver detalhes
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+
     </>
   );
-} 
+}

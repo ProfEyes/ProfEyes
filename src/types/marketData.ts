@@ -24,4 +24,23 @@ export interface ProcessedHistoricalData {
   lows: number[];
   volumes: number[];
   timestamps: string[];
+}
+
+export interface TradingSignal {
+  id: string;
+  symbol: string;
+  signal: 'BUY' | 'SELL';
+  type: 'TECHNICAL' | string;
+  strength: 'STRONG' | string;
+  timestamp: number;
+  price: number;
+  entry_price: number;
+  stop_loss: number;
+  target_price: number;
+  success_rate: number;
+  timeframe: string;
+  expiry: string;
+  risk_reward: string;
+  status: 'active' | string;
+  entry_time?: string;
 } 

@@ -75,7 +75,7 @@ export async function getMarketStackHistorical(symbol: string, dateFrom?: string
       return [];
     }
 
-    return data.data.map((item: any) => ({
+    return data.data.map((item: Record<string, unknown>) => ({
       date: new Date(item.date).getTime(),
       open: item.open,
       high: item.high,
@@ -115,7 +115,7 @@ export async function getMarketStackIntraday(symbol: string, interval: string = 
       return [];
     }
 
-    return data.data.map((item: any) => ({
+    return data.data.map((item: Record<string, unknown>) => ({
       date: new Date(item.date).getTime(),
       open: item.open,
       high: item.high,

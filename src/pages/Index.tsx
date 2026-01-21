@@ -4,10 +4,10 @@ import { Button } from "@/components/ui/button";
 import { BellRing, RefreshCw, PlayCircle } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import DashboardCard from "@/components/dashboard/DashboardCard";
-import SignalsCard from "@/components/dashboard/SignalsCard";
+import { default as SignalsCard } from "@/components/dashboard/SignalsCard";
 import { NewsCard } from "@/components/dashboard/NewsCard";
 import { fetchMarketData } from "@/services";
-import { monitorSignals } from "@/services/tradingSignals";
+// import { monitorSignals } from "@/services/tradingSignals"; // Removido - arquivo não existe mais
 import { toast } from "sonner";
 import { getLatestPrices } from "@/services/getSimulatedPrices";
 import { NotificationButton } from "@/components/ui/notification-button";
@@ -16,6 +16,8 @@ import { useNavigate } from "react-router-dom";
 import { VideoPlayer } from "@/components/ui/video-player";
 import { Card } from "@/components/ui/card";
 import { useLanguage } from "@/contexts/LanguageContext";
+// Importar o serviço de links do trader
+import { traderLinkService } from "@/services/traderLinkService";
 
 // Lista de estatísticas do desempenho do trader
 const DASHBOARD_STATS = [
@@ -46,6 +48,38 @@ const Index = () => {
   // Estado para controlar a animação de atualização
   const [isRefreshing, setIsRefreshing] = useState(false);
   
+  // Estado para o link do trader - MOVIDO PARA O INÍCIO DO COMPONENTE
+  const [traderLink, setTraderLink] = useState<string>('');
+  
+  // Função para abrir o link do trader - MOVIDA PARA O INÍCIO DO COMPONENTE
+  const openTraderLink = useCallback(() => {
+    if (!traderLink) {
+      console.warn('⚠️ Index - Tentativa de abrir link do trader, mas o link ainda não foi carregado');
+      // Fallback para o link padrão caso o traderLink ainda não tenha sido carregado
+      window.open('https://trade.avalonbroker.io/register?aff=385853&aff_model=revenue&afftrack=mesnagensfree', '_blank');
+      return;
+    }
+    console.log('🔗 Index - Abrindo link do trader:', traderLink);
+    window.open(traderLink, '_blank');
+  }, [traderLink]);
+  
+  // Carregar o link do trader no início
+  useEffect(() => {
+    const loadTraderLink = async () => {
+      try {
+        const link = await traderLinkService.getCurrentTraderLink();
+        console.log('📌 Index - Link do trader carregado:', link);
+        setTraderLink(link);
+      } catch (error) {
+        console.error('❌ Index - Erro ao carregar link do trader:', error);
+        // Em caso de erro, manter o link padrão
+        setTraderLink('https://trade.avalonbroker.io/register?aff=385853&aff_model=revenue&afftrack=mesnagensfree');
+      }
+    };
+    
+    loadTraderLink();
+  }, []);
+  
   // Consulta para obter dados iniciais e atualizações periódicas de outros dados
   const { data: marketData, isLoading, error, refetch } = useQuery({
     queryKey: ['marketData'],
@@ -66,35 +100,12 @@ const Index = () => {
   // Adicionar monitoramento automático de sinais
   const [monitoringActive, setMonitoringActive] = useState(false);
   
-  // Função para monitorar sinais
+  // Função para monitorar sinais - DESATIVADA (arquivo tradingSignals removido)
   const checkSignals = async () => {
     try {
-      const result = await monitorSignals();
-      
-      // Verificar se algum sinal foi atualizado ou substituído
-      if (result.updated.length > 0) {
-        console.log(`${result.updated.length} sinais monitorados.`);
-        
-        // Verificar sinais que foram concluídos ou cancelados
-        const completedSignals = result.updated.filter(
-          signal => signal.status === 'CONCLUÍDO' || signal.status === 'CANCELADO'
-        );
-        
-        if (completedSignals.length > 0) {
-          toast.info(`${completedSignals.length} sinais atingiram alvo ou stop.`);
-        }
-      }
-      
-      // Verificar se algum sinal foi substituído
-      if (result.replaced.length > 0) {
-        toast.success(`${result.replaced.length} novos sinais gerados para substituir os sinais concluídos.`, {
-          duration: 5000,
-        });
-      }
-      
-      // Não reiniciar a busca de sinais para não atualizar a interface
-      // Manter os sinais existentes
-      
+      // const result = await monitorSignals();
+      // Funcionalidade desativada - arquivo tradingSignals.ts foi removido
+      console.log('Monitoramento de sinais desativado');
     } catch (error) {
       console.error('Erro ao monitorar sinais:', error);
     }
@@ -130,8 +141,8 @@ const Index = () => {
     return cleanup;
   }, []);
 
-  // Função para buscar preços em tempo real
-  const fetchRealTimePrices = async () => {
+  // Função para buscar preços em tempo real (memoizada para manter identidade estável)
+  const fetchRealTimePrices = useCallback(async () => {
     try {
       // Verificar se temos preços em cache para exibir imediatamente
       const cachedPrices = localStorage.getItem('cached-crypto-prices');
@@ -159,7 +170,7 @@ const Index = () => {
       // Gerar dados estáticos para cada estatística
       DASHBOARD_STATS.forEach(symbol => {
         let change = "";
-        let changePercent = "";
+        const changePercent = "";
         
         switch(symbol) {
           case 'SINAIS_TOTAL':
@@ -197,11 +208,15 @@ const Index = () => {
       });
       
       // Criar um novo objeto diretamente em vez de copiar o anterior
-      const updated: Record<string, any> = {};
+      const updated: Record<string, { price: string; change: string; changePercent: string }> = {};
       
       // Processar todos os dados de uma vez
       prices.forEach(item => {
-        const symbol = item.symbol;
+        if (!item || typeof item !== 'object') return;
+        
+        const symbol = item.symbol || '';
+        if (!symbol) return; // Pular itens sem símbolo
+        
         let price = "";
         
         // Formatar valores para cada tipo de estatística
@@ -231,7 +246,7 @@ const Index = () => {
             price = "45";
             break;
           default:
-            price = item.price;
+            price = item.price || "0";
         }
         
         // Obter dados de variação das estatísticas personalizadas
@@ -240,14 +255,14 @@ const Index = () => {
         let changePercent = "";
         
         if (stats) {
-          change = stats.priceChange;
-          changePercent = stats.priceChangePercent;
+          change = stats.priceChange || "";
+          changePercent = stats.priceChangePercent || "";
         }
         
         updated[symbol] = {
-          price: price,
-          change,
-          changePercent
+          price: price || "0",
+          change: change || "0",
+          changePercent: changePercent || "0%"
         };
       });
       
@@ -272,26 +287,29 @@ const Index = () => {
         }
       }
     }
-  };
+  }, []);
 
   // Efeito para configurar atualizações em tempo real
   useEffect(() => {
     // Buscar preços iniciais e configurar atualizações periódicas
     fetchRealTimePrices();
-    
-    // Configurar intervalo para atualização a cada 0,1 segundos com dados reais
+
+    // Configurar intervalo para atualização (1s) - mantemos a função memoizada
     const interval = setInterval(() => {
       fetchRealTimePrices();
-    }, 100);
-    
+    }, 1000);
+
     // Busca dados iniciais de variação
     refetch();
-    
+
     // Limpar na desmontagem do componente
     return () => {
       clearInterval(interval);
     };
-  }, [refetch]);
+    // Intencionalmente deixamos dependências vazias para evitar recriar o intervalo
+    // e rely on memoized fetchRealTimePrices. `refetch` do react-query é estável,
+    // mas se seu lint reclamar, podemos colocá-lo em uma ref.
+  }, []);
   
   // Efeito para atualizar dados de variação quando marketData for atualizado
   useEffect(() => {
@@ -303,14 +321,14 @@ const Index = () => {
           if (updated[item.symbol]) {
             // Manter o preço em tempo real, mas atualizar dados de variação
             // Converter valores numéricos para string
-            updated[item.symbol].change = item.change.toString();
-            updated[item.symbol].changePercent = `${item.change}%`;
+            updated[item.symbol].change = item.change != null ? item.change.toString() : '0';
+            updated[item.symbol].changePercent = item.change != null ? `${item.change}%` : '0%';
           } else {
             // Adicionar item completo se não existir
             updated[item.symbol] = {
-              price: `$${item.price.toString()}`,
-              change: item.change.toString(),
-              changePercent: `${item.change}%`
+              price: `$${item.price != null ? item.price.toString() : '0'}`,
+              change: item.change != null ? item.change.toString() : '0',
+              changePercent: item.change != null ? `${item.change}%` : '0%'
             };
           }
         });
@@ -352,6 +370,62 @@ const Index = () => {
           }
         });
       },
+      onUpcomingSignal: (signal) => {
+        // Notificar sobre sinais prestes a entrar (5 minutos antes)
+        // Criar dois toasts diferentes para ter dois botões distintos
+        toast.info("⏰ ATENÇÃO: Sinal em 5 minutos!", {
+          description: `Prepare-se para o sinal de ${signal.signal === 'BUY' ? 'COMPRA' : 'VENDA'} para ${signal.pair || signal.symbol}
+          \nPreço de entrada: ${signal.entry_price || 'N/A'}
+          \nConfidência: ${signal.success_rate ? (signal.success_rate * 100).toFixed(1) + '%' : 'N/A'}`,
+          action: {
+            label: "Abrir Corretora", 
+            onClick: () => openTraderLink()
+          },
+          duration: 15000, // 15 segundos
+        });
+        
+        // Segundo toast para o botão "Ver Sinais"
+        toast.info("⏰ Ver detalhes do sinal", {
+          description: `Clique para ver todos os detalhes do sinal para ${signal.pair || signal.symbol}`,
+          action: {
+            label: "Ver Sinais",
+            onClick: () => navigate('/signals')
+          },
+          duration: 15000, // 15 segundos
+        });
+        
+        // Habilitar notificações para este sinal
+        notificationService.setEnabled(true);
+      },
+      onSignalResult: (signal, result) => {
+        // Notificação de resultado de sinal (após 10 minutos da entrada)
+        if (result === 'success') {
+          // Notificação de GANHO
+          toast.success(`🎯 GANHO: ${signal.pair || signal.symbol}!`, {
+            description: `Sua operação de ${signal.signal === 'BUY' ? 'COMPRA' : 'VENDA'} resultou em ganho!
+            \nParabéns pelo resultado! Continue operando.`,
+            action: {
+              label: "Nova Operação",
+              onClick: () => navigate('/signals')
+            },
+            duration: 20000, // 20 segundos
+          });
+        } else {
+          // Notificação de PERDA
+          toast.error(`❌ PERDA: ${signal.pair || signal.symbol}`, {
+            description: `Sua operação de ${signal.signal === 'BUY' ? 'COMPRA' : 'VENDA'} resultou em perda.
+            \nO próximo sinal pode ser vencedor! Continue operando.`,
+            action: {
+              label: "Tentar Novamente",
+              onClick: () => navigate('/signals')
+            },
+            duration: 20000, // 20 segundos
+          });
+        }
+        
+        // Atualizar interface
+        queryClient.invalidateQueries({ queryKey: ['dashboardSignals'] });
+      },
       onMarketNews: (news) => {
         // Mostrar notícias importantes na interface
         toast.info("Nova Notícia do Mercado", {
@@ -363,7 +437,10 @@ const Index = () => {
         });
       }
     });
-  }, [queryClient, navigate]);
+    
+    // Habilitar o serviço de notificações
+    notificationService.setEnabled(true);
+  }, [queryClient, navigate, openTraderLink]);
 
   // Função para disparar a atualização com animação
   const handleRefresh = useCallback(() => {
@@ -474,7 +551,6 @@ const Index = () => {
             muted={true}
             loop={true}
             canHide={true}
-            allowDetails={true}
           />
         </div>
 

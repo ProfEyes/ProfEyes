@@ -1,4 +1,4 @@
-import { getAlphaVantageApiKey } from './apiKeyManager';
+import { apiKeyManager } from './apiKeyManager';
 
 interface AlphaVantageQuote {
   symbol: string;
@@ -23,7 +23,7 @@ interface TechnicalIndicator {
 
 export async function fetchStockQuote(symbol: string): Promise<AlphaVantageQuote> {
   try {
-    const apiKey = await getAlphaVantageApiKey();
+    const apiKey = await apiKeyManager.getApiKey('alphavantage');
     const response = await fetch(
       `https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${symbol}&apikey=${apiKey}`
     );
@@ -56,7 +56,7 @@ export async function fetchHistoricalData(
   interval: string = 'daily'
 ): Promise<HistoricalData[]> {
   try {
-    const apiKey = await getAlphaVantageApiKey();
+    const apiKey = await apiKeyManager.getApiKey('alphavantage');
     const function_name = interval === 'daily' ? 'TIME_SERIES_DAILY' : 'TIME_SERIES_INTRADAY';
     
     const response = await fetch(
@@ -76,13 +76,13 @@ export async function fetchHistoricalData(
     const timeSeriesKey = interval === 'daily' ? 'Time Series (Daily)' : `Time Series (${interval})`;
     const timeSeries = data[timeSeriesKey];
     
-    return Object.entries(timeSeries).map(([timestamp, values]: [string, any]) => ({
+    return Object.entries(timeSeries).map(([timestamp, values]: [string, Record<string, unknown>]) => ({
       timestamp,
-      open: parseFloat(values['1. open']),
-      high: parseFloat(values['2. high']),
-      low: parseFloat(values['3. low']),
-      close: parseFloat(values['4. close']),
-      volume: parseInt(values['5. volume'])
+      open: parseFloat(String(values['1. open'])),
+      high: parseFloat(String(values['2. high'])),
+      low: parseFloat(String(values['3. low'])),
+      close: parseFloat(String(values['4. close'])),
+      volume: parseInt(String(values['5. volume']))
     }));
   } catch (error) {
     console.error('Erro ao buscar dados históricos:', error);
@@ -96,7 +96,7 @@ export async function fetchTechnicalIndicator(
   interval: string = 'daily'
 ): Promise<TechnicalIndicator[]> {
   try {
-    const apiKey = await getAlphaVantageApiKey();
+    const apiKey = await apiKeyManager.getApiKey('alphavantage');
     
     const response = await fetch(
       `https://www.alphavantage.co/query?function=${indicator}&symbol=${symbol}&interval=${interval}&time_period=14&apikey=${apiKey}`
@@ -115,7 +115,7 @@ export async function fetchTechnicalIndicator(
     const indicatorKey = `Technical Analysis: ${indicator}`;
     const indicatorData = data[indicatorKey];
     
-    return Object.entries(indicatorData).map(([timestamp, values]: [string, any]) => ({
+    return Object.entries(indicatorData).map(([timestamp, values]: [string, Record<string, unknown>]) => ({
       timestamp,
       value: parseFloat(Object.values(values)[0] as string)
     }));
@@ -125,9 +125,9 @@ export async function fetchTechnicalIndicator(
   }
 }
 
-export async function fetchCompanyOverview(symbol: string): Promise<any> {
+export async function fetchCompanyOverview(symbol: string): Promise<Record<string, unknown>> {
   try {
-    const apiKey = await getAlphaVantageApiKey();
+    const apiKey = await apiKeyManager.getApiKey('alphavantage');
     
     const response = await fetch(
       `https://www.alphavantage.co/query?function=OVERVIEW&symbol=${symbol}&apikey=${apiKey}`

@@ -67,8 +67,8 @@ export async function getLatestPrices(symbols: string[]): Promise<Price[]> {
     return {
       symbol,
       price,
-      change: cached.basePrice * changePercent / 100,
-      changePercent
+      change: changePercent != null ? (cached.basePrice * changePercent / 100) : 0,
+      changePercent: changePercent || 0
     };
   });
 }

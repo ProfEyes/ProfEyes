@@ -25,6 +25,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Avatar } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 /**
  * Formata o tempo relativo (há quanto tempo aconteceu)
@@ -70,31 +71,30 @@ function formatFullDate(date: Date): string {
 }
 
 // Configurações de cores por tipo de notificação
-const notificationStyles: Record<string, { icon: React.ReactNode; color: string; bgColor: string }> = {
+const notificationStyles: Record<string, { icon: React.ReactNode; color: string; bgColor: string; borderColor: string }> = {
   signals: { 
     icon: <Tag size={16} />, 
-    color: 'text-blue-600 dark:text-blue-500', 
-    bgColor: 'bg-blue-100 dark:bg-blue-900/30' 
+    color: 'text-cyan-400', 
+    bgColor: 'bg-gradient-to-br from-cyan-500/10 via-blue-500/5 to-cyan-500/10',
+    borderColor: 'border-cyan-500/20'
   },
   completed: { 
     icon: <Check size={16} />, 
-    color: 'text-green-600 dark:text-green-500', 
-    bgColor: 'bg-green-100 dark:bg-green-900/30' 
+    color: 'text-green-400', 
+    bgColor: 'bg-gradient-to-br from-green-500/10 via-emerald-500/5 to-green-500/10',
+    borderColor: 'border-green-500/20'
   },
   stopped: { 
     icon: <X size={16} />, 
-    color: 'text-red-600 dark:text-red-500', 
-    bgColor: 'bg-red-100 dark:bg-red-900/30' 
+    color: 'text-red-400', 
+    bgColor: 'bg-gradient-to-br from-red-500/10 via-rose-500/5 to-red-500/10',
+    borderColor: 'border-red-500/20'
   },
   system: { 
     icon: <Bell size={16} />, 
-    color: 'text-purple-600 dark:text-purple-500', 
-    bgColor: 'bg-purple-100 dark:bg-purple-900/30' 
-  },
-  alerts: { 
-    icon: <Bell size={16} />, 
-    color: 'text-orange-600 dark:text-orange-500', 
-    bgColor: 'bg-orange-100 dark:bg-orange-900/30' 
+    color: 'text-purple-400', 
+    bgColor: 'bg-gradient-to-br from-purple-500/10 via-indigo-500/5 to-purple-500/10',
+    borderColor: 'border-purple-500/20'
   }
 };
 
@@ -113,12 +113,31 @@ const NotificationItem = ({ notification, onMarkAsRead, onRemove, onClick, compa
   
   const handleAction = () => {
     if (notification.actionLink) {
-      navigate(notification.actionLink);
+      window.open(notification.actionLink, '_blank');
     }
     if (onClick) onClick();
     if (!notification.read && onMarkAsRead) {
       onMarkAsRead(notification.id);
     }
+  };
+
+  const renderActionButton = () => {
+    if (notification.type === 'signals' && notification.actionLink) {
+      return (
+        <Button
+          variant="default"
+          size="sm"
+          className="mt-3 bg-gradient-to-r from-blue-600 via-cyan-500 to-blue-600 hover:from-blue-700 hover:via-cyan-600 hover:to-blue-700 text-white shadow-lg shadow-blue-500/20 transition-all duration-300 hover:shadow-blue-500/30 hover:scale-[1.02]"
+          onClick={(e) => {
+            e.stopPropagation();
+            window.open(notification.actionLink, '_blank');
+          }}
+        >
+          Abrir Corretora
+        </Button>
+      );
+    }
+    return null;
   };
   
   return (
@@ -128,133 +147,87 @@ const NotificationItem = ({ notification, onMarkAsRead, onRemove, onClick, compa
       exit={{ opacity: 0, x: -10 }}
       transition={{ duration: 0.2 }}
       className={cn(
-        "relative border p-4 mb-2 rounded-lg transition-all",
+        "relative border p-4 mb-3 rounded-xl transition-all duration-300 cursor-pointer group",
         notification.read 
-          ? "bg-muted/30 border-muted/50" 
-          : "bg-muted/10 border-muted shadow-sm",
-        compact ? "p-3" : "p-4"
+          ? "bg-black/40 border-zinc-800/50" 
+          : "bg-black/60 border-zinc-800 shadow-lg shadow-black/20",
+        compact ? "p-3" : "p-4",
+        notification.type === 'signals' && "bg-gradient-to-br from-black/80 via-black/70 to-black/60 backdrop-blur-sm",
+        style.borderColor,
+        "hover:shadow-xl hover:shadow-black/30 hover:scale-[1.01]"
       )}
+      onClick={handleAction}
     >
       <div className="flex items-start gap-3">
-        <div className={cn("p-2 rounded-full flex-shrink-0", style.bgColor)}>
-          <div className={style.color}>{style.icon}</div>
+        <div className={cn(
+          "p-2.5 rounded-xl transition-all duration-300",
+          style.bgColor,
+          style.color,
+          "group-hover:scale-110 group-hover:shadow-lg group-hover:shadow-current/20"
+        )}>
+          {style.icon}
         </div>
         
         <div className="flex-1 min-w-0">
-          <div className="flex items-start justify-between gap-2">
-            <h4 className={cn(
-              "font-medium line-clamp-1",
-              notification.read ? "text-muted-foreground" : "text-foreground"
-            )}>
-              {notification.title}
-            </h4>
-            
-            <div className="flex items-center gap-1 flex-shrink-0">
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <time className="text-xs text-muted-foreground">
-                {formatRelativeTime(notification.timestamp)}
-                    </time>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>{formatFullDate(notification.timestamp)}</p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-              
-              {!compact && (
-                <div className="flex gap-1 ml-2">
-                  {!notification.read && (
-                    <TooltipProvider>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Button 
-                            variant="ghost" 
-                            size="icon" 
-                            className="h-7 w-7" 
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              if (onMarkAsRead) onMarkAsRead(notification.id);
-                            }}
-                          >
-                            <Check size={14} />
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          <p>Marcar como lida</p>
-                        </TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
-                  )}
-                  
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button 
-                          variant="ghost" 
-                          size="icon" 
-                          className="h-7 w-7 text-muted-foreground hover:text-destructive" 
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            if (onRemove) onRemove(notification.id);
-                          }}
-                        >
-                          <Trash2 size={14} />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p>Remover notificação</p>
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                </div>
-              )}
-            </div>
-          </div>
+          <h4 className={cn(
+            "font-medium text-sm tracking-wide",
+            notification.type === 'signals' ? "text-white" : "text-zinc-200",
+            "group-hover:text-white transition-colors duration-300"
+          )}>
+            {notification.title}
+          </h4>
           
           <p className={cn(
-            "text-sm mt-1",
-            notification.read ? "text-muted-foreground" : "text-foreground"
+            "text-sm mt-1.5",
+            notification.type === 'signals' ? "text-zinc-300" : "text-zinc-400",
+            "group-hover:text-zinc-200 transition-colors duration-300"
           )}>
             {notification.message}
           </p>
+
+          {renderActionButton()}
           
-          {notification.data && !compact && (
-            <div className="mt-2 p-2 bg-muted/20 rounded text-xs">
-              <pre className="overflow-auto max-h-24 whitespace-pre-wrap">
-                {JSON.stringify(notification.data, null, 2)}
-              </pre>
-            </div>
-          )}
-          
-          {notification.actionLink && !compact && (
-            <div className="mt-3">
-              <Button
-                variant="secondary" 
-                size="sm"
-                className="text-xs h-7 gap-1"
-                onClick={handleAction}
-              >
-                <ChevronRight size={12} />
-                Ver mais detalhes
-              </Button>
-            </div>
-          )}
+          <div className="flex items-center gap-2 mt-2 text-xs text-zinc-500 group-hover:text-zinc-400 transition-colors duration-300">
+            <Clock size={12} className="opacity-70" />
+            <span>
+              {new Date(notification.timestamp).toLocaleTimeString()}
+            </span>
+          </div>
         </div>
+        
+        {!compact && (
+          <div className="flex items-start gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+            {!notification.read && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50 rounded-lg"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (onMarkAsRead) onMarkAsRead(notification.id);
+                }}
+              >
+                <Check size={14} />
+              </Button>
+            )}
+            
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-6 w-6 text-zinc-400 hover:text-red-400 hover:bg-zinc-800/50 rounded-lg"
+              onClick={(e) => {
+                e.stopPropagation();
+                if (onRemove) onRemove(notification.id);
+              }}
+            >
+              <X size={14} />
+            </Button>
+          </div>
+        )}
       </div>
-      
+
       {!notification.read && (
-        <span className="absolute top-4 right-4 w-2 h-2 rounded-full bg-primary" />
-      )}
-      
-      {/* Overlay para clique quando compacto */}
-      {compact && (
-        <button 
-          className="absolute inset-0 w-full h-full cursor-pointer"
-          onClick={handleAction}
-          aria-label="Ver notificação"
-        />
+        <div className="absolute top-3 right-3 w-2 h-2 rounded-full bg-gradient-to-r from-cyan-500 to-blue-500 animate-pulse" />
       )}
     </motion.div>
   );
@@ -280,23 +253,31 @@ const NotificationFilter = ({
 }: NotificationFilterProps) => {
   const { settings } = useNotifications();
   const notificationTypes = settings.types;
+  const { t } = useLanguage();
   
   return (
-    <div className="mb-4">
-      <div className="flex justify-between items-center mb-3">
-        <h3 className="text-lg font-semibold">Suas Notificações</h3>
+    <div className="mb-6">
+      <div className="flex justify-between items-center mb-4">
+        <h3 className="text-lg font-semibold text-white">
+          {t('notifications.yours')}
+        </h3>
         
         <div className="flex gap-2">
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button variant="outline" size="sm" onClick={onMarkAllAsRead}>
-                  <Check size={14} className="mr-1" />
-                  <span className="hidden sm:inline">Marcar todas</span>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={onMarkAllAsRead}
+                  className="bg-black/40 border-zinc-800 hover:bg-zinc-800/50 hover:border-zinc-700 text-zinc-300 transition-all duration-300"
+                >
+                  <Check size={14} className="mr-1.5 text-green-400" />
+                  <span className="hidden sm:inline">{t('notifications.markAll')}</span>
                 </Button>
               </TooltipTrigger>
               <TooltipContent>
-                <p>Marcar todas como lidas</p>
+                <p>{t('notifications.markAllAsRead')}</p>
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
@@ -304,13 +285,18 @@ const NotificationFilter = ({
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button variant="outline" size="sm" onClick={onClear}>
-                  <Trash2 size={14} className="mr-1" />
-                  <span className="hidden sm:inline">Limpar todas</span>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={onClear}
+                  className="bg-black/40 border-zinc-800 hover:bg-zinc-800/50 hover:border-zinc-700 text-zinc-300 transition-all duration-300"
+                >
+                  <Trash2 size={14} className="mr-1.5 text-red-400" />
+                  <span className="hidden sm:inline">{t('notifications.clearAll')}</span>
                 </Button>
               </TooltipTrigger>
               <TooltipContent>
-                <p>Remover todas as notificações</p>
+                <p>{t('notifications.removeAll')}</p>
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
@@ -320,64 +306,70 @@ const NotificationFilter = ({
               <Tooltip>
                 <TooltipTrigger asChild>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="outline" size="icon" className="h-8 w-8">
+                    <Button 
+                      variant="outline" 
+                      size="icon" 
+                      className="h-8 w-8 bg-black/40 border-zinc-800 hover:bg-zinc-800/50 hover:border-zinc-700 text-zinc-300 transition-all duration-300"
+                    >
                       <Filter size={14} />
                     </Button>
                   </DropdownMenuTrigger>
                 </TooltipTrigger>
                 <TooltipContent>
-                  <p>Filtrar notificações</p>
+                  <p>{t('notifications.filter')}</p>
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
             
-            <DropdownMenuContent align="end" className="w-52">
-              <DropdownMenuLabel>Filtrar por tipo</DropdownMenuLabel>
-              <DropdownMenuSeparator />
+            <DropdownMenuContent align="end" className="w-56 bg-black/90 border-zinc-800 backdrop-blur-sm">
+              <DropdownMenuLabel className="text-zinc-400">{t('notifications.filterByType')}</DropdownMenuLabel>
+              <DropdownMenuSeparator className="bg-zinc-800" />
               
               <DropdownMenuItem 
                 onClick={() => onSelectType('all')}
-                className={selectedType === 'all' ? 'bg-muted' : ''}
+                className={cn(
+                  "flex items-center gap-2 text-zinc-300 hover:text-white hover:bg-zinc-800/50 transition-colors duration-200",
+                  selectedType === 'all' && "bg-zinc-800/50 text-white"
+                )}
               >
-                <span className="flex items-center gap-2">
-                  <Bell size={14} />
-                  Todas
-                </span>
-                {selectedType === 'all' && <Check size={14} className="ml-auto" />}
+                <Bell size={14} className="text-cyan-400" />
+                {t('notifications.all')}
+                {selectedType === 'all' && <Check size={14} className="ml-auto text-cyan-400" />}
               </DropdownMenuItem>
               
               {notificationTypes.map(type => (
                 <DropdownMenuItem 
                   key={type.id}
                   onClick={() => onSelectType(type.id)}
-                  className={selectedType === type.id ? 'bg-muted' : ''}
+                  className={cn(
+                    "flex items-center gap-2 text-zinc-300 hover:text-white hover:bg-zinc-800/50 transition-colors duration-200",
+                    selectedType === type.id && "bg-zinc-800/50 text-white"
+                  )}
                 >
-                  <span className="flex items-center gap-2">
-                    {notificationStyles[type.id]?.icon || <Bell size={14} />}
-                    {type.name}
-                  </span>
-                  {selectedType === type.id && <Check size={14} className="ml-auto" />}
+                  {notificationStyles[type.id]?.icon || <Bell size={14} />}
+                  {type.name}
+                  {selectedType === type.id && <Check size={14} className="ml-auto text-cyan-400" />}
                 </DropdownMenuItem>
               ))}
               
-              <DropdownMenuSeparator />
-              <DropdownMenuLabel>Exibição</DropdownMenuLabel>
+              <DropdownMenuSeparator className="bg-zinc-800" />
+              <DropdownMenuLabel className="text-zinc-400">{t('notifications.display')}</DropdownMenuLabel>
               <DropdownMenuItem 
                 onClick={() => setUnreadOnly(!unreadOnly)}
-                className="flex items-center justify-between"
+                className="flex items-center justify-between text-zinc-300 hover:text-white hover:bg-zinc-800/50 transition-colors duration-200"
               >
-                <span>Apenas não lidas</span>
-                {unreadOnly && <Check size={14} />}
+                <span>{t('notifications.onlyUnread')}</span>
+                {unreadOnly && <Check size={14} className="text-cyan-400" />}
               </DropdownMenuItem>
               
-              <DropdownMenuSeparator />
+              <DropdownMenuSeparator className="bg-zinc-800" />
               <DropdownMenuItem asChild>
                 <button 
-                  className="flex items-center w-full" 
+                  className="flex items-center w-full text-zinc-300 hover:text-white hover:bg-zinc-800/50 transition-colors duration-200" 
                   onClick={() => window.location.href = '/settings'}
                 >
-                  <Settings size={14} className="mr-2" />
-                  Configurações de notificações
+                  <Settings size={14} className="mr-2 text-purple-400" />
+                  {t('notifications.settings')}
                 </button>
               </DropdownMenuItem>
             </DropdownMenuContent>
@@ -386,16 +378,19 @@ const NotificationFilter = ({
       </div>
       
       {selectedType !== 'all' && (
-        <div className="mb-3">
-          <Badge variant="outline" className="flex items-center gap-1 px-3 py-1">
+        <div className="mb-4">
+          <Badge 
+            variant="outline" 
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-black/40 border-zinc-800 text-zinc-300"
+          >
             {notificationStyles[selectedType]?.icon || <Bell size={12} />}
             <span>
-              {settings.types.find(t => t.id === selectedType)?.name || 'Filtrando por tipo'}
+              {settings.types.find(t => t.id === selectedType)?.name || t('notifications.filteringByType')}
             </span>
             <Button 
               variant="ghost" 
               size="icon" 
-              className="h-4 w-4 ml-1" 
+              className="h-4 w-4 ml-1 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50" 
               onClick={() => onSelectType('all')}
             >
               <X size={10} />
@@ -425,6 +420,7 @@ export const NotificationList = ({ compact = false, maxItems }: NotificationList
   const [selectedType, setSelectedType] = useState('all');
   const [unreadOnly, setUnreadOnly] = useState(false);
   const [loading, setLoading] = useState(true);
+  const { t } = useLanguage();
   
   // Simulação de carregamento para UX
   useEffect(() => {
@@ -460,7 +456,7 @@ export const NotificationList = ({ compact = false, maxItems }: NotificationList
   
   // Interface para listagem completa
   if (!compact) {
-  return (
+    return (
       <div className="space-y-2">
         <NotificationFilter
           selectedType={selectedType}
@@ -471,12 +467,25 @@ export const NotificationList = ({ compact = false, maxItems }: NotificationList
           setUnreadOnly={setUnreadOnly}
         />
         
-        <Tabs defaultValue="all">
-          <TabsList className="mb-4">
-            <TabsTrigger value="all">Todas</TabsTrigger>
-            <TabsTrigger value="unread">Não lidas {notifications.filter(n => !n.read).length > 0 && (
-              <Badge className="ml-1 bg-primary">{notifications.filter(n => !n.read).length}</Badge>
-            )}</TabsTrigger>
+        <Tabs defaultValue="all" className="w-full">
+          <TabsList className="mb-6 bg-black/40 border border-zinc-800 p-1">
+            <TabsTrigger 
+              value="all"
+              className="data-[state=active]:bg-zinc-800 data-[state=active]:text-white text-zinc-400 hover:text-zinc-200 transition-colors duration-200"
+            >
+              {t('notifications.all')}
+            </TabsTrigger>
+            <TabsTrigger 
+              value="unread"
+              className="data-[state=active]:bg-zinc-800 data-[state=active]:text-white text-zinc-400 hover:text-zinc-200 transition-colors duration-200"
+            >
+              {t('notifications.unread')} 
+              {notifications.filter(n => !n.read).length > 0 && (
+                <Badge className="ml-1.5 bg-black/80 border border-white/10 text-white hover:bg-black/90 transition-colors">
+                  {notifications.filter(n => !n.read).length}
+                </Badge>
+              )}
+            </TabsTrigger>
           </TabsList>
           
           <TabsContent value="all">
@@ -494,13 +503,13 @@ export const NotificationList = ({ compact = false, maxItems }: NotificationList
                 ) : (
                   <div className="flex flex-col items-center justify-center py-10 text-center">
                     <Bell size={40} className="text-muted-foreground opacity-20 mb-4" />
-                    <h3 className="text-lg font-medium">Nenhuma notificação encontrada</h3>
+                    <h3 className="text-lg font-medium">{t('notifications.notFound')}</h3>
                     <p className="text-muted-foreground mt-1">
                       {unreadOnly 
-                        ? "Você já leu todas as suas notificações" 
+                        ? t('notifications.allRead')
                         : selectedType !== 'all' 
-                          ? "Nenhuma notificação deste tipo foi encontrada" 
-                          : "Quando houver novidades, elas aparecerão aqui"}
+                          ? t('notifications.noneOfType')
+                          : t('notifications.willAppearHere')}
                     </p>
                   </div>
                 )}
@@ -526,9 +535,9 @@ export const NotificationList = ({ compact = false, maxItems }: NotificationList
                 ) : (
                   <div className="flex flex-col items-center justify-center py-10 text-center">
                     <Check size={40} className="text-muted-foreground opacity-20 mb-4" />
-                    <h3 className="text-lg font-medium">Nenhuma notificação não lida</h3>
+                    <h3 className="text-lg font-medium">{t('notifications.noUnread')}</h3>
                     <p className="text-muted-foreground mt-1">
-                      Você leu todas as suas notificações
+                      {t('notifications.allRead')}
                     </p>
                   </div>
                 )}
@@ -544,14 +553,14 @@ export const NotificationList = ({ compact = false, maxItems }: NotificationList
   return (
     <div className="w-full">
       <div className="flex justify-between items-center mb-2">
-        <h3 className="text-sm font-semibold">Notificações recentes</h3>
+        <h3 className="text-sm font-semibold">{t('notifications.recent')}</h3>
               <Button 
           variant="link" 
                 size="sm" 
           className="text-xs h-auto p-0"
           onClick={() => window.location.href = '/notifications'}
               >
-          Ver todas
+          {t('notifications.viewAll')}
               </Button>
             </div>
       
@@ -571,7 +580,7 @@ export const NotificationList = ({ compact = false, maxItems }: NotificationList
             <div className="text-center py-5">
               <Bell size={24} className="text-muted-foreground opacity-20 mx-auto mb-2" />
               <p className="text-xs text-muted-foreground">
-                Nenhuma notificação
+                {t('notifications.none')}
               </p>
             </div>
           )}
@@ -586,7 +595,7 @@ export const NotificationList = ({ compact = false, maxItems }: NotificationList
             className="text-xs h-7" 
                 onClick={markAllAsRead}
               >
-            Marcar como lidas
+            {t('notifications.markAsRead')}
               </Button>
         </div>
       )}
