@@ -27,10 +27,11 @@ import { ptBR } from "date-fns/locale";
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { useRealtimeSignals } from "@/hooks/useRealtimeSignals";
+import { useExtendedSignals } from "@/hooks/useExtendedSignals";
 import { Button } from "@/components/ui/button";
 
 import { SignalStrength as SignalStrengthEnum, SignalType } from "@/services/types";
-// import { tradingSignalService } from "@/services/TradingSignalService"; // Removido - arquivo não existe mais
+// import { tradingSignalService } from "@/services/TradingSignalService"; // Removido - arquivo n??o existe mais
 import { motion, AnimatePresence } from "framer-motion";
 import { TimeZoneSelector } from "@/components/dashboard/TimeZoneSelector";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -42,7 +43,7 @@ import { traderLinkService } from "@/services/traderLinkService";
 import { useTradingSignalsRealtime } from "@/hooks/useSupabaseRealtime";
 import { RealtimeStatus } from "@/components/RealtimeStatus";
 
-// Interfaces de tipo para diagnóstico
+// Interfaces de tipo para diagn??stico
 interface MemoryInfo {
   jsHeapSizeLimit: number;
   totalJSHeapSize: number;
@@ -62,7 +63,7 @@ interface BrowserInfo {
   isOperar?: boolean;
 }
 
-// Declaração para auxiliar na depuração do navegador Operar
+// Declara????o para auxiliar na depura????o do navegador Operar
 declare global {
   interface Window {
     BROWSER_INFO?: BrowserInfo;
@@ -74,10 +75,10 @@ declare global {
   }
 }
 
-// Inicializar variáveis de diagnóstico
+// Inicializar vari??veis de diagn??stico
 if (typeof window !== 'undefined') {
   try {
-    // Detectar navegador para logs específicos
+    // Detectar navegador para logs espec??ficos
     const ua = navigator.userAgent;
     window.BROWSER_INFO = {
       name: ua.includes('Edge') ? 'Edge' : 
@@ -89,7 +90,7 @@ if (typeof window !== 'undefined') {
       isOperar: ua.includes('Opera')
     };
     
-    // Capturar informações de diagnóstico
+    // Capturar informa????es de diagn??stico
     const performanceMemory = (performance as { memory?: MemoryInfo }).memory;
     const navigatorVendor = (navigator as { vendor?: string }).vendor;
     
@@ -105,28 +106,28 @@ if (typeof window !== 'undefined') {
         } : 'Not available'
     };
     
-    // Array para armazenar logs de diagnóstico
+    // Array para armazenar logs de diagn??stico
     window.DEBUG_LOGS = [];
     
-    // Função para exportar logs para console
+    // Fun????o para exportar logs para console
     window.dumpDebugLogs = () => {
-      console.log('==== LOGS DE DIAGNÓSTICO ====');
+      console.log('==== LOGS DE DIAGN??STICO ====');
       (window.DEBUG_LOGS || []).forEach(log => console.log(log));
       console.log('==== FIM DOS LOGS ====');
       
-      // Exibir informações do navegador
-      console.log('==== INFORMAÇÕES DO NAVEGADOR ====');
+      // Exibir informa????es do navegador
+      console.log('==== INFORMA????ES DO NAVEGADOR ====');
       console.log('Nome:', window.BROWSER_INFO?.name);
-      console.log('Versão:', window.BROWSER_INFO?.version);
+      console.log('Vers??o:', window.BROWSER_INFO?.version);
       console.log('User Agent:', window.BROWSER_DIAGNOSTICS?.userAgent);
       console.log('Rendering Engine:', window.BROWSER_DIAGNOSTICS?.renderingEngine);
-      console.log('Resolução:', window.BROWSER_DIAGNOSTICS?.screenResolution);
-      console.log('==== FIM DAS INFORMAÇÕES ====');
+      console.log('Resolu????o:', window.BROWSER_DIAGNOSTICS?.screenResolution);
+      console.log('==== FIM DAS INFORMA????ES ====');
       
       if (window.crashInfo) {
-        console.log('==== INFORMAÇÕES DO CRASH ====');
+        console.log('==== INFORMA????ES DO CRASH ====');
         console.log(window.crashInfo);
-        console.log('==== FIM DAS INFORMAÇÕES DO CRASH ====');
+        console.log('==== FIM DAS INFORMA????ES DO CRASH ====');
       }
     };
     
@@ -144,22 +145,22 @@ if (typeof window !== 'undefined') {
       
       // Adicionar ao log
       if (window.DEBUG_LOGS) {
-        window.DEBUG_LOGS.push(`❌ ERRO GLOBAL: ${event.message} (${event.filename}:${event.lineno}:${event.colno})`);
+        window.DEBUG_LOGS.push(`??? ERRO GLOBAL: ${event.message} (${event.filename}:${event.lineno}:${event.colno})`);
       }
       
       console.error('Erro global capturado:', window.crashInfo);
     });
     
-    // Sobrescrever console.error para melhor diagnóstico
+    // Sobrescrever console.error para melhor diagn??stico
     const originalConsoleError = console.error;
     console.error = function(...args) {
       originalConsoleError.apply(console, args);
       if (window.DEBUG_LOGS) {
-        window.DEBUG_LOGS.push(`❌ ERRO: ${args.map(a => typeof a === 'object' ? JSON.stringify(a) : a).join(' ')}`);
+        window.DEBUG_LOGS.push(`??? ERRO: ${args.map(a => typeof a === 'object' ? JSON.stringify(a) : a).join(' ')}`);
       }
     };
   } catch (err) {
-    console.error('Erro ao inicializar diagnóstico:', err);
+    console.error('Erro ao inicializar diagn??stico:', err);
   }
 }
 
@@ -171,8 +172,8 @@ interface GenericCache {
 
 let signalCache: GenericCache | null = null;
 
-// 🔒 SISTEMA DE PERSISTÊNCIA NAVEGACIONAL (CAMADAS 3-6)
-// Sistema robusto de persistência que mantém sinais entre navegações
+// ???? SISTEMA DE PERSIST??NCIA NAVEGACIONAL (CAMADAS 3-6)
+// Sistema robusto de persist??ncia que mant??m sinais entre navega????es
 interface PersistentSignalsNavigation {
   signals: PlaceholderSignal[];
   timestamp: number;
@@ -181,39 +182,39 @@ interface PersistentSignalsNavigation {
   lastTabSwitch: number;
 }
 
-// FUNÇÃO PRESERVATIVA: Salvar sinais automaticamente
+// FUN????O PRESERVATIVA: Salvar sinais automaticamente
 const saveSignalsToNavigationCache = (signals: PlaceholderSignal[]): void => {
   try {
     if (!signals || signals.length < 4) {
-      console.warn('⚠️ Cache rejeitado: menos de 4 sinais', signals?.length || 0);
+      console.warn('???? Cache rejeitado: menos de 4 sinais', signals?.length || 0);
       return;
     }
 
-    // Salvar para persistência da aba Trades
+    // Salvar para persist??ncia da aba Trades
     const cacheData: PersistentSignalsNavigation = {
       signals,
       timestamp: Date.now(),
-      version: '2.1-new-logic', // Nova versão para forçar atualização
+      version: '2.1-new-logic', // Nova vers??o para for??ar atualiza????o
       count: signals.length,
       lastTabSwitch: Date.now()
     };
     localStorage.setItem('persistent-signals-navigation', JSON.stringify(cacheData));
     
-    // SINCRONIZAÇÃO BIDIRECIONAL REFORÇADA: Compartilhar os 3 primeiros sinais com a Dashboard
+    // SINCRONIZA????O BIDIRECIONAL REFOR??ADA: Compartilhar os 3 primeiros sinais com a Dashboard
     if (signals.length >= 3) {
-      // Garantir que os sinais tenham todas as propriedades necessárias
+      // Garantir que os sinais tenham todas as propriedades necess??rias
       const enrichedSignals = signals.slice(0, 3).map((signal, index) => ({
         ...signal,
-        // Propriedades obrigatórias
+        // Propriedades obrigat??rias
         id: signal.id || `trade-signal-${Date.now()}-${index}`,
         symbol: signal.symbol,
         entry_time: signal.entry_time,
         signal: signal.signal || (Math.random() > 0.5 ? 'BUY' : 'SELL'),
-        // Propriedades específicas da Dashboard
+        // Propriedades espec??ficas da Dashboard
         isDashboard: true,
         position: index + 1,
         dashboardPosition: index,
-        // Garantir que estão completos
+        // Garantir que est??o completos
         exchange: signal.exchange || inferExchangeCategory(signal.symbol),
         timeframe: signal.timeframe || '5m',
         expiry: signal.expiry || '5m'
@@ -226,24 +227,24 @@ const saveSignalsToNavigationCache = (signals: PlaceholderSignal[]): void => {
         source: 'signals'
       };
       
-      // Salvar em múltiplos locais para garantir acesso
+      // Salvar em m??ltiplos locais para garantir acesso
       localStorage.setItem('tradesSignals', JSON.stringify(dashboardData));
       localStorage.setItem('dashboardSignals', JSON.stringify(dashboardData)); // Atualizar diretamente
       
-      // Notificar a dashboard imediatamente via múltiplos eventos
+      // Notificar a dashboard imediatamente via m??ltiplos eventos
       window.dispatchEvent(new CustomEvent('tradesSignalsUpdated', { detail: dashboardData }));
       window.dispatchEvent(new CustomEvent('forceDashboardSync', { detail: dashboardData }));
       
-      console.log('💾 CACHE SINCRONIZADO: Sinais salvos e compartilhados com Dashboard');
+      console.log('??? CACHE SINCRONIZADO: Sinais salvos e compartilhados com Dashboard');
     } else {
-      console.log('💾 CACHE: Sinais salvos apenas na navegação (sem compartilhar)');
+      console.log('??? CACHE: Sinais salvos apenas na navega????o (sem compartilhar)');
     }
   } catch (error) {
-    console.error('❌ ERRO: Falha ao salvar cache de navegação:', error);
+    console.error('??? ERRO: Falha ao salvar cache de navega????o:', error);
   }
 };
 
-// FUNÇÃO PRESERVATIVA: Carregar sinais automaticamente
+// FUN????O PRESERVATIVA: Carregar sinais automaticamente
 const loadSignalsFromNavigationCache = (): PlaceholderSignal[] | null => {
   try {
     const cacheData = localStorage.getItem('persistent-signals-navigation');
@@ -251,67 +252,67 @@ const loadSignalsFromNavigationCache = (): PlaceholderSignal[] | null => {
     
     const parsed: PersistentSignalsNavigation = JSON.parse(cacheData);
     
-    // Verificar se a versão é compatível com a nova lógica
+    // Verificar se a vers??o ?? compat??vel com a nova l??gica
     if (parsed.version !== '2.1-new-logic') {
-      console.log('🔄 CACHE: Versão antiga detectada, limpando cache');
+      console.log('???? CACHE: Vers??o antiga detectada, limpando cache');
       localStorage.removeItem('persistent-signals-navigation');
       return null;
     }
     
-    // Cache válido por 30 minutos (mesmo tempo dos sinais da dashboard)
+    // Cache v??lido por 30 minutos (mesmo tempo dos sinais da dashboard)
     const MAX_CACHE_AGE = 30 * 60 * 1000;
     if (Date.now() - parsed.timestamp > MAX_CACHE_AGE) {
-      console.log('⏰ CACHE: Cache expirado, removendo');
+      console.log('??? CACHE: Cache expirado, removendo');
       localStorage.removeItem('persistent-signals-navigation');
       return null;
     }
     
     if (parsed.signals && parsed.signals.length >= 7) {
-      console.log('💾 CACHE HIT: Carregando sinais do cache de navegação');
+      console.log('??? CACHE HIT: Carregando sinais do cache de navega????o');
       return parsed.signals;
     }
     
     return null;
   } catch (error) {
-    console.error('❌ ERRO: Falha ao carregar cache de navegação:', error);
+    console.error('??? ERRO: Falha ao carregar cache de navega????o:', error);
     localStorage.removeItem('persistent-signals-navigation');
     return null;
   }
 };
 
-// Função para limpar cache quando sinais da dashboard mudarem
+// Fun????o para limpar cache quando sinais da dashboard mudarem
 const clearNavigationCacheOnDashboardChange = (): void => {
   try {
     localStorage.removeItem('persistent-signals-navigation');
-    console.log('🧹 CACHE: Cache limpo devido a mudança na dashboard');
+    console.log('???? CACHE: Cache limpo devido a mudan??a na dashboard');
   } catch (error) {
-    console.error('❌ ERRO: Falha ao limpar cache:', error);
+    console.error('??? ERRO: Falha ao limpar cache:', error);
   }
 };
 
-// 🛡️ VERIFICAÇÃO INTELIGENTE DE CACHE (CAMADAS 1-2)
-// Só limpa cache em casos REALMENTE críticos
+// ??????? VERIFICA????O INTELIGENTE DE CACHE (CAMADAS 1-2)
+// S?? limpa cache em casos REALMENTE cr??ticos
 const shouldClearCacheIntelligent = (currentSignals: PlaceholderSignal[]): boolean => {
   if (!currentSignals) return true;
   
-  // CASO CRÍTICO 1: Menos de 4 sinais
+  // CASO CR??TICO 1: Menos de 4 sinais
   if (currentSignals.length < 4) {
-    console.log('🚨 CRÍTICO: Menos de 4 sinais detectado');
+    console.log('??? CR??TICO: Menos de 4 sinais detectado');
     return true;
   }
   
-  // CASO CRÍTICO 2: Sinais com "binance" (não permitido)
+  // CASO CR??TICO 2: Sinais com "binance" (n??o permitido)
   const hasBinanceSignals = currentSignals.some(signal => 
     signal.symbol?.toLowerCase().includes('binance') ||
     signal.exchange?.toLowerCase().includes('binance')
   );
   
   if (hasBinanceSignals) {
-    console.log('🚨 CRÍTICO: Sinais binance detectados');
+    console.log('??? CR??TICO: Sinais binance detectados');
     return true;
   }
   
-  // CASO CRÍTICO 3: Horários inválidos em mais da metade dos sinais
+  // CASO CR??TICO 3: Hor??rios inv??lidos em mais da metade dos sinais
   const invalidTimeSignals = currentSignals.filter(signal => {
     if (!signal.entry_time) return true;
     const [_, minutes] = signal.entry_time.split(':').map(Number);
@@ -319,53 +320,53 @@ const shouldClearCacheIntelligent = (currentSignals: PlaceholderSignal[]): boole
   });
   
   if (invalidTimeSignals.length > currentSignals.length / 2) {
-    console.log('🚨 CRÍTICO: Muitos horários inválidos');
+    console.log('??? CR??TICO: Muitos hor??rios inv??lidos');
     return true;
   }
   
-  // NÃO é caso crítico - PRESERVAR sinais
+  // N??O ?? caso cr??tico - PRESERVAR sinais
   return false;
 };
 
-// Declarações das funções preservativas serão movidas para depois de generateDailySignals
+// Declara????es das fun????es preservativas ser??o movidas para depois de generateDailySignals
 
 // Constantes para controle dos tempos dos sinais
-const SIGNAL_EXPIRY_TIME = 5; // Tempo de expiração em minutos (sempre 5 minutos)
-const TIME_BETWEEN_SIGNALS = 20; // Tempo entre sinais (padrão XX:03, XX:23, XX:43)
-const RESULT_TIME = 16; // Tempo até mostrar o resultado (16 minutos após a entrada)
-const FIRST_SIGNAL_TIME = "00:03"; // Horário do primeiro sinal do dia (sempre começa com XX:03)
-const WIN_LOSS_RATIO = 9; // Proporção de 9 ganhos para 1 perda
-// Minutos válidos para sinais - seguindo padrão sequencial XX:03, XX:23, XX:43
-const VALID_MINUTES = [3, 23, 43]; // Padrão sequencial: 03 -> 23 -> 43 -> (hora+1):03
+const SIGNAL_EXPIRY_TIME = 5; // Tempo de expira????o em minutos (sempre 5 minutos)
+const TIME_BETWEEN_SIGNALS = 20; // Tempo entre sinais (padr??o XX:03, XX:23, XX:43)
+const RESULT_TIME = 16; // Tempo at?? mostrar o resultado (16 minutos ap??s a entrada)
+const FIRST_SIGNAL_TIME = "00:03"; // Hor??rio do primeiro sinal do dia (sempre come??a com XX:03)
+const WIN_LOSS_RATIO = 9; // Propor????o de 9 ganhos para 1 perda
+// Minutos v??lidos para sinais - seguindo padr??o sequencial XX:03, XX:23, XX:43
+const VALID_MINUTES = [3, 23, 43]; // Padr??o sequencial: 03 -> 23 -> 43 -> (hora+1):03
 
-// Lista de ativos disponíveis com suas categorias
+// Lista de ativos dispon??veis com suas categorias
 const ATIVOS_CATEGORIAS: Record<string, string> = {
-  // Ações
-  "AIG": "Ações",
-  "Alibaba Group Holding": "Ações",
-  "Amazon": "Ações",
-  "Amazon/Alibaba": "Ações",
-  "Amazon/Ebay": "Ações",
-  "Apple": "Ações",
-  "Baidu, Inc. ADR": "Ações",
-  "Citigroup, Inc": "Ações",
-  "Coca-Cola Company": "Ações",
-  "Meta": "Ações",
-  "Google": "Ações",
-  "Alphabet/Microsoft": "Ações",
-  "Goldman Sachs Group, Inc.": "Ações",
-  "Intel Corporation": "Ações",
-  "Intel/IBM": "Ações",
-  "JPMorgan Chase E Co.": "Ações",
-  "McDonald´s Corporation": "Ações",
-  "Meta/Alphabet": "Ações",
-  "Morgan Stanley": "Ações",
-  "Microsoft Corporation": "Ações",
-  "Microsoft/Apple": "Ações",
-  "Netflix/Amazon": "Ações",
-  "Snap Inc.": "Ações",
-  "Tesla": "Ações",
-  "Tesla/Ford": "Ações",
+  // A????es
+  "AIG": "A????es",
+  "Alibaba Group Holding": "A????es",
+  "Amazon": "A????es",
+  "Amazon/Alibaba": "A????es",
+  "Amazon/Ebay": "A????es",
+  "Apple": "A????es",
+  "Baidu, Inc. ADR": "A????es",
+  "Citigroup, Inc": "A????es",
+  "Coca-Cola Company": "A????es",
+  "Meta": "A????es",
+  "Google": "A????es",
+  "Alphabet/Microsoft": "A????es",
+  "Goldman Sachs Group, Inc.": "A????es",
+  "Intel Corporation": "A????es",
+  "Intel/IBM": "A????es",
+  "JPMorgan Chase E Co.": "A????es",
+  "McDonald??s Corporation": "A????es",
+  "Meta/Alphabet": "A????es",
+  "Morgan Stanley": "A????es",
+  "Microsoft Corporation": "A????es",
+  "Microsoft/Apple": "A????es",
+  "Netflix/Amazon": "A????es",
+  "Snap Inc.": "A????es",
+  "Tesla": "A????es",
+  "Tesla/Ford": "A????es",
   
   // Commodities
   "Crude Oil Brent": "Commodities",
@@ -373,25 +374,25 @@ const ATIVOS_CATEGORIAS: Record<string, string> = {
   "Silver": "Commodities",
   "Ouro/Prata": "Commodities",
   "Gold": "Commodities",
-  "Gás Natural": "Commodities",
+  "G??s Natural": "Commodities",
   
-  // Índices
-  "AUS 200": "Índices",
-  "EU 50": "Índices",
-  "FR 40": "Índices",
-  "GER 30": "Índices",
-  "GER30/UK100": "Índices",
-  "HK 33": "Índices",
-  "JP 225": "Índices",
-  "SP 35": "Índices",
-  "US 500": "Índices",
-  "UK 100": "Índices",
-  "US100/JP225": "Índices",
-  "US2000": "Índices",
-  "US 30": "Índices",
-  "US30/JP225": "Índices",
-  "US500/JP225": "Índices",
-  "US 100": "Índices",
+  // ??ndices
+  "AUS 200": "??ndices",
+  "EU 50": "??ndices",
+  "FR 40": "??ndices",
+  "GER 30": "??ndices",
+  "GER30/UK100": "??ndices",
+  "HK 33": "??ndices",
+  "JP 225": "??ndices",
+  "SP 35": "??ndices",
+  "US 500": "??ndices",
+  "UK 100": "??ndices",
+  "US100/JP225": "??ndices",
+  "US2000": "??ndices",
+  "US 30": "??ndices",
+  "US30/JP225": "??ndices",
+  "US500/JP225": "??ndices",
+  "US 100": "??ndices",
 
   // Cripto
   "Arbitrum": "Cripto",
@@ -416,7 +417,7 @@ const ATIVOS_CATEGORIAS: Record<string, string> = {
   "Immutable": "Cripto",
   "Injective": "Cripto",
   "IOTA": "Cripto",
-  "Júpiter": "Cripto",
+  "J??piter": "Cripto",
   "Chainlink": "Cripto",
   "Litecoin": "Cripto",
   "Decentraland": "Cripto",
@@ -515,27 +516,27 @@ const ATIVOS_CATEGORIAS: Record<string, string> = {
   "USD/CHF": "Forex"
 };
 
-// Lista de ativos PERMITIDOS explicitamente (forçada pela especificação do usuário)
-// Observação: Mantemos algumas variações com e sem sufixo (OTC) para compatibilidade
+// Lista de ativos PERMITIDOS explicitamente (for??ada pela especifica????o do usu??rio)
+// Observa????o: Mantemos algumas varia????es com e sem sufixo (OTC) para compatibilidade
 const ALLOWED_ASSETS: string[] = [
-  // Ações
+  // A????es
   "AIG", "Alibaba Group Holding", "Amazon", "Amazon/Alibaba", "Amazon/Ebay", "Apple", 
   "Baidu, Inc. ADR", "Citigroup, Inc", "Coca-Cola Company", "Meta", "Google", 
   "Alphabet/Microsoft", "Goldman Sachs Group, Inc.", "Intel Corporation", "Intel/IBM", 
-  "JPMorgan Chase E Co.", "McDonald´s Corporation", "Meta/Alphabet", "Morgan Stanley", 
+  "JPMorgan Chase E Co.", "McDonald??s Corporation", "Meta/Alphabet", "Morgan Stanley", 
   "Microsoft Corporation", "Microsoft/Apple", "Netflix/Amazon", "Snap Inc.", "Tesla", "Tesla/Ford",
 
   // Commodities
-  "Crude Oil Brent", "Crude Oil WTI", "Silver", "Ouro/Prata", "Gold", "Gás Natural",
+  "Crude Oil Brent", "Crude Oil WTI", "Silver", "Ouro/Prata", "Gold", "G??s Natural",
 
-  // Índices
+  // ??ndices
   "AUS 200", "EU 50", "FR 40", "GER 30", "GER30/UK100", "HK 33", "JP 225", "SP 35", 
   "US 500", "UK 100", "US100/JP225", "US2000", "US 30", "US30/JP225", "US500/JP225", "US 100",
 
   // Cripto
   "Arbitrum", "Cosmos", "Bitcoin Cash", "Bonk", "Bitcoin", "Cardano", "Dash", "Dogecoin", 
   "Polkadot", "DYDX", "EOS", "Ethereum", "Fartcoin", "Artificial Superintelligence Alliance", 
-  "Floki", "Gala", "Graph", "Hedera", "ICP", "Immutable", "Injective", "IOTA", "Júpiter", 
+  "Floki", "Gala", "Graph", "Hedera", "ICP", "Immutable", "Injective", "IOTA", "J??piter", 
   "Chainlink", "Litecoin", "Decentraland", "Polygon", "MELANIA Coin", "NEAR", "Ondo", 
   "Onyxcoin", "ORDI", "Pudgy Penguins", "Pepe", "Pyth", "Raydium", "Render", "Ronin", 
   "Sandbox", "1000Sats", "Sei", "Shiba Inu", "Solana", "Stacks", "Sui", "Bittensor", 
@@ -565,38 +566,38 @@ const getAllAssetNames = (): string[] => {
   return Array.from(merged);
 };
 
-// Inferência de categoria com base no nome do ativo
+// Infer??ncia de categoria com base no nome do ativo
 const inferExchangeCategory = (symbol: string): string => {
   const s = symbol.replace("(OTC)", "").trim();
   const lower = s.toLowerCase();
 
-  // Ações
+  // A????es
   const stockKeywords = [
     'aig','alibaba','amazon','apple','baidu','citigroup','coca-cola','meta','google','alphabet','goldman sachs',
     'intel','jpmorgan','mcdonald','morgan stanley','microsoft','netflix','snap','tesla','ford','ibm'
   ];
-  if (stockKeywords.some(k => lower.includes(k))) return 'Ações';
+  if (stockKeywords.some(k => lower.includes(k))) return 'A????es';
   const stockPairs = ['amazon/alibaba','amazon/ebay','alphabet/microsoft','intel/ibm','meta/alphabet','microsoft/apple','netflix/amazon','tesla/ford'];
-  if (stockPairs.some(k => lower.includes(k))) return 'Ações';
+  if (stockPairs.some(k => lower.includes(k))) return 'A????es';
 
   // Commodities
-  const commodities = ['crude oil brent','crude oil wti','silver','ouro/prata','gold','gás natural','gold/silver'];
+  const commodities = ['crude oil brent','crude oil wti','silver','ouro/prata','gold','g??s natural','gold/silver'];
   if (commodities.some(k => lower.includes(k))) return 'Commodities';
 
-  // Índices
+  // ??ndices
   const indices = ['aus 200','eu 50','fr 40','ger 30','ger30/uk100','hk 33','jp 225','sp 35','us 500','uk 100','us100/jp225','us2000','us 30','us30/jp225','us500/jp225','us 100'];
-  if (indices.some(k => lower.includes(k))) return 'Índices';
+  if (indices.some(k => lower.includes(k))) return '??ndices';
 
   // Cripto
   const cryptos = [
     'arbitrum','cosmos','bitcoin cash','bonk','bitcoin','cardano','dash','dogecoin','polkadot','dydx','eos','ethereum','fartcoin',
-    'artificial superintelligence alliance','floki','gala','graph','hedera','icp','immutable','injective','iota','júpiter','jupiter','chainlink',
+    'artificial superintelligence alliance','floki','gala','graph','hedera','icp','immutable','injective','iota','j??piter','jupiter','chainlink',
     'litecoin','decentraland','polygon','melania coin','near','ondo','onyxcoin','ordi','pudgy penguins','pepe','pyth','raydium','render','ronin',
     'sandbox','1000sats','sei','shiba inu','solana','stacks','sui','bittensor','celestia','ton','tron/usd','trump coin','dogwifhat','world coin','ripple'
   ];
   if (cryptos.some(k => lower.includes(k))) return 'Cripto';
 
-  // Forex (pares e índices de moedas)
+  // Forex (pares e ??ndices de moedas)
   const forexKeywords = [
     'aud/cad','aud/jpy','aud/nzd','aud/usd','cad/chf','cad/jpy','chf/jpy','chfnok','dollar index','eur/aud','eur/cad','eur/chf','eur/gbp','eur/jpy','eur/nzd','eur/thb','eur/usd',
     'gbp/aud','gbp/cad','gbp/chf','gbp/jpy','gbp/nzd','gbp/usd','jpy/thb','nok/jpy','nzd/cad','nzdchf','nzd/jpy','nzd/usd','pen/usd',
@@ -605,517 +606,517 @@ const inferExchangeCategory = (symbol: string): string => {
   ];
   if (forexKeywords.some(k => lower.includes(k))) return 'Forex';
 
-  // Demais casos: manter categorização existente ou assumir "Cripto" como fallback
+  // Demais casos: manter categoriza????o existente ou assumir "Cripto" como fallback
   return ATIVOS_CATEGORIAS[symbol] || 'Cripto';
 };
 
-// Estrutura para armazenar os horários de disponibilidade de cada ativo
+// Estrutura para armazenar os hor??rios de disponibilidade de cada ativo
 // Formato: [hora_inicio, minuto_inicio, hora_fim, minuto_fim]
-// Se um ativo não estiver listado, assume-se que está disponível 24/7
+// Se um ativo n??o estiver listado, assume-se que est?? dispon??vel 24/7
 const HORARIOS_DISPONIBILIDADE: Record<string, Array<[number, number, number, number]>> = {
-  // Exemplo de formato: "Ativo": [[8, 0, 16, 30]] - disponível das 8:00 às 16:30
-  // Múltiplos intervalos são permitidos: [[8, 0, 12, 0], [13, 0, 17, 0]]
-  // Se um ativo não estiver listado aqui, assume-se que está disponível 24/7
+  // Exemplo de formato: "Ativo": [[8, 0, 16, 30]] - dispon??vel das 8:00 ??s 16:30
+  // M??ltiplos intervalos s??o permitidos: [[8, 0, 12, 0], [13, 0, 17, 0]]
+  // Se um ativo n??o estiver listado aqui, assume-se que est?? dispon??vel 24/7
   
-  // Ações
-  // AIG - Mesmo padrão para todos os dias
+  // A????es
+  // AIG - Mesmo padr??o para todos os dias
   "AIG": [[0, 0, 5, 0], [6, 10, 23, 59]],
   
-  // Alibaba Group Holding - Mesmo padrão para todos os dias
+  // Alibaba Group Holding - Mesmo padr??o para todos os dias
   "Alibaba Group Holding": [[0, 0, 5, 0], [6, 10, 23, 59]],
   
-  // Amazon - Padrão para dias com interrupção (seg, qua, sex)
+  // Amazon - Padr??o para dias com interrup????o (seg, qua, sex)
   "Amazon": [[0, 0, 15, 30], [16, 0, 23, 59]],
   
-  // Amazon/Alibaba - Mesmo padrão para todos os dias
+  // Amazon/Alibaba - Mesmo padr??o para todos os dias
   "Amazon/Alibaba": [[0, 0, 6, 30], [7, 0, 23, 59]],
   
-  // Amazon/Ebay - Mesmo padrão para todos os dias
+  // Amazon/Ebay - Mesmo padr??o para todos os dias
   "Amazon/Ebay": [[0, 0, 6, 30], [7, 0, 23, 59]],
   
-  // Apple - Padrão para dias com interrupção (seg, qua, sex)
+  // Apple - Padr??o para dias com interrup????o (seg, qua, sex)
   "Apple": [[0, 0, 15, 30], [16, 0, 23, 59]],
   
-  // Baidu, Inc. ADR - Mesmo padrão para todos os dias
+  // Baidu, Inc. ADR - Mesmo padr??o para todos os dias
   "Baidu, Inc. ADR": [[0, 0, 5, 0], [5, 30, 23, 59]],
   
-  // Citigroup, Inc - Mesmo padrão para todos os dias
+  // Citigroup, Inc - Mesmo padr??o para todos os dias
   "Citigroup, Inc": [[0, 0, 5, 0], [6, 10, 23, 59]],
   
-  // Coca-Cola Company - Mesmo padrão para todos os dias
+  // Coca-Cola Company - Mesmo padr??o para todos os dias
   "Coca-Cola Company": [[0, 0, 5, 0], [5, 30, 23, 59]],
   
-  // Meta - Padrão para dias com interrupção (seg, qua, sex)
+  // Meta - Padr??o para dias com interrup????o (seg, qua, sex)
   "Meta": [[0, 0, 15, 30], [16, 35, 23, 59]],
   
-  // Google - Padrão para dias com interrupção (seg, qua, sex)
+  // Google - Padr??o para dias com interrup????o (seg, qua, sex)
   "Google": [[0, 0, 15, 30], [16, 35, 23, 59]],
   
-  // Alphabet/Microsoft - Mesmo padrão para todos os dias
+  // Alphabet/Microsoft - Mesmo padr??o para todos os dias
   "Alphabet/Microsoft": [[0, 0, 6, 30], [7, 0, 23, 59]],
   
-  // Goldman Sachs Group, Inc. - Mesmo padrão para todos os dias
+  // Goldman Sachs Group, Inc. - Mesmo padr??o para todos os dias
   "Goldman Sachs Group, Inc.": [[0, 0, 5, 0], [5, 30, 23, 59]],
   
-  // Intel Corporation - Mesmo padrão para todos os dias
+  // Intel Corporation - Mesmo padr??o para todos os dias
   "Intel Corporation": [[0, 0, 5, 0], [6, 10, 23, 59]],
   
-  // Intel/IBM - Mesmo padrão para todos os dias
+  // Intel/IBM - Mesmo padr??o para todos os dias
   "Intel/IBM": [[0, 0, 6, 30], [7, 0, 23, 59]],
   
-  // JPMorgan Chase E Co. - Mesmo padrão para todos os dias
+  // JPMorgan Chase E Co. - Mesmo padr??o para todos os dias
   "JPMorgan Chase E Co.": [[0, 0, 5, 0], [6, 10, 23, 59]],
   
-  // McDonald´s Corporation - Mesmo padrão para todos os dias
-  "McDonald´s Corporation": [[0, 0, 5, 0], [6, 10, 23, 59]],
+  // McDonald??s Corporation - Mesmo padr??o para todos os dias
+  "McDonald??s Corporation": [[0, 0, 5, 0], [6, 10, 23, 59]],
   
-  // Meta/Alphabet - Mesmo padrão para todos os dias
+  // Meta/Alphabet - Mesmo padr??o para todos os dias
   "Meta/Alphabet": [[0, 0, 6, 30], [7, 40, 23, 59]],
   
-  // Morgan Stanley - Mesmo padrão para todos os dias
+  // Morgan Stanley - Mesmo padr??o para todos os dias
   "Morgan Stanley": [[0, 0, 5, 0], [6, 10, 23, 59]],
   
-  // Microsoft Corporation - Mesmo padrão para todos os dias
+  // Microsoft Corporation - Mesmo padr??o para todos os dias
   "Microsoft Corporation": [[0, 0, 5, 0], [5, 30, 23, 59]],
   
-  // Microsoft/Apple - Mesmo padrão para todos os dias
+  // Microsoft/Apple - Mesmo padr??o para todos os dias
   "Microsoft/Apple": [[0, 0, 6, 30], [7, 40, 23, 59]],
   
-  // Netflix/Amazon - Mesmo padrão para todos os dias
+  // Netflix/Amazon - Mesmo padr??o para todos os dias
   "Netflix/Amazon": [[0, 0, 6, 30], [7, 0, 23, 59]],
   
-  // Snap Inc. - Mesmo padrão para todos os dias
+  // Snap Inc. - Mesmo padr??o para todos os dias
   "Snap Inc.": [[0, 0, 5, 0], [6, 10, 23, 59]],
   
-  // Tesla - Padrão para dias com interrupção (seg, qua, sex)
+  // Tesla - Padr??o para dias com interrup????o (seg, qua, sex)
   "Tesla": [[0, 0, 15, 30], [16, 0, 23, 59]],
   
-  // Tesla/Ford - Mesmo padrão para todos os dias
+  // Tesla/Ford - Mesmo padr??o para todos os dias
   "Tesla/Ford": [[0, 0, 6, 30], [7, 0, 23, 59]],
   
   // Commodities
-  // Crude Oil Brent - Padrão para dias com interrupção (seg, qui)
+  // Crude Oil Brent - Padr??o para dias com interrup????o (seg, qui)
   "Crude Oil Brent": [[0, 0, 6, 0], [7, 5, 23, 59]],
   
-  // Crude Oil WTI - Padrão para dias com interrupção (seg, qui)
+  // Crude Oil WTI - Padr??o para dias com interrup????o (seg, qui)
   "Crude Oil WTI": [[0, 0, 6, 0], [7, 5, 23, 59]],
   
-  // Silver - Padrão para dias com interrupção (seg, qui)
+  // Silver - Padr??o para dias com interrup????o (seg, qui)
   "Silver": [[0, 0, 6, 0], [7, 5, 23, 59]],
   
-  // Ouro/Prata - Mesmo padrão para todos os dias
+  // Ouro/Prata - Mesmo padr??o para todos os dias
   "Ouro/Prata": [[0, 0, 6, 30], [7, 40, 23, 59]],
   
-  // Gold - Padrão para dias com interrupção (seg, qui)
+  // Gold - Padr??o para dias com interrup????o (seg, qui)
   "Gold": [[0, 0, 6, 0], [7, 5, 23, 59]],
   
-  // Gás Natural - Padrão para dias com interrupção (seg, qui)
-  "Gás Natural": [[0, 0, 6, 0], [7, 5, 23, 59]],
+  // G??s Natural - Padr??o para dias com interrup????o (seg, qui)
+  "G??s Natural": [[0, 0, 6, 0], [7, 5, 23, 59]],
   
-  // Índices
-  // AUS 200 - Mesmo padrão para todos os dias
+  // ??ndices
+  // AUS 200 - Mesmo padr??o para todos os dias
   "AUS 200": [[0, 0, 22, 0], [22, 30, 23, 59]],
   
-  // EU 50 - Mesmo padrão para todos os dias
+  // EU 50 - Mesmo padr??o para todos os dias
   "EU 50": [[0, 0, 5, 0], [6, 10, 23, 59]],
   
-  // FR 40 - Mesmo padrão para todos os dias
+  // FR 40 - Mesmo padr??o para todos os dias
   "FR 40": [[0, 0, 5, 0], [6, 10, 23, 59]],
   
-  // GER 30 - Mesmo padrão para todos os dias
+  // GER 30 - Mesmo padr??o para todos os dias
   "GER 30": [[0, 0, 5, 0], [5, 30, 23, 59]],
   
-  // GER30/UK100 - Mesmo padrão para todos os dias
+  // GER30/UK100 - Mesmo padr??o para todos os dias
   "GER30/UK100": [[0, 0, 6, 30], [7, 0, 23, 59]],
   
-  // HK 33 - Padrão diferente para dias úteis e fins de semana
+  // HK 33 - Padr??o diferente para dias ??teis e fins de semana
   "HK 33": [[0, 0, 15, 0], [15, 30, 23, 59]],
   
-  // JP 225 - Mesmo padrão para todos os dias
+  // JP 225 - Mesmo padr??o para todos os dias
   "JP 225": [[0, 0, 22, 0], [23, 5, 23, 59]],
   
-  // SP 35 - Mesmo padrão para todos os dias
+  // SP 35 - Mesmo padr??o para todos os dias
   "SP 35": [[0, 0, 5, 0], [5, 30, 23, 59]],
   
-  // US 500 - Padrão para dias úteis, fechado nos fins de semana
+  // US 500 - Padr??o para dias ??teis, fechado nos fins de semana
   "US 500": [[11, 35, 17, 55]],
   
-  // UK 100 - Mesmo padrão para todos os dias
+  // UK 100 - Mesmo padr??o para todos os dias
   "UK 100": [[0, 0, 5, 0], [6, 10, 23, 59]],
   
-  // US100/JP225 - Mesmo padrão para todos os dias
+  // US100/JP225 - Mesmo padr??o para todos os dias
   "US100/JP225": [[0, 0, 6, 30], [7, 40, 23, 59]],
   
-  // US2000 - Mesmo padrão para todos os dias
+  // US2000 - Mesmo padr??o para todos os dias
   "US2000": [[0, 0, 5, 0], [5, 30, 23, 59]],
   
-  // US 30 - Padrão diferente para dias úteis e fins de semana
+  // US 30 - Padr??o diferente para dias ??teis e fins de semana
   "US 30": [[0, 0, 15, 0], [16, 10, 23, 59]],
   
-  // US30/JP225 - Mesmo padrão para todos os dias
+  // US30/JP225 - Mesmo padr??o para todos os dias
   "US30/JP225": [[0, 0, 6, 30], [7, 40, 23, 59]],
   
-  // US500/JP225 - Mesmo padrão para todos os dias
+  // US500/JP225 - Mesmo padr??o para todos os dias
   "US500/JP225": [[0, 0, 6, 30], [7, 0, 23, 59]],
   
-  // US 100 - Padrão diferente para dias úteis e fins de semana
+  // US 100 - Padr??o diferente para dias ??teis e fins de semana
   "US 100": [[0, 0, 15, 0], [16, 10, 23, 59]],
   
   // Cripto
-  // Arbitrum - Mesmo padrão para todos os dias
+  // Arbitrum - Mesmo padr??o para todos os dias
   "Arbitrum": [[0, 0, 12, 0], [12, 30, 23, 59]],
   
-  // Cosmos - Mesmo padrão para todos os dias
+  // Cosmos - Mesmo padr??o para todos os dias
   "Cosmos": [[0, 0, 12, 0], [13, 10, 23, 59]],
   
-  // Bitcoin Cash - Mesmo padrão para todos os dias
+  // Bitcoin Cash - Mesmo padr??o para todos os dias
   "Bitcoin Cash": [[0, 0, 17, 45], [18, 15, 23, 59]],
   
-  // Bonk - Mesmo padrão para todos os dias
+  // Bonk - Mesmo padr??o para todos os dias
   "Bonk": [[0, 0, 17, 40], [18, 50, 23, 59]],
   
-  // Bitcoin - Mesmo padrão para todos os dias
+  // Bitcoin - Mesmo padr??o para todos os dias
   "Bitcoin": [[0, 0, 12, 0], [12, 30, 23, 59]],
   
-  // Cardano - Mesmo padrão para todos os dias
+  // Cardano - Mesmo padr??o para todos os dias
   "Cardano": [[0, 0, 17, 45], [18, 15, 23, 59]],
   
-  // Dash - Mesmo padrão para todos os dias
+  // Dash - Mesmo padr??o para todos os dias
   "Dash": [[0, 0, 17, 45], [18, 15, 23, 59]],
   
-  // Dogecoin - Mesmo padrão para todos os dias
+  // Dogecoin - Mesmo padr??o para todos os dias
   "Dogecoin": [[0, 0, 17, 45], [18, 55, 23, 59]],
   
-  // Polkadot - Mesmo padrão para todos os dias
+  // Polkadot - Mesmo padr??o para todos os dias
   "Polkadot": [[0, 0, 17, 45], [18, 15, 23, 59]],
   
-  // DYDX - Mesmo padrão para todos os dias
+  // DYDX - Mesmo padr??o para todos os dias
   "DYDX": [[0, 0, 17, 40], [18, 50, 23, 59]],
   
-  // EOS - Mesmo padrão para todos os dias
+  // EOS - Mesmo padr??o para todos os dias
   "EOS": [[0, 0, 22, 0], [22, 30, 23, 59]],
   
-  // Ethereum - Mesmo padrão para todos os dias
+  // Ethereum - Mesmo padr??o para todos os dias
   "Ethereum": [[0, 0, 12, 0], [13, 10, 23, 59]],
   
-  // Fartcoin - Mesmo padrão para todos os dias
+  // Fartcoin - Mesmo padr??o para todos os dias
   "Fartcoin": [[0, 0, 17, 45], [18, 15, 23, 59]],
   
-  // Artificial Superintelligence Alliance - Mesmo padrão para todos os dias
+  // Artificial Superintelligence Alliance - Mesmo padr??o para todos os dias
   "Artificial Superintelligence Alliance": [[0, 0, 17, 40], [18, 50, 23, 59]],
   
-  // Floki - Mesmo padrão para todos os dias
+  // Floki - Mesmo padr??o para todos os dias
   "Floki": [[0, 0, 17, 40], [18, 50, 23, 59]],
   
-  // Gala - Mesmo padrão para todos os dias
+  // Gala - Mesmo padr??o para todos os dias
   "Gala": [[0, 0, 17, 40], [18, 50, 23, 59]],
   
-  // Graph - Mesmo padrão para todos os dias
+  // Graph - Mesmo padr??o para todos os dias
   "Graph": [[0, 0, 17, 45], [18, 15, 23, 59]],
   
-  // Hedera - Mesmo padrão para todos os dias
+  // Hedera - Mesmo padr??o para todos os dias
   "Hedera": [[0, 0, 17, 40], [18, 50, 23, 59]],
   
-  // ICP - Mesmo padrão para todos os dias
+  // ICP - Mesmo padr??o para todos os dias
   "ICP": [[0, 0, 17, 40], [18, 50, 23, 59]],
   
-  // Immutable - Mesmo padrão para todos os dias
+  // Immutable - Mesmo padr??o para todos os dias
   "Immutable": [[0, 0, 17, 40], [18, 50, 23, 59]],
   
-  // Injective - Mesmo padrão para todos os dias
+  // Injective - Mesmo padr??o para todos os dias
   "Injective": [[0, 0, 17, 45], [18, 15, 23, 59]],
   
-  // IOTA - Mesmo padrão para todos os dias
+  // IOTA - Mesmo padr??o para todos os dias
   "IOTA": [[0, 0, 17, 45], [18, 15, 23, 59]],
   
-  // Júpiter - Mesmo padrão para todos os dias
-  "Júpiter": [[0, 0, 17, 40], [18, 50, 23, 59]],
+  // J??piter - Mesmo padr??o para todos os dias
+  "J??piter": [[0, 0, 17, 40], [18, 50, 23, 59]],
   
-  // Chainlink - Mesmo padrão para todos os dias
+  // Chainlink - Mesmo padr??o para todos os dias
   "Chainlink": [[0, 0, 17, 45], [18, 15, 23, 59]],
   
-  // Litecoin - Mesmo padrão para todos os dias
+  // Litecoin - Mesmo padr??o para todos os dias
   "Litecoin": [[0, 0, 22, 0], [23, 5, 23, 59]],
   
-  // Decentraland - Mesmo padrão para todos os dias
+  // Decentraland - Mesmo padr??o para todos os dias
   "Decentraland": [[0, 0, 17, 40], [18, 50, 23, 59]],
   
-  // Polygon - Mesmo padrão para todos os dias
+  // Polygon - Mesmo padr??o para todos os dias
   "Polygon": [[0, 0, 17, 45], [18, 15, 23, 59]],
   
-  // MELANIA Coin - Mesmo padrão para todos os dias
+  // MELANIA Coin - Mesmo padr??o para todos os dias
   "MELANIA Coin": [[0, 0, 17, 45], [18, 15, 23, 59]],
   
-  // NEAR - Mesmo padrão para todos os dias
+  // NEAR - Mesmo padr??o para todos os dias
   "NEAR": [[0, 0, 17, 40], [18, 50, 23, 59]],
   
-  // Ondo - Mesmo padrão para todos os dias
+  // Ondo - Mesmo padr??o para todos os dias
   "Ondo": [[0, 0, 12, 0], [13, 10, 23, 59]],
   
-  // Onyxcoin - Mesmo padrão para todos os dias
+  // Onyxcoin - Mesmo padr??o para todos os dias
   "Onyxcoin": [[0, 0, 12, 0], [12, 30, 23, 59]],
   
-  // ORDI - Mesmo padrão para todos os dias
+  // ORDI - Mesmo padr??o para todos os dias
   "ORDI": [[0, 0, 12, 0], [12, 30, 23, 59]],
   
-  // Pudgy Penguins - Mesmo padrão para todos os dias
+  // Pudgy Penguins - Mesmo padr??o para todos os dias
   "Pudgy Penguins": [[0, 0, 12, 0], [13, 10, 23, 59]],
   
-  // Pepe - Mesmo padrão para todos os dias
+  // Pepe - Mesmo padr??o para todos os dias
   "Pepe": [[0, 0, 12, 0], [13, 10, 23, 59]],
   
-  // Pyth - Mesmo padrão para todos os dias
+  // Pyth - Mesmo padr??o para todos os dias
   "Pyth": [[0, 0, 12, 0], [13, 10, 23, 59]],
   
-  // Raydium - Mesmo padrão para todos os dias
+  // Raydium - Mesmo padr??o para todos os dias
   "Raydium": [[0, 0, 12, 0], [13, 10, 23, 59]],
   
-  // Render - Mesmo padrão para todos os dias
+  // Render - Mesmo padr??o para todos os dias
   "Render": [[0, 0, 12, 0], [12, 30, 23, 59]],
   
-  // Ronin - Mesmo padrão para todos os dias
+  // Ronin - Mesmo padr??o para todos os dias
   "Ronin": [[0, 0, 12, 0], [12, 30, 23, 59]],
   
-  // Sandbox - Mesmo padrão para todos os dias
+  // Sandbox - Mesmo padr??o para todos os dias
   "Sandbox": [[0, 0, 12, 0], [12, 30, 23, 59]],
   
-  // 1000Sats - Mesmo padrão para todos os dias
+  // 1000Sats - Mesmo padr??o para todos os dias
   "1000Sats": [[0, 0, 12, 0], [12, 30, 23, 59]],
   
-  // Sei - Mesmo padrão para todos os dias
+  // Sei - Mesmo padr??o para todos os dias
   "Sei": [[0, 0, 12, 0], [12, 30, 23, 59]],
   
-  // Shiba Inu - Mesmo padrão para todos os dias
+  // Shiba Inu - Mesmo padr??o para todos os dias
   "Shiba Inu": [[0, 0, 17, 45], [18, 15, 23, 59]],
   
-  // Solana - Mesmo padrão para todos os dias
+  // Solana - Mesmo padr??o para todos os dias
   "Solana": [[0, 0, 17, 45], [18, 15, 23, 59]],
   
-  // Stacks - Mesmo padrão para todos os dias
+  // Stacks - Mesmo padr??o para todos os dias
   "Stacks": [[0, 0, 12, 0], [13, 10, 23, 59]],
   
-  // Sui - Mesmo padrão para todos os dias
+  // Sui - Mesmo padr??o para todos os dias
   "Sui": [[0, 0, 12, 0], [12, 30, 23, 59]],
   
-  // Bittensor - Mesmo padrão para todos os dias
+  // Bittensor - Mesmo padr??o para todos os dias
   "Bittensor": [[0, 0, 12, 0], [13, 10, 23, 59]],
   
-  // Celestia - Mesmo padrão para todos os dias
+  // Celestia - Mesmo padr??o para todos os dias
   "Celestia": [[0, 0, 12, 0], [12, 30, 23, 59]],
   
-  // TON - Mesmo padrão para todos os dias
+  // TON - Mesmo padr??o para todos os dias
   "TON": [[0, 0, 12, 0], [13, 10, 23, 59]],
   
-  // TRON/USD - Mesmo padrão para todos os dias
+  // TRON/USD - Mesmo padr??o para todos os dias
   "TRON/USD": [[0, 0, 17, 45], [18, 55, 23, 59]],
   
-  // TRUMP Coin - Mesmo padrão para todos os dias
+  // TRUMP Coin - Mesmo padr??o para todos os dias
   "TRUMP Coin": [[0, 0, 12, 0], [13, 10, 23, 59]],
   
-  // Dogwifhat - Mesmo padrão para todos os dias
+  // Dogwifhat - Mesmo padr??o para todos os dias
   "Dogwifhat": [[0, 0, 17, 45], [18, 15, 23, 59]],
   
-  // World Coin - Mesmo padrão para todos os dias
+  // World Coin - Mesmo padr??o para todos os dias
   "World Coin": [[0, 0, 17, 45], [18, 15, 23, 59]],
   
-  // Ripple - Mesmo padrão para todos os dias
+  // Ripple - Mesmo padr??o para todos os dias
   "Ripple": [[0, 0, 22, 0], [22, 30, 23, 59]],
   
   // Forex
-  // AUD/CAD (OTC) - Considerando o padrão para dias com interrupção (seg, qua, sex)
+  // AUD/CAD (OTC) - Considerando o padr??o para dias com interrup????o (seg, qua, sex)
   "AUD/CAD (OTC)": [[0, 0, 1, 0], [2, 10, 23, 59]],
   
-  // AUD/CAD - Padrão para dias úteis
+  // AUD/CAD - Padr??o para dias ??teis
   "AUD/CAD": [[8, 0, 13, 0]],
   
-  // AUD/JPY (OTC) - Mesmo padrão para todos os dias
+  // AUD/JPY (OTC) - Mesmo padr??o para todos os dias
   "AUD/JPY (OTC)": [[0, 0, 5, 0], [6, 10, 23, 59]],
   
-  // AUD/JPY - Padrão para dias úteis
+  // AUD/JPY - Padr??o para dias ??teis
   "AUD/JPY": [[7, 0, 12, 0]],
   
-  // AUD/NZD (OTC) - Mesmo padrão para todos os dias
+  // AUD/NZD (OTC) - Mesmo padr??o para todos os dias
   "AUD/NZD (OTC)": [[0, 0, 22, 0], [22, 30, 23, 59]],
   
-  // AUD/USD (OTC) - Mesmo padrão para todos os dias
+  // AUD/USD (OTC) - Mesmo padr??o para todos os dias
   "AUD/USD (OTC)": [[0, 0, 22, 0], [22, 30, 23, 59]],
   
-  // AUD/USD - Padrão para dias úteis com intervalos específicos
+  // AUD/USD - Padr??o para dias ??teis com intervalos espec??ficos
   "AUD/USD": [[2, 0, 6, 0], [9, 30, 15, 0]],
   
-  // AUD/CHF - Padrão para dias úteis (seg-sex)
+  // AUD/CHF - Padr??o para dias ??teis (seg-sex)
   "AUD/CHF": [[0, 0, 16, 0]],
   
-  // CAD/CHF (OTC) - Padrão para dias úteis e sábado
+  // CAD/CHF (OTC) - Padr??o para dias ??teis e s??bado
   "CAD/CHF (OTC)": [[0, 0, 5, 0], [5, 30, 23, 59]],
   
-  // CAD/CHF - Padrão para dias úteis
+  // CAD/CHF - Padr??o para dias ??teis
   "CAD/CHF": [[4, 0, 16, 0]],
   
-  // CAD/JPY (OTC) - Mesmo padrão para todos os dias
+  // CAD/JPY (OTC) - Mesmo padr??o para todos os dias
   "CAD/JPY (OTC)": [[0, 0, 22, 0], [22, 30, 23, 59]],
   
-  // CHF/JPY - Mesmo padrão para todos os dias
+  // CHF/JPY - Mesmo padr??o para todos os dias
   "CHF/JPY": [[0, 0, 5, 0], [6, 10, 23, 59]],
   
-  // CHFNOK - Padrão para dias úteis e sábado
+  // CHFNOK - Padr??o para dias ??teis e s??bado
   "CHFNOK": [[0, 0, 5, 0], [5, 30, 23, 59]],
   
-  // Dollar Index - Padrão para dias úteis (seg-qui)
+  // Dollar Index - Padr??o para dias ??teis (seg-qui)
   "Dollar Index": [[0, 0, 10, 0], [11, 10, 22, 0], [23, 10, 23, 59]],
   
-  // EUR/AUD (OTC) - Mesmo padrão para todos os dias
+  // EUR/AUD (OTC) - Mesmo padr??o para todos os dias
   "EUR/AUD (OTC)": [[0, 0, 5, 0], [6, 10, 23, 59]],
   
-  // EUR/AUD - Padrão para dias úteis (seg-sex)
+  // EUR/AUD - Padr??o para dias ??teis (seg-sex)
   "EUR/AUD": [[0, 0, 16, 0]],
   
-  // EUR/CAD (OTC) - Padrão para dias úteis e sábado
+  // EUR/CAD (OTC) - Padr??o para dias ??teis e s??bado
   "EUR/CAD (OTC)": [[0, 0, 5, 0], [5, 30, 23, 59]],
   
-  // EUR/CAD - Padrão para dias úteis
+  // EUR/CAD - Padr??o para dias ??teis
   "EUR/CAD": [[4, 0, 16, 0]],
   
-  // EUR/CHF (OTC) - Mesmo padrão para todos os dias
+  // EUR/CHF (OTC) - Mesmo padr??o para todos os dias
   "EUR/CHF (OTC)": [[0, 0, 5, 0], [6, 10, 23, 59]],
   
-  // EUR/GBP (OTC) - Considerando o padrão para dias com interrupção (seg, qua, sex)
+  // EUR/GBP (OTC) - Considerando o padr??o para dias com interrup????o (seg, qua, sex)
   "EUR/GBP (OTC)": [[0, 0, 1, 0], [2, 10, 23, 59]],
   
-  // EUR/GBP - Padrão para dias úteis
+  // EUR/GBP - Padr??o para dias ??teis
   "EUR/GBP": [[3, 0, 13, 0]],
   
-  // EUR/JPY (OTC) - Considerando o padrão para dias com interrupção (seg, qua, sex)
+  // EUR/JPY (OTC) - Considerando o padr??o para dias com interrup????o (seg, qua, sex)
   "EUR/JPY (OTC)": [[0, 0, 1, 0], [1, 30, 23, 59]],
   
-  // EUR/NZD (OTC) - Mesmo padrão para todos os dias
+  // EUR/NZD (OTC) - Mesmo padr??o para todos os dias
   "EUR/NZD (OTC)": [[0, 0, 22, 0], [23, 5, 23, 59]],
   
-  // EUR/NZD - Padrão para dias úteis (seg-sex)
+  // EUR/NZD - Padr??o para dias ??teis (seg-sex)
   "EUR/NZD": [[0, 0, 16, 0]],
   
-  // EUR/THB (OTC) - Mesmo padrão para todos os dias
+  // EUR/THB (OTC) - Mesmo padr??o para todos os dias
   "EUR/THB (OTC)": [[0, 0, 22, 0], [23, 5, 23, 59]],
   
-  // EUR/USD (OTC) - Considerando o padrão para dias com interrupção (seg, qua, sex)
+  // EUR/USD (OTC) - Considerando o padr??o para dias com interrup????o (seg, qua, sex)
   "EUR/USD (OTC)": [[0, 0, 1, 0], [1, 30, 23, 59]],
   
-  // GBP/AUD (OTC) - Padrão para dias úteis e sábado
+  // GBP/AUD (OTC) - Padr??o para dias ??teis e s??bado
   "GBP/AUD (OTC)": [[0, 0, 5, 0], [5, 30, 23, 59]],
   
-  // GBP/AUD - Padrão para dias úteis (seg-sex)
+  // GBP/AUD - Padr??o para dias ??teis (seg-sex)
   "GBP/AUD": [[0, 0, 16, 0]],
   
-  // GBP/CAD (OTC) - Padrão para dias úteis e sábado
+  // GBP/CAD (OTC) - Padr??o para dias ??teis e s??bado
   "GBP/CAD (OTC)": [[0, 0, 5, 0], [5, 30, 23, 59]],
   
-  // GBP/CAD - Padrão para dias úteis
+  // GBP/CAD - Padr??o para dias ??teis
   "GBP/CAD": [[4, 0, 15, 0]],
   
-  // GBP/CHF (OTC) - Padrão para dias úteis e sábado
+  // GBP/CHF (OTC) - Padr??o para dias ??teis e s??bado
   "GBP/CHF (OTC)": [[0, 0, 5, 0], [5, 30, 23, 59]],
   
-  // GBP/CHF - Padrão para dias úteis (seg-sex)
+  // GBP/CHF - Padr??o para dias ??teis (seg-sex)
   "GBP/CHF": [[0, 0, 16, 0]],
   
-  // GBP/JPY (OTC) - Considerando o padrão para dias com interrupção (ter, qui)
+  // GBP/JPY (OTC) - Considerando o padr??o para dias com interrup????o (ter, qui)
   "GBP/JPY (OTC)": [[0, 0, 1, 0], [2, 10, 23, 59]],
   
-  // GBP/JPY - Padrão para dias úteis (seg-qui até 17:00, sex até 15:30)
+  // GBP/JPY - Padr??o para dias ??teis (seg-qui at?? 17:00, sex at?? 15:30)
   "GBP/JPY": [[3, 0, 17, 0]],
   
-  // GBP/NZD (OTC) - Mesmo padrão para todos os dias
+  // GBP/NZD (OTC) - Mesmo padr??o para todos os dias
   "GBP/NZD (OTC)": [[0, 0, 22, 0], [23, 5, 23, 59]],
   
-  // GBP/NZD - Padrão para dias úteis (seg-sex)
+  // GBP/NZD - Padr??o para dias ??teis (seg-sex)
   "GBP/NZD": [[0, 0, 16, 0]],
   
-  // GBP/USD (OTC) - Considerando o padrão para dias com interrupção (ter, qui)
+  // GBP/USD (OTC) - Considerando o padr??o para dias com interrup????o (ter, qui)
   "GBP/USD (OTC)": [[0, 0, 1, 0], [1, 30, 23, 59]],
   
-  // GBP/USD - Padrão para dias úteis (seg-qui até 17:00, sex até 15:30)
+  // GBP/USD - Padr??o para dias ??teis (seg-qui at?? 17:00, sex at?? 15:30)
   "GBP/USD": [[3, 0, 17, 0]],
   
-  // JPY/THB (OTC) - Mesmo padrão para todos os dias
+  // JPY/THB (OTC) - Mesmo padr??o para todos os dias
   "JPY/THB (OTC)": [[0, 0, 22, 0], [22, 30, 23, 59]],
   
-  // NOK/JPY (OTC) - Mesmo padrão para todos os dias
+  // NOK/JPY (OTC) - Mesmo padr??o para todos os dias
   "NOK/JPY (OTC)": [[0, 0, 22, 0], [23, 5, 23, 59]],
   
-  // NZD/CAD (OTC) - Mesmo padrão para todos os dias
+  // NZD/CAD (OTC) - Mesmo padr??o para todos os dias
   "NZD/CAD (OTC)": [[0, 0, 22, 0], [23, 5, 23, 59]],
   
-  // NZDCHF - Mesmo padrão para todos os dias
+  // NZDCHF - Mesmo padr??o para todos os dias
   "NZDCHF": [[0, 0, 22, 0], [23, 5, 23, 59]],
   
-  // NZD/JPY (OTC) - Mesmo padrão para todos os dias
+  // NZD/JPY (OTC) - Mesmo padr??o para todos os dias
   "NZD/JPY (OTC)": [[0, 0, 22, 0], [23, 5, 23, 59]],
   
-  // NZD/USD (OTC) - Considerando o padrão para dias com interrupção (ter, qui)
+  // NZD/USD (OTC) - Considerando o padr??o para dias com interrup????o (ter, qui)
   "NZD/USD (OTC)": [[0, 0, 1, 0], [1, 30, 23, 59]],
   
-  // PEN/USD (OTC) - Considerando o padrão para dias com interrupção (ter)
+  // PEN/USD (OTC) - Considerando o padr??o para dias com interrup????o (ter)
   "PEN/USD (OTC)": [[0, 0, 0, 45], [1, 15, 23, 59]],
   
-  // USD/BRL (OTC) - Considerando o padrão para dias com interrupção (ter)
+  // USD/BRL (OTC) - Considerando o padr??o para dias com interrup????o (ter)
   "USD/BRL (OTC)": [[0, 0, 0, 50], [2, 20, 23, 59]],
   
-  // USD/CAD (OTC) - Mesmo padrão para todos os dias
+  // USD/CAD (OTC) - Mesmo padr??o para todos os dias
   "USD/CAD (OTC)": [[0, 0, 5, 0], [6, 10, 23, 59]],
   
-  // USD/CAD - Padrão para dias úteis
+  // USD/CAD - Padr??o para dias ??teis
   "USD/CAD": [[3, 0, 15, 0]],
   
-  // USD/CHF (OTC) - Considerando o padrão para dias com interrupção (ter, qui)
+  // USD/CHF (OTC) - Considerando o padr??o para dias com interrup????o (ter, qui)
   "USD/CHF (OTC)": [[0, 0, 1, 0], [1, 30, 23, 59]],
   
-  // USD/CHF - Padrão para dias úteis
+  // USD/CHF - Padr??o para dias ??teis
   "USD/CHF": [[10, 0, 14, 0]],
   
-  // USD/COP (OTC) - Considerando o padrão para dias com interrupção (ter)
+  // USD/COP (OTC) - Considerando o padr??o para dias com interrup????o (ter)
   "USD/COP (OTC)": [[0, 0, 0, 45], [1, 15, 23, 59]],
   
-  // USD/HKD (OTC) - Mesmo padrão para todos os dias
+  // USD/HKD (OTC) - Mesmo padr??o para todos os dias
   "USD/HKD (OTC)": [[0, 0, 22, 0], [22, 30, 23, 59]],
   
-  // USD/INR (OTC) - Considerando o padrão para dias com interrupção (ter, qui)
+  // USD/INR (OTC) - Considerando o padr??o para dias com interrup????o (ter, qui)
   "USD/INR (OTC)": [[0, 0, 1, 0], [1, 30, 23, 59]],
   
-  // USD/JPY (OTC) - Considerando o padrão para dias com interrupção (ter, qui)
+  // USD/JPY (OTC) - Considerando o padr??o para dias com interrup????o (ter, qui)
   "USD/JPY (OTC)": [[0, 0, 1, 0], [2, 10, 23, 59]],
   
-  // USD/MXN (OTC) - Considerando o padrão para dias com interrupção (ter)
+  // USD/MXN (OTC) - Considerando o padr??o para dias com interrup????o (ter)
   "USD/MXN (OTC)": [[0, 0, 0, 50], [2, 20, 23, 59]],
   
-  // USD/NOK (OTC) - Mesmo padrão para todos os dias
+  // USD/NOK (OTC) - Mesmo padr??o para todos os dias
   "USD/NOK (OTC)": [[0, 0, 5, 0], [6, 10, 23, 59]],
   
-  // USD/PLN (OTC) - Padrão para dias úteis e sábado
+  // USD/PLN (OTC) - Padr??o para dias ??teis e s??bado
   "USD/PLN (OTC)": [[0, 0, 5, 0], [5, 30, 23, 59]],
   
-  // USD/SEK (OTC) - Padrão para dias úteis e sábado
+  // USD/SEK (OTC) - Padr??o para dias ??teis e s??bado
   "USD/SEK (OTC)": [[0, 0, 5, 0], [5, 30, 23, 59]],
   
-  // USD/SGD (OTC) - Mesmo padrão para todos os dias
+  // USD/SGD (OTC) - Mesmo padr??o para todos os dias
   "USD/SGD (OTC)": [[0, 0, 22, 0], [23, 5, 23, 59]],
   
-  // USD/THB (OTC) - Mesmo padrão para todos os dias
+  // USD/THB (OTC) - Mesmo padr??o para todos os dias
   "USD/THB (OTC)": [[0, 0, 22, 0], [23, 5, 23, 59]],
   
-  // USD/TRY (OTC) - Mesmo padrão para todos os dias
+  // USD/TRY (OTC) - Mesmo padr??o para todos os dias
   "USD/TRY (OTC)": [[0, 0, 5, 0], [6, 10, 23, 59]],
   
-  // USD/XOF (OTC) - Considerando o padrão para dias com interrupção (ter, qui)
+  // USD/XOF (OTC) - Considerando o padr??o para dias com interrup????o (ter, qui)
   "USD/XOF (OTC)": [[0, 0, 1, 0], [1, 30, 23, 59]],
   
-  // USD/ZAR (OTC) - Mesmo padrão para todos os dias
+  // USD/ZAR (OTC) - Mesmo padr??o para todos os dias
   "USD/ZAR (OTC)": [[0, 0, 5, 0], [6, 10, 23, 59]],
   
-  // Yen Index - Padrão para dias úteis (seg-qui)
+  // Yen Index - Padr??o para dias ??teis (seg-qui)
   "Yen Index": [[0, 0, 10, 0], [10, 30, 22, 0], [22, 30, 23, 59]]
 };
 
-// Objeto para uso mais fácil no código
+// Objeto para uso mais f??cil no c??digo
 const SignalStrength = {
   STRONG: 'STRONG' as SignalStrengthEnum,
   MODERATE: 'MODERATE' as SignalStrengthEnum,
@@ -1123,7 +1124,7 @@ const SignalStrength = {
   VERY_STRONG: 'VERY_STRONG' as SignalStrengthEnum
 };
 
-// Estilos para as animações
+// Estilos para as anima????es
 const styles = `
   @keyframes pulse {
     0%, 100% { opacity: 0.6; transform: scale(0.98); }
@@ -1156,7 +1157,7 @@ const styles = `
     50% { opacity: 1; }
   }
   
-  /* Animações para sinais completados */
+  /* Anima????es para sinais completados */
   @keyframes winPulse {
     0% { background-color: rgba(34, 197, 94, 0.05); box-shadow: 0 0 15px rgba(34, 197, 94, 0.1); }
     50% { background-color: rgba(34, 197, 94, 0.1); box-shadow: 0 0 25px rgba(34, 197, 94, 0.15); }
@@ -1224,7 +1225,7 @@ const styles = `
     animation: winConfetti 2s ease-out forwards;
   }
   
-  /* Animações para os ícones de resultado */
+  /* Anima????es para os ??cones de resultado */
   @keyframes iconScaleIn {
     0% { transform: scale(0); opacity: 0; }
     40% { transform: scale(1.2); opacity: 1; }
@@ -1281,7 +1282,7 @@ const styles = `
     margin-top: 10px;
   }
   
-  /* Classe específica para a página de sinais - não afeta o Dashboard */
+  /* Classe espec??fica para a p??gina de sinais - n??o afeta o Dashboard */
   .signals-page-dark-gradient {
     background: #000000;
   }
@@ -1367,14 +1368,14 @@ const styles = `
     color: rgba(255, 255, 255, 0.8);
   }
 
-  /* Estilo para as caixas de informação */
+  /* Estilo para as caixas de informa????o */
   .signal-info-box {
     background: rgba(0, 0, 0, 0.8);
     border: 1px solid rgba(255, 255, 255, 0.05);
     backdrop-filter: blur(10px);
   }
   
-  /* Classes específicas para a página de sinais */
+  /* Classes espec??ficas para a p??gina de sinais */
   .signals-page-light-accent {
     position: absolute;
     width: 200px;
@@ -1400,7 +1401,7 @@ const styles = `
     animation: slowFloat 5s ease-in-out infinite;
   }
   
-  /* Classe específica para os cartões da página de sinais */
+  /* Classe espec??fica para os cart??es da p??gina de sinais */
   .signals-page-card-glass {
     background: rgba(0, 0, 0, 0.6);
     backdrop-filter: blur(15px);
@@ -1451,7 +1452,7 @@ const styles = `
     animation: glowPulse 3s ease-in-out infinite;
   }
 
-  /* Estilo para o título principal da página */
+  /* Estilo para o t??tulo principal da p??gina */
   .signals-title {
     position: relative;
     display: inline-block;
@@ -1488,7 +1489,7 @@ const styles = `
   }
 `;
 
-// Interface para sinais de placeholder compatível com TradingSignal
+// Interface para sinais de placeholder compat??vel com TradingSignal
 interface PlaceholderSignal extends TradingSignal {
   id: string;
   symbol: string;
@@ -1501,38 +1502,38 @@ interface PlaceholderSignal extends TradingSignal {
   gale2_time: string;
   result?: 'win' | 'loss' | null;
   completedTime?: number;
-  resultDetermined?: boolean;  // Flag para indicar se o resultado já foi determinado
+  resultDetermined?: boolean;  // Flag para indicar se o resultado j?? foi determinado
   showResult?: boolean;       // Flag para indicar se deve mostrar o resultado
   resultTimestamp?: number;   // Timestamp de quando o resultado foi determinado
-  isAnimatingResult?: boolean; // Flag para controlar animação do resultado
+  isAnimatingResult?: boolean; // Flag para controlar anima????o do resultado
 }
 
-// Interface para sinais estendidos com propriedades de animação e processamento
+// Interface para sinais estendidos com propriedades de anima????o e processamento
 interface ExtendedSignal extends PlaceholderSignal {
   isAnimating?: boolean;
   processed?: boolean;
   isDashboard?: boolean;
 }
 
-// Adicionar a propriedade para o TypeScript no nível superior do arquivo
-// Nota: A interface Window._cacheDailySignals já está definida em SignalsCard.tsx como any[]
+// Adicionar a propriedade para o TypeScript no n??vel superior do arquivo
+// Nota: A interface Window._cacheDailySignals j?? est?? definida em SignalsCard.tsx como any[]
 // para manter compatibilidade com outros componentes
 
-// Função para verificar se um ativo está disponível em determinado horário
+// Fun????o para verificar se um ativo est?? dispon??vel em determinado hor??rio
 const isAssetAvailable = (asset: string, date: Date = new Date()): boolean => {
-  // Verificação especial para USD Currency Index com horários específicos por dia da semana
+  // Verifica????o especial para USD Currency Index com hor??rios espec??ficos por dia da semana
   if (asset === "USD Currency Index (OTC)") {
-    const dayOfWeek = date.getDay(); // 0 = Domingo, 1 = Segunda, ..., 6 = Sábado
+    const dayOfWeek = date.getDay(); // 0 = Domingo, 1 = Segunda, ..., 6 = S??bado
     const hora = date.getHours();
     const minuto = date.getMinutes();
     const currentTimeInMinutes = hora * 60 + minuto;
     
-    // Sábado: Mercado fechado
+    // S??bado: Mercado fechado
     if (dayOfWeek === 6) {
       return false;
     }
     
-    // Domingo: 19:00 – 23:59
+    // Domingo: 19:00 ??? 23:59
     if (dayOfWeek === 0) {
       return currentTimeInMinutes >= (19 * 60) && currentTimeInMinutes <= (23 * 60 + 59);
     }
@@ -1553,7 +1554,7 @@ const isAssetAvailable = (asset: string, date: Date = new Date()): boolean => {
     return false;
   }
   
-  // Se o ativo não estiver na lista de horários, assume-se que está disponível 24/7
+  // Se o ativo n??o estiver na lista de hor??rios, assume-se que est?? dispon??vel 24/7
   if (!HORARIOS_DISPONIBILIDADE[asset]) {
     return true;
   }
@@ -1561,7 +1562,7 @@ const isAssetAvailable = (asset: string, date: Date = new Date()): boolean => {
   const hora = date.getHours();
   const minuto = date.getMinutes();
   
-  // Verificar se o horário atual está dentro de algum dos intervalos de disponibilidade
+  // Verificar se o hor??rio atual est?? dentro de algum dos intervalos de disponibilidade
   const isAvailable = HORARIOS_DISPONIBILIDADE[asset].some(([horaInicio, minutoInicio, horaFim, minutoFim]) => {
     const inicioEmMinutos = horaInicio * 60 + minutoInicio;
     const fimEmMinutos = horaFim * 60 + minutoFim;
@@ -1572,28 +1573,28 @@ const isAssetAvailable = (asset: string, date: Date = new Date()): boolean => {
   
   // Log detalhado apenas para alguns ativos para evitar spam
   if (asset === "Ouro/Prata" || asset === "US 100 (OTC)" || asset === "Amazon/Ebay (OTC)") {
-    console.log(`Verificando disponibilidade: ${asset} às ${hora}:${minuto} - ${isAvailable ? 'Disponível' : 'Indisponível'}`);
+    console.log(`Verificando disponibilidade: ${asset} ??s ${hora}:${minuto} - ${isAvailable ? 'Dispon??vel' : 'Indispon??vel'}`);
   }
   
   return isAvailable;
 };
 
-// Função FLEXIBILIZADA para verificar se um ativo estará disponível por pelo menos 30 minutos
-// Esta função substitui a verificação rigorosa para permitir mais sinais serem gerados
+// Fun????o FLEXIBILIZADA para verificar se um ativo estar?? dispon??vel por pelo menos 30 minutos
+// Esta fun????o substitui a verifica????o rigorosa para permitir mais sinais serem gerados
 const isAssetAvailableForSignal = (asset: string, entryDate: Date = new Date()): boolean => {
-  // Verificação especial para USD Currency Index com horários específicos por dia da semana
+  // Verifica????o especial para USD Currency Index com hor??rios espec??ficos por dia da semana
   if (asset === "USD Currency Index (OTC)") {
-    const dayOfWeek = entryDate.getDay(); // 0 = Domingo, 1 = Segunda, ..., 6 = Sábado
+    const dayOfWeek = entryDate.getDay(); // 0 = Domingo, 1 = Segunda, ..., 6 = S??bado
     const hora = entryDate.getHours();
     const minuto = entryDate.getMinutes();
     const entryTimeMinutes = hora * 60 + minuto;
     
-    // Sábado: Mercado fechado
+    // S??bado: Mercado fechado
     if (dayOfWeek === 6) {
       return false;
     }
     
-    // Domingo: 19:00 – 23:59
+    // Domingo: 19:00 ??? 23:59
     if (dayOfWeek === 0) {
       const isInRange = entryTimeMinutes >= (19 * 60) && entryTimeMinutes <= (23 * 60 + 59);
       const timeRemaining = (23 * 60 + 59) - entryTimeMinutes;
@@ -1638,7 +1639,7 @@ const isAssetAvailableForSignal = (asset: string, entryDate: Date = new Date()):
     return false;
   }
   
-  // Se o ativo não estiver na lista de horários, assume-se que está disponível 24/7
+  // Se o ativo n??o estiver na lista de hor??rios, assume-se que est?? dispon??vel 24/7
   if (!HORARIOS_DISPONIBILIDADE[asset]) {
     return true;
   }
@@ -1647,15 +1648,15 @@ const isAssetAvailableForSignal = (asset: string, entryDate: Date = new Date()):
   const minuto = entryDate.getMinutes();
   const entryTimeMinutes = hora * 60 + minuto;
   
-  // Verificar se o ativo estará disponível por pelo menos 3 horas a partir do horário de entrada
-  const requiredEndTime = entryTimeMinutes + 180; // 180 minutos (3 horas) após a entrada
+  // Verificar se o ativo estar?? dispon??vel por pelo menos 3 horas a partir do hor??rio de entrada
+  const requiredEndTime = entryTimeMinutes + 180; // 180 minutos (3 horas) ap??s a entrada
   
   const isAvailable = HORARIOS_DISPONIBILIDADE[asset].some(([horaInicio, minutoInicio, horaFim, minutoFim]) => {
     const inicioEmMinutos = horaInicio * 60 + minutoInicio;
     const fimEmMinutos = horaFim * 60 + minutoFim;
     
-    // Verifica se o horário de entrada está dentro do intervalo
-    // E se há pelo menos 3 horas de disponibilidade restante
+    // Verifica se o hor??rio de entrada est?? dentro do intervalo
+    // E se h?? pelo menos 3 horas de disponibilidade restante
     const entryInRange = entryTimeMinutes >= inicioEmMinutos && entryTimeMinutes <= fimEmMinutos;
     const availableTimeRemaining = fimEmMinutos - entryTimeMinutes; // Tempo restante de disponibilidade
     const hasEnoughTime = availableTimeRemaining >= 180; // Pelo menos 180 minutos (3 horas) restantes
@@ -1663,15 +1664,17 @@ const isAssetAvailableForSignal = (asset: string, entryDate: Date = new Date()):
     return entryInRange && hasEnoughTime;
   });
   
-  // Log para debug quando necessário
+  // Log para debug quando necess??rio
   if (!isAvailable && (asset === "Ouro/Prata" || asset === "US 100 (OTC)" || asset === "Amazon/Ebay (OTC)")) {
-    console.log(`❌ Ativo ${asset} não terá 30min disponíveis a partir de ${hora}:${String(minuto).padStart(2, '0')}`);
+    console.log(`??? Ativo ${asset} n??o ter?? 30min dispon??veis a partir de ${hora}:${String(minuto).padStart(2, '0')}`);
   }
   
   return isAvailable;
 };
 
 const Signals = () => {
+  console.log('?? [Signals] Componente montado/renderizado');
+  
   const { t, language } = useLanguage();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
@@ -1701,7 +1704,7 @@ const Signals = () => {
   
 
   
-  // Referências para controle de estado sem re-renderização
+  // Refer??ncias para controle de estado sem re-renderiza????o
   const rotateSignalsLock = useRef(false);
   const lastRotationTime = useRef(0);
   const stateRef = useRef({
@@ -1715,15 +1718,15 @@ const Signals = () => {
   });
   
   // ===== SUPABASE REALTIME INTEGRATION =====
-  // Handler para mudanças em tempo real nos sinais
+  // Handler para mudan??as em tempo real nos sinais
   const handleRealtimeSignalChange = useCallback((signal: TradingSignal) => {
-    console.log('🔄 [Realtime] Sinal atualizado em tempo real:', signal);
+    console.log('???? [Realtime] Sinal atualizado em tempo real:', signal);
     
     // Invalidar cache do React Query para recarregar sinais
     queryClient.invalidateQueries({ queryKey: ['tradingSignals'] });
     
-    // Opcional: Mostrar notificação visual
-    // toast.info('Novo sinal disponível');
+    // Opcional: Mostrar notifica????o visual
+    // toast.info('Novo sinal dispon??vel');
   }, [queryClient]);
 
   // Conectar ao realtime do Supabase
@@ -1734,17 +1737,17 @@ const Signals = () => {
 
   useEffect(() => {
     if (realtimeStatus === 'connected') {
-      console.log('✅ [Realtime] Conectado ao Supabase Realtime para sinais de trading');
+      console.log('?? [Realtime] Conectado ao Supabase Realtime para sinais de trading');
     } else if (realtimeStatus === 'disconnected') {
-      console.warn('⚠️ [Realtime] Desconectado do Supabase Realtime');
+      console.warn('???? [Realtime] Desconectado do Supabase Realtime');
     }
   }, [realtimeStatus]);
   // ===== FIM SUPABASE REALTIME INTEGRATION =====
 
   
-  // Usar a função `adjustTime` fornecida pelo contexto `useTimeZone`
+  // Usar a fun????o `adjustTime` fornecida pelo contexto `useTimeZone`
 
-  // Função para converter o tempo de string para Date
+  // Fun????o para converter o tempo de string para Date
   const convertTimeStringToDate = useCallback((timeString: string): Date => {
     if (!timeString) return new Date();
     try {
@@ -1758,7 +1761,7 @@ const Signals = () => {
     }
   }, [adjustTime]);
   
-  // Função para calcular o próximo horário com base em um horário inicial e um intervalo em minutos
+  // Fun????o para calcular o pr??ximo hor??rio com base em um hor??rio inicial e um intervalo em minutos
   const calculateNextTime = useCallback((timeStr: string, minutesToAdd: number): string => {
     const [hours, minutes] = timeStr.split(':').map(Number);
     const totalMinutes = hours * 60 + minutes + minutesToAdd;
@@ -1769,7 +1772,7 @@ const Signals = () => {
     return `${newHours.toString().padStart(2, '0')}:${newMinutes.toString().padStart(2, '0')}`;
   }, []);
   
-  // Converter PlaceholderSignal para TradingSignal (compatível com notificações)
+  // Converter PlaceholderSignal para TradingSignal (compat??vel com notifica????es)
   const convertToTradingSignal = useCallback((signal: PlaceholderSignal): TradingSignal => ({
     ...signal,
     id: signal.id,
@@ -1777,7 +1780,7 @@ const Signals = () => {
     pair: signal.pair,
     type: SignalType.TECHNICAL,
     signal: signal.signal,
-    reason: signal.reason || 'Análise algorítmica',
+    reason: signal.reason || 'An??lise algor??tmica',
     strength: SignalStrength.STRONG,
     timestamp: signal.timestamp || Date.now(),
     price: signal.price || signal.entry_price || 0,
@@ -1792,19 +1795,19 @@ const Signals = () => {
     entry_time: signal.entry_time
   }), []);
 
-  // Agendar notificações para novos sinais
+  // Agendar notifica????es para novos sinais
   const scheduleNotificationsForSignals = useCallback((signals: PlaceholderSignal[]) => {
     signals.forEach(signal => {
       if (signal.entry_time) {
         const tradingSignal = convertToTradingSignal(signal);
-        // Compatibilidade: O contexto aceita TradingSignal com entry_price flexível
+        // Compatibilidade: O contexto aceita TradingSignal com entry_price flex??vel
         // O tipo importado usa number, mas o contexto aceita ambos
         scheduleSignalNotification(tradingSignal as unknown as Parameters<typeof scheduleSignalNotification>[0]);
       }
     });
   }, [scheduleSignalNotification, convertToTradingSignal]);
 
-  // Helper para comparar arrays de sinais (IDs e entry_time) para evitar setState desnecessário
+  // Helper para comparar arrays de sinais (IDs e entry_time) para evitar setState desnecess??rio
   const areSignalsEqual = (a?: TradingSignal[] | null, b?: TradingSignal[] | null) => {
     if (a === b) return true;
     if (!Array.isArray(a) || !Array.isArray(b)) return false;
@@ -1819,13 +1822,13 @@ const Signals = () => {
     return true;
   };
 
-  // Função segura para atualizar o cache do React Query somente se houver mudança real
+  // Fun????o segura para atualizar o cache do React Query somente se houver mudan??a real
   const safeSetTradingSignals = useCallback((newSignals: TradingSignal[] | null | undefined) => {
     try {
       const existing = queryClient.getQueryData<TradingSignal[]>(['tradingSignals']) || [];
       if (!newSignals) return;
       if (areSignalsEqual(existing, newSignals)) {
-        // Não atualiza se for idêntico
+        // N??o atualiza se for id??ntico
         return;
       }
       queryClient.setQueryData(['tradingSignals'], newSignals);
@@ -1834,11 +1837,11 @@ const Signals = () => {
     }
   }, [queryClient]);
 
-  // Função para obter um ativo aleatório disponível no momento atual com disponibilidade de 30 minutos
+  // Fun????o para obter um ativo aleat??rio dispon??vel no momento atual com disponibilidade de 30 minutos
   const getRandomAsset = useCallback((entryDate?: Date): string => {
     const checkDate = entryDate || new Date();
     
-    // Filtrar RIGOROSAMENTE qualquer ativo que contenha "binance" (maiúsculo ou minúsculo)
+    // Filtrar RIGOROSAMENTE qualquer ativo que contenha "binance" (mai??sculo ou min??sculo)
     const availableAssets = getAllAssetNames().filter(asset => {
       const assetLower = asset.toLowerCase();
       const categoryLower = (ATIVOS_CATEGORIAS[asset] || '').toLowerCase();
@@ -1853,10 +1856,10 @@ const Signals = () => {
     
     // Log para debug - apenas se houver problemas
     if (availableAssets.length === 0) {
-      console.warn('Nenhum ativo disponível encontrado, usando ativos padrão');
+      console.warn('Nenhum ativo dispon??vel encontrado, usando ativos padr??o');
     }
     
-    // Se não houver ativos disponíveis, usar ativos padrão que são sempre seguros
+    // Se n??o houver ativos dispon??veis, usar ativos padr??o que s??o sempre seguros
     if (availableAssets.length === 0) {
       const safeAssets = [
         "Bitcoin", 
@@ -1869,7 +1872,7 @@ const Signals = () => {
       return safeAssets[randomIndex];
     }
     
-    // Lista de ativos prioritários para maior variação (todos OTC e sem binance)
+    // Lista de ativos priorit??rios para maior varia????o (todos OTC e sem binance)
     const priorityAssets = [
       "GER 30 (OTC)", "USD/ZAR (OTC)", "MELANIA Coin (OTC)", 
       "Hamster Kombat (OTC)", "Worldcoin (OTC)", "TRUMP Coin (OTC)", "GBP/CAD (OTC)",
@@ -1880,18 +1883,18 @@ const Signals = () => {
       !asset.toLowerCase().includes('binance')
     );
     
-    // Se temos ativos prioritários disponíveis, escolher entre eles
+    // Se temos ativos priorit??rios dispon??veis, escolher entre eles
     if (priorityAssets.length > 0) {
       const randomIndex = Math.floor(Math.random() * priorityAssets.length);
       const selectedAsset = priorityAssets[randomIndex];
       
-      // Verificação adicional de segurança
+      // Verifica????o adicional de seguran??a
       if (!selectedAsset.toLowerCase().includes('binance')) {
         return selectedAsset;
       }
     }
     
-    // Caso contrário, retornar um ativo aleatório da lista completa de disponíveis
+    // Caso contr??rio, retornar um ativo aleat??rio da lista completa de dispon??veis
     const filteredAvailableAssets = availableAssets.filter(asset => ALLOWED_SET.has(asset) && !asset.toLowerCase().includes('binance'));
     
     if (filteredAvailableAssets.length > 0) {
@@ -1899,11 +1902,11 @@ const Signals = () => {
       return filteredAvailableAssets[randomIndex];
     }
     
-    // Último recurso - retornar um ativo absolutamente seguro
+    // ??ltimo recurso - retornar um ativo absolutamente seguro
     return "Bitcoin";
   }, []);
 
-  // Função para criar dados base para um sinal placeholder
+  // Fun????o para criar dados base para um sinal placeholder
   // NOTA: Precisa estar aqui antes de generateDailySignals que a utiliza
   const createBasePlaceholderData = useCallback((override: Partial<PlaceholderSignal> = {}): PlaceholderSignal => ({
     id: `signal-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
@@ -1918,7 +1921,7 @@ const Signals = () => {
     status: 'active',
     strength: SignalStrength.MODERATE,
     type: SignalType.TECHNICAL,
-    reason: 'Análise algorítmica',
+    reason: 'An??lise algor??tmica',
     timestamp: Date.now(),
     success_rate: 0.85,
     price: 100 + Math.random() * 900,
@@ -1930,10 +1933,10 @@ const Signals = () => {
     ...override
   }), []);
 
-  // Função para gerar a sequência de sinais para o dia todo, começando à meia-noite
+  // Fun????o para gerar a sequ??ncia de sinais para o dia todo, come??ando ?? meia-noite
   // NOTA: Precisa estar aqui antes de createRandomPlaceholderSignal que a utiliza
   const generateDailySignals = useCallback((): PlaceholderSignal[] => {
-    // Verificar se já temos sinais gerados em cache de memória
+    // Verificar se j?? temos sinais gerados em cache de mem??ria
     const today = new Date();
     const todayStr = `${today.getFullYear()}-${today.getMonth()+1}-${today.getDate()}`;
     
@@ -1942,50 +1945,50 @@ const Signals = () => {
     }
     const dailySignals: PlaceholderSignal[] = [];
     
-    // Usar semente para geração aleatória baseada no dia atual
-    // Isso garante que os sinais serão os mesmos para o dia todo
+    // Usar semente para gera????o aleat??ria baseada no dia atual
+    // Isso garante que os sinais ser??o os mesmos para o dia todo
     const seed = today.getFullYear() * 10000 + (today.getMonth() + 1) * 100 + today.getDate();
     const seededRandom = (max: number) => {
       const x = Math.sin(seed + dailySignals.length) * 10000;
       return Math.floor((x - Math.floor(x)) * max);
     };
     
-    // Criar um conjunto para rastrear combinações de ativos e horários já usados
+    // Criar um conjunto para rastrear combina????es de ativos e hor??rios j?? usados
     const usedAssetTimeCombo = new Set<string>();
     
-    // Gerar horários seguindo a sequência correta: 00:03, 00:23, 00:43, 01:03, 01:23, 01:43, 02:03...
+    // Gerar hor??rios seguindo a sequ??ncia correta: 00:03, 00:23, 00:43, 01:03, 01:23, 01:43, 02:03...
     let currentHour = 0;
-    let currentMinute = 3; // Começar sempre com :03
+    let currentMinute = 3; // Come??ar sempre com :03
     
     // Gerar sinais para 24 horas (72 sinais no total: 3 por hora x 24 horas)
     for (let i = 0; i < 72; i++) {
-        // Formatar o horário de entrada
+        // Formatar o hor??rio de entrada
       const entryTime = `${currentHour.toString().padStart(2, '0')}:${currentMinute.toString().padStart(2, '0')}`;
         
-        // Calcular os horários de expiração e reentradas
-        const expiryTime = calculateNextTime(entryTime, SIGNAL_EXPIRY_TIME); // Expiração = entrada + 5 min
-        const gale1Time = expiryTime; // Reentrada 1 é igual ao horário de expiração
+        // Calcular os hor??rios de expira????o e reentradas
+        const expiryTime = calculateNextTime(entryTime, SIGNAL_EXPIRY_TIME); // Expira????o = entrada + 5 min
+        const gale1Time = expiryTime; // Reentrada 1 ?? igual ao hor??rio de expira????o
         const gale2Time = calculateNextTime(gale1Time, SIGNAL_EXPIRY_TIME); // Reentrada 2 = reentrada 1 + 5 min
         
-        // Criar uma data simulada para este horário específico
+        // Criar uma data simulada para este hor??rio espec??fico
         const signalDate = new Date();
       signalDate.setHours(currentHour, currentMinute, 0, 0);
         
-        // Obter todos os ativos disponíveis neste horário específico (com 3 horas de disponibilidade)
+        // Obter todos os ativos dispon??veis neste hor??rio espec??fico (com 3 horas de disponibilidade)
         const availableAssets = getAllAssetNames().filter(asset => 
           ALLOWED_SET.has(asset) && isAssetAvailableForSignal(asset, signalDate)
         );
         
         // Log para debug da nova regra de disponibilidade
         const totalAssets = Object.keys(ATIVOS_CATEGORIAS).length;
-        console.log(`✅ DISPONIBILIDADE: ${availableAssets.length}/${totalAssets} ativos disponíveis às ${entryTime} (regra 3 horas)`);
+        console.log(`?? DISPONIBILIDADE: ${availableAssets.length}/${totalAssets} ativos dispon??veis ??s ${entryTime} (regra 3 horas)`);
         
-        // Se não houver ativos disponíveis neste horário, usar ativos da lista permitida
+        // Se n??o houver ativos dispon??veis neste hor??rio, usar ativos da lista permitida
         const assetsToUse = availableAssets.length > 0 ? availableAssets : ALLOWED_ASSETS.slice(0, 3);
         
-        // Se ainda não temos ativos disponíveis, pular este horário
+        // Se ainda n??o temos ativos dispon??veis, pular este hor??rio
       if (assetsToUse.length === 0) {
-        // Avançar para o próximo horário na sequência
+        // Avan??ar para o pr??ximo hor??rio na sequ??ncia
         if (currentMinute === 3) {
           currentMinute = 23;
         } else if (currentMinute === 23) {
@@ -1997,7 +2000,7 @@ const Signals = () => {
         continue;
       }
         
-        // Selecionar um ativo aleatório não usado no horário anterior
+        // Selecionar um ativo aleat??rio n??o usado no hor??rio anterior
         let symbol;
         let attempts = 0;
         
@@ -2007,23 +2010,23 @@ const Signals = () => {
           attempts++;
       } while (usedAssetTimeCombo.has(`${symbol}-${currentHour}${currentMinute}`) && attempts < 10);
         
-        // Marcar esta combinação como usada
+        // Marcar esta combina????o como usada
       usedAssetTimeCombo.add(`${symbol}-${currentHour}${currentMinute}`);
         
-        // Criar um ID estável baseado no horário e no asset, não em timestamp aleatório
+        // Criar um ID est??vel baseado no hor??rio e no asset, n??o em timestamp aleat??rio
         const stableId = `signal_${entryTime.replace(':', '')}_${symbol.replace(/[^a-zA-Z0-9]/g, '_')}_${seed}`;
         
         // Gerar taxas de sucesso entre 80% e 93.4%
         const successRate = 0.80 + (seededRandom(100) / 100) * (0.934 - 0.80);
         
-        // Determinar força do sinal com base na taxa de sucesso
+        // Determinar for??a do sinal com base na taxa de sucesso
         let strength;
         if (successRate >= 0.90) {
-          strength = SignalStrength.VERY_STRONG; // Altíssima expectativa (≥ 90%)
+          strength = SignalStrength.VERY_STRONG; // Alt??ssima expectativa (??? 90%)
         } else if (successRate >= 0.85) {
-          strength = SignalStrength.STRONG; // Alta expectativa (≥ 85%)
+          strength = SignalStrength.STRONG; // Alta expectativa (??? 85%)
         } else {
-          strength = SignalStrength.MODERATE; // Média expectativa (< 85%)
+          strength = SignalStrength.MODERATE; // M??dia expectativa (< 85%)
         }
         
         // Adicionar este sinal ao conjunto
@@ -2043,18 +2046,18 @@ const Signals = () => {
         
         dailySignals.push(signal);
       
-      // Avançar para o próximo horário na sequência correta
+      // Avan??ar para o pr??ximo hor??rio na sequ??ncia correta
       if (currentMinute === 3) {
         currentMinute = 23; // 03 -> 23 (mesma hora)
       } else if (currentMinute === 23) {
         currentMinute = 43; // 23 -> 43 (mesma hora)
       } else if (currentMinute === 43) {
-        currentMinute = 3; // 43 -> 03 (próxima hora)
+        currentMinute = 3; // 43 -> 03 (pr??xima hora)
         currentHour = (currentHour + 1) % 24;
       }
     }
     
-    // Armazenar em cache de memória
+    // Armazenar em cache de mem??ria
     signalCache = {
       signals: dailySignals,
       date: todayStr
@@ -2063,122 +2066,122 @@ const Signals = () => {
     return dailySignals;
   }, [calculateNextTime, createBasePlaceholderData]);
 
-  // Função para criar um novo sinal aleatório (baseado no ciclo definido)
+  // Fun????o para criar um novo sinal aleat??rio (baseado no ciclo definido)
   // NOTA: Precisa estar aqui antes de rotateSignals que a utiliza
   const createRandomPlaceholderSignal = useCallback((): PlaceholderSignal => {
-    // Obter os sinais diários
+    // Obter os sinais di??rios
     const dailySignals = generateDailySignals();
     
-    // Obter o horário atual
+    // Obter o hor??rio atual
     const now = new Date();
     
-    // Encontrar o próximo sinal baseado no horário atual
+    // Encontrar o pr??ximo sinal baseado no hor??rio atual
     let nextSignal = dailySignals[0];
     
     for (const signal of dailySignals) {
       const entryTime = convertTimeStringToDate(signal.entry_time);
       
-      // Se encontrarmos um sinal com horário de entrada futuro, usamos ele
+      // Se encontrarmos um sinal com hor??rio de entrada futuro, usamos ele
       if (entryTime > now) {
         nextSignal = signal;
         break;
       }
     }
     
-    // Se não encontramos nenhum sinal futuro, usar o primeiro do dia seguinte
+    // Se n??o encontramos nenhum sinal futuro, usar o primeiro do dia seguinte
     if (!nextSignal) {
       nextSignal = dailySignals[0];
     }
     
-    // Garantir que o ID seja único
+    // Garantir que o ID seja ??nico
     return {
       ...nextSignal,
       id: 'placeholder-' + Math.random().toString(36).substring(2, 9),
     };
   }, [convertTimeStringToDate, generateDailySignals]);
 
-  // Função para rotacionar os sinais com lock para evitar múltiplas chamadas rápidas
+  // Fun????o para rotacionar os sinais com lock para evitar m??ltiplas chamadas r??pidas
   const rotateSignals = useCallback((currentSignals: TradingSignal[]): TradingSignal[] => {
-    // Verificar se já rotacionamos recentemente (dentro dos últimos 5 minutos)
+    // Verificar se j?? rotacionamos recentemente (dentro dos ??ltimos 5 minutos)
     const now = Date.now();
     if (now - lastRotationTime.current < 5 * 60 * 1000) {
-      console.log('Ignorando rotação - última rotação foi há menos de 5 minutos');
+      console.log('Ignorando rota????o - ??ltima rota????o foi h?? menos de 5 minutos');
       return currentSignals;
     }
     
-    // Verificar se o lock de rotação está ativo
+    // Verificar se o lock de rota????o est?? ativo
     if (rotateSignalsLock.current) {
-      console.log('Rotação ignorada devido ao lock ativo');
+      console.log('Rota????o ignorada devido ao lock ativo');
       return currentSignals;
     }
     
-    // Ativar lock de rotação para evitar rotações simultâneas
+    // Ativar lock de rota????o para evitar rota????es simult??neas
     rotateSignalsLock.current = true;
     
     try {
-      console.log('Iniciando rotação controlada de sinais...');
+      console.log('Iniciando rota????o controlada de sinais...');
       
       // Verificar se temos pelo menos 7 sinais na lista atual
       if (!currentSignals || currentSignals.length < 7) {
-        console.log('Número insuficiente de sinais para rotação (mínimo 7 necessários)');
+        console.log('N??mero insuficiente de sinais para rota????o (m??nimo 7 necess??rios)');
         return currentSignals;
       }
       
-      // Obter o primeiro sinal (que será removido na rotação)
+      // Obter o primeiro sinal (que ser?? removido na rota????o)
       const firstSignal = currentSignals[0];
       if (!firstSignal || !firstSignal.entry_time) {
-        console.log('Primeiro sinal inválido, não é possível verificar rotação');
+        console.log('Primeiro sinal inv??lido, n??o ?? poss??vel verificar rota????o');
         return currentSignals;
       }
       
-      // Verificar se já se passaram 20 minutos desde a entrada do primeiro sinal
+      // Verificar se j?? se passaram 20 minutos desde a entrada do primeiro sinal
       const [entryHour, entryMin] = String(firstSignal.entry_time).split(':').map(Number);
       
-      // Criar horário de entrada
+      // Criar hor??rio de entrada
       const entryTime = new Date();
       entryTime.setHours(entryHour, entryMin, 0, 0);
       
-      // Se o horário de entrada for no futuro, ajustar para o dia anterior
+      // Se o hor??rio de entrada for no futuro, ajustar para o dia anterior
       const currentTime = new Date();
       if (entryTime > currentTime) {
         entryTime.setDate(entryTime.getDate() - 1);
       }
       
-      // Calcular diferença em minutos desde a entrada
+      // Calcular diferen??a em minutos desde a entrada
       const timeDiffMs = currentTime.getTime() - entryTime.getTime();
       const minutesSinceEntry = Math.floor(timeDiffMs / (1000 * 60));
         
-      // Verificar se já se passaram 20 minutos
+      // Verificar se j?? se passaram 20 minutos
       if (minutesSinceEntry < 20) {
-        console.log(`Rotação não necessária - apenas ${minutesSinceEntry} minutos desde a entrada do primeiro sinal (necessário 20)`);
+        console.log(`Rota????o n??o necess??ria - apenas ${minutesSinceEntry} minutos desde a entrada do primeiro sinal (necess??rio 20)`);
         return currentSignals;
       }
       
-      console.log(`🔄 ROTAÇÃO NECESSÁRIA - ${minutesSinceEntry} minutos desde a entrada do primeiro sinal (${firstSignal.entry_time})`);
+      console.log(`???? ROTA????O NECESS??RIA - ${minutesSinceEntry} minutos desde a entrada do primeiro sinal (${firstSignal.entry_time})`);
       
-      // Obter o último sinal atual para determinar o próximo horário válido
+      // Obter o ??ltimo sinal atual para determinar o pr??ximo hor??rio v??lido
       const lastSignal = currentSignals[currentSignals.length - 1];
       
-      // Calcular o próximo horário válido baseado no padrão 03→23→43→03
+      // Calcular o pr??ximo hor??rio v??lido baseado no padr??o 03???23???43???03
       const lastEntryTime = String(lastSignal.entry_time);
       const [lastHour, lastMinute] = lastEntryTime.split(':').map(Number);
         
-      // Determinar o próximo horário seguindo o padrão
+      // Determinar o pr??ximo hor??rio seguindo o padr??o
       let nextHour = lastHour;
       let nextMinute = lastMinute;
       
-      // Avançar para o próximo horário válido
+      // Avan??ar para o pr??ximo hor??rio v??lido
       if (lastMinute === 3) {
-        nextMinute = 23; // 03 → 23
+        nextMinute = 23; // 03 ??? 23
       } else if (lastMinute === 23) {
-        nextMinute = 43; // 23 → 43
+        nextMinute = 43; // 23 ??? 43
       } else if (lastMinute === 43) {
-        nextMinute = 3; // 43 → 03 (próxima hora)
+        nextMinute = 3; // 43 ??? 03 (pr??xima hora)
         nextHour = (lastHour + 1) % 24;
       } else {
-        // Caso o último horário não siga o padrão, usar próximo válido
-        console.log(`⚠️ Horário inválido detectado (${lastEntryTime}), corrigindo para o próximo válido`);
-        // Usar padrão default
+        // Caso o ??ltimo hor??rio n??o siga o padr??o, usar pr??ximo v??lido
+        console.log(`???? Hor??rio inv??lido detectado (${lastEntryTime}), corrigindo para o pr??ximo v??lido`);
+        // Usar padr??o default
         if (lastMinute < 3) {
           nextMinute = 3;
         } else if (lastMinute < 23) {
@@ -2193,9 +2196,9 @@ const Signals = () => {
       
       const nextEntryTime = `${nextHour.toString().padStart(2, '0')}:${nextMinute.toString().padStart(2, '0')}`;
       
-      console.log(`⏰ PRÓXIMO HORÁRIO: ${nextEntryTime} (baseado no último sinal: ${lastEntryTime})`);
+      console.log(`??? PR??XIMO HOR??RIO: ${nextEntryTime} (baseado no ??ltimo sinal: ${lastEntryTime})`);
       
-      // Gerar um novo sinal para a posição 7
+      // Gerar um novo sinal para a posi????o 7
       const newSignal = createBasePlaceholderData({
         entry_time: nextEntryTime,
         expiry_time_str: calculateNextTime(nextEntryTime, SIGNAL_EXPIRY_TIME),
@@ -2206,40 +2209,40 @@ const Signals = () => {
       // Criar a nova lista de sinais: remover o primeiro e adicionar o novo no final
       const rotatedSignals = [...currentSignals.slice(1), newSignal];
       
-      console.log('✅ ROTAÇÃO CONCLUÍDA:');
-      console.log(`   • Sinal removido: ${firstSignal.symbol} (${firstSignal.entry_time})`);
-      console.log(`   • Novo sinal na posição 7: ${newSignal.symbol} (${newSignal.entry_time})`);
+      console.log('?? ROTA????O CONCLU??DA:');
+      console.log(`   ??? Sinal removido: ${firstSignal.symbol} (${firstSignal.entry_time})`);
+      console.log(`   ??? Novo sinal na posi????o 7: ${newSignal.symbol} (${newSignal.entry_time})`);
       
-      // Atualizar o timestamp da última rotação
+      // Atualizar o timestamp da ??ltima rota????o
       lastRotationTime.current = now;
       
-      // Salvar no cache de navegação para persistência entre trocas de aba
+      // Salvar no cache de navega????o para persist??ncia entre trocas de aba
       saveSignalsToNavigationCache(rotatedSignals as PlaceholderSignal[]);
       
       // Retornar a lista atualizada
       return rotatedSignals;
     } finally {
-      // Liberar o lock após 10 segundos para garantir que tudo acabou
+      // Liberar o lock ap??s 10 segundos para garantir que tudo acabou
       setTimeout(() => {
         rotateSignalsLock.current = false;
       }, 10000);
     }
   }, [calculateNextTime, createBasePlaceholderData]);
 
-  // REMOVIDO: Sistema de rotação própria da página Signals
-  // A página Signals agora APENAS SINCRONIZA com a dashboard
-  // A rotação é feita EXCLUSIVAMENTE pela dashboard
+  // REMOVIDO: Sistema de rota????o pr??pria da p??gina Signals
+  // A p??gina Signals agora APENAS SINCRONIZA com a dashboard
+  // A rota????o ?? feita EXCLUSIVAMENTE pela dashboard
 
-  // Adicionar função para reiniciar contadores quando a página é carregada
+  // Adicionar fun????o para reiniciar contadores quando a p??gina ?? carregada
   useEffect(() => {
     setSignalCompletionCount({wins: 0, losses: 0});
     
-    // Definir filtros padrão: mostrar todos os tipos e não mostrar expirados
+    // Definir filtros padr??o: mostrar todos os tipos e n??o mostrar expirados
     setFilterType('ALL');
     setShowExpiredSignals(false);
   }, []);
   
-  // Efeito para subscrever às atualizações de sinais - DESATIVADO (arquivo removido)
+  // Efeito para subscrever ??s atualiza????es de sinais - DESATIVADO (arquivo removido)
   useEffect(() => {
     // const unsubscribe = tradingSignalService.subscribe(() => {
     //   queryClient.invalidateQueries({ queryKey: ['tradingSignals'] });
@@ -2254,51 +2257,51 @@ const Signals = () => {
   
   // Processar sinais que precisam ser removidos
   useEffect(() => {
-    // Este código foi substituído pela função rotateSignals
-    // que gerencia toda a lógica de rotação de sinais
+    // Este c??digo foi substitu??do pela fun????o rotateSignals
+    // que gerencia toda a l??gica de rota????o de sinais
   }, [createRandomPlaceholderSignal]);
   
-  // 🎯 FUNÇÃO PRESERVATIVA: Completar sinais faltantes SEM alterar existentes (CAMADA 9)
+  // ??? FUN????O PRESERVATIVA: Completar sinais faltantes SEM alterar existentes (CAMADA 9)
   const generateMinimumSevenSignals = useCallback((existingSignals: PlaceholderSignal[]): PlaceholderSignal[] => {
     if (!existingSignals || existingSignals.length === 0) {
-      // Se não há sinais, gerar os 7 do zero
+      // Se n??o h?? sinais, gerar os 7 do zero
       return generateDailySignals().slice(0, 7);
     }
     
     if (existingSignals.length >= 7) {
-      // Se já temos 7 ou mais, manter os 7 primeiros
-      console.log(`🎯 PRESERVAÇÃO: Mantendo ${existingSignals.length} sinais existentes`);
+      // Se j?? temos 7 ou mais, manter os 7 primeiros
+      console.log(`??? PRESERVA????O: Mantendo ${existingSignals.length} sinais existentes`);
       return existingSignals.slice(0, 7);
     }
     
     // Se temos menos de 7, completar sem alterar os existentes
     const needed = 7 - existingSignals.length;
-    console.log(`🎯 COMPLETANDO: Adicionando ${needed} sinais aos ${existingSignals.length} existentes`);
+    console.log(`??? COMPLETANDO: Adicionando ${needed} sinais aos ${existingSignals.length} existentes`);
     
     // Gerar sinais extras baseados na hora atual
     const allDailySignals = generateDailySignals();
     const existingIds = new Set(existingSignals.map(s => s.id));
     const existingSymbols = new Set(existingSignals.map(s => s.symbol));
     
-    // Encontrar sinais que não existem ainda
+    // Encontrar sinais que n??o existem ainda
     const availableSignals = allDailySignals.filter(signal => 
       !existingIds.has(signal.id) && 
       !existingSymbols.has(signal.symbol) &&
       !signal.symbol?.toLowerCase().includes('binance')
     );
     
-    // Pegar os sinais necessários
+    // Pegar os sinais necess??rios
     const additionalSignals = availableSignals.slice(0, needed);
     
     // Combinar preservando os existentes
     return [...existingSignals, ...additionalSignals];
   }, [generateDailySignals]);
 
-  // 🛡️ FUNÇÃO SUPER PRESERVATIVA: Garantir 7 sinais preservando existentes (CAMADA 8)
+  // ??????? FUN????O SUPER PRESERVATIVA: Garantir 7 sinais preservando existentes (CAMADA 8)
   const ensureSevenSignalsPreservative = useCallback((inputSignals: PlaceholderSignal[]): PlaceholderSignal[] => {
-    console.log(`🛡️ PRESERVAÇÃO: Verificando ${inputSignals?.length || 0} sinais de entrada`);
+    console.log(`??????? PRESERVA????O: Verificando ${inputSignals?.length || 0} sinais de entrada`);
     
-    // Se temos exatamente 7 sinais válidos, PRESERVAR completamente
+    // Se temos exatamente 7 sinais v??lidos, PRESERVAR completamente
     if (inputSignals && inputSignals.length === 7) {
       const allValid = inputSignals.every(signal => 
         signal.symbol && 
@@ -2308,12 +2311,12 @@ const Signals = () => {
       );
       
       if (allValid) {
-        console.log('🛡️ PRESERVAÇÃO: 7 sinais válidos encontrados - MANTENDO integralmente');
+        console.log('??????? PRESERVA????O: 7 sinais v??lidos encontrados - MANTENDO integralmente');
         return inputSignals;
       }
     }
     
-    // Filtrar sinais válidos primeiro
+    // Filtrar sinais v??lidos primeiro
     const validSignals = (inputSignals || []).filter(signal => 
       signal.symbol && 
       !signal.symbol.toLowerCase().includes('binance') &&
@@ -2322,45 +2325,45 @@ const Signals = () => {
       signal.id
     );
     
-    // Usar função para completar até 7
+    // Usar fun????o para completar at?? 7
     return generateMinimumSevenSignals(validSignals);
   }, [generateMinimumSevenSignals]);
 
-  // 🔄 HANDLE VISIBILITY CHANGE ULTRA CONSERVATIVO (CAMADA 7)
+  // ???? HANDLE VISIBILITY CHANGE ULTRA CONSERVATIVO (CAMADA 7)
 // NUNCA substitui sinais existentes - apenas recupera se perdidos
 const handleVisibilityChangeConservative = useCallback((
   queryClient: QueryClient, 
   currentSignals: PlaceholderSignal[]
 ): void => {
-  console.log('🔄 NAVEGAÇÃO: Retorno à aba detectado');
+  console.log('???? NAVEGA????O: Retorno ?? aba detectado');
   
-  // VERIFICAÇÃO PRIORITÁRIA: SEMPRE tentar recuperar sinais do cache primeiro
+  // VERIFICA????O PRIORIT??RIA: SEMPRE tentar recuperar sinais do cache primeiro
   const cachedSignals = loadSignalsFromNavigationCache();
   if (cachedSignals && cachedSignals.length >= 7) {
-    console.log('🛡️ RECUPERAÇÃO PRIORITÁRIA: Restaurando sinais salvos');
+    console.log('??????? RECUPERA????O PRIORIT??RIA: Restaurando sinais salvos');
     safeSetTradingSignals(cachedSignals);
     return;
   }
   
-  // VERIFICAÇÃO SECUNDÁRIA: Se temos sinais atuais válidos, PRESERVAR TOTALMENTE
+  // VERIFICA????O SECUND??RIA: Se temos sinais atuais v??lidos, PRESERVAR TOTALMENTE
   if (currentSignals && currentSignals.length >= 7) {
-    console.log('🛡️ PRESERVAÇÃO TOTAL: Mantendo sinais atuais sem alteração');
-    // Salvar os sinais atuais para próximas navegações
+    console.log('??????? PRESERVA????O TOTAL: Mantendo sinais atuais sem altera????o');
+    // Salvar os sinais atuais para pr??ximas navega????es
     saveSignalsToNavigationCache(currentSignals);
     return;
   }
   
-  // VERIFICAÇÃO TERCIÁRIA: Se temos alguns sinais (4-6), preservar e completar
+  // VERIFICA????O TERCI??RIA: Se temos alguns sinais (4-6), preservar e completar
   if (currentSignals && currentSignals.length >= 4) {
-    console.log('🛡️ PRESERVAÇÃO PARCIAL: Completando sinais existentes');
+    console.log('??????? PRESERVA????O PARCIAL: Completando sinais existentes');
     const completedSignals = ensureSevenSignalsPreservative(currentSignals);
     safeSetTradingSignals(completedSignals);
     saveSignalsToNavigationCache(completedSignals);
     return;
   }
   
-  // ÚLTIMO RECURSO: Apenas se não há sinais válidos (menos de 4)
-  console.log('🚨 EMERGÊNCIA: Criando novos sinais (menos de 4 encontrados)');
+  // ??LTIMO RECURSO: Apenas se n??o h?? sinais v??lidos (menos de 4)
+  console.log('??? EMERG??NCIA: Criando novos sinais (menos de 4 encontrados)');
   
   // Tentar usar sinais da dashboard como base
   try {
@@ -2378,22 +2381,22 @@ const handleVisibilityChangeConservative = useCallback((
     console.error('Erro ao recuperar sinais da dashboard:', error);
   }
   
-  // Último recurso absoluto: gerar novos sinais
+  // ??ltimo recurso absoluto: gerar novos sinais
   const newSignals = generateDailySignals().slice(0, 7);
   safeSetTradingSignals(newSignals);
   saveSignalsToNavigationCache(newSignals);
 }, [generateDailySignals, ensureSevenSignalsPreservative, safeSetTradingSignals]);
   
-  // Filtrar os sinais mais relevantes para o horário atual
+  // Filtrar os sinais mais relevantes para o hor??rio atual
   const filterRelevantSignals = useCallback((allSignals: PlaceholderSignal[]): PlaceholderSignal[] => {
     try {
-      // Verificação de segurança
+      // Verifica????o de seguran??a
       if (!allSignals || !Array.isArray(allSignals)) {
-        console.error('❌ ERRO: filterRelevantSignals recebeu dados inválidos:', allSignals);
+        console.error('??? ERRO: filterRelevantSignals recebeu dados inv??lidos:', allSignals);
         return [];
       }
       
-      // console.log(`🔍 DIAGNÓSTICO: filterRelevantSignals processando ${allSignals.length} sinais`);
+      // console.log(`???? DIAGN??STICO: filterRelevantSignals processando ${allSignals.length} sinais`);
     if (!allSignals || allSignals.length === 0) return [];
     
     // Obter a hora atual
@@ -2401,72 +2404,72 @@ const handleVisibilityChangeConservative = useCallback((
     const currentHour = now.getHours();
     const currentMinute = now.getMinutes();
     
-    // Para seguir o padrão correto: XX:03, XX:23, XX:43, (XX+1):03, (XX+1):23, (XX+1):43, etc.
-    // Sequência correta: 03 -> 23 -> 43 -> próxima hora com 03, etc.
+    // Para seguir o padr??o correto: XX:03, XX:23, XX:43, (XX+1):03, (XX+1):23, (XX+1):43, etc.
+    // Sequ??ncia correta: 03 -> 23 -> 43 -> pr??xima hora com 03, etc.
     
-    // Determinar o próximo horário válido
+    // Determinar o pr??ximo hor??rio v??lido
     let nextMinute, nextHour;
     
-    // Se estamos antes de XX:23, o próximo horário é XX:23
+    // Se estamos antes de XX:23, o pr??ximo hor??rio ?? XX:23
     if (currentMinute < 23) {
       nextMinute = 23;
       nextHour = currentHour;
     }
-    // Se estamos entre XX:23 e XX:43, o próximo horário é XX:43
+    // Se estamos entre XX:23 e XX:43, o pr??ximo hor??rio ?? XX:43
     else if (currentMinute < 43) {
       nextMinute = 43;
       nextHour = currentHour;
     }
-    // Se estamos após XX:43, o próximo horário é (XX+1):03
+    // Se estamos ap??s XX:43, o pr??ximo hor??rio ?? (XX+1):03
     else {
       nextMinute = 3;
       nextHour = (currentHour + 1) % 24;
     }
     
-    // Gerar os próximos 7 horários seguindo a sequência correta: XX:03, XX:23, XX:43
+    // Gerar os pr??ximos 7 hor??rios seguindo a sequ??ncia correta: XX:03, XX:23, XX:43
     const relevantTimes = [];
     let hour = nextHour;
     let minute = nextMinute;
     
     for (let i = 0; i < 7; i++) {
-      // Adicionar o horário atual
+      // Adicionar o hor??rio atual
       relevantTimes.push(`${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`);
       
-      // Avançar para o próximo horário na sequência correta
+      // Avan??ar para o pr??ximo hor??rio na sequ??ncia correta
       if (minute === 3) {
         minute = 23; // 03 -> 23 (mesma hora)
       } else if (minute === 23) {
         minute = 43; // 23 -> 43 (mesma hora)
       } else if (minute === 43) {
-        minute = 3; // 43 -> 03 (próxima hora)
+        minute = 3; // 43 -> 03 (pr??xima hora)
         hour = (hour + 1) % 24;
       }
     }
     
-    console.log("Horários relevantes:", relevantTimes);
+    console.log("Hor??rios relevantes:", relevantTimes);
     
-    // Filtrar os sinais que correspondem aos horários relevantes
-    // E também verificar se o ativo estará disponível por 30 minutos no horário do sinal
+    // Filtrar os sinais que correspondem aos hor??rios relevantes
+    // E tamb??m verificar se o ativo estar?? dispon??vel por 30 minutos no hor??rio do sinal
     const filteredSignals = allSignals.filter(signal => {
-      // Verificar se o horário corresponde a um dos relevantes
+      // Verificar se o hor??rio corresponde a um dos relevantes
       if (!relevantTimes.includes(signal.entry_time)) {
         return false;
       }
       
-      // Verificar se o ativo estará disponível por pelo menos 30 minutos no horário do sinal
+      // Verificar se o ativo estar?? dispon??vel por pelo menos 30 minutos no hor??rio do sinal
       const [hour, minute] = signal.entry_time.split(':').map(Number);
       const signalDate = new Date();
       signalDate.setHours(hour, minute, 0, 0);
       return isAssetAvailableForSignal(signal.symbol, signalDate);
     });
     
-    // Se não encontramos 7 sinais, completar com os mais próximos
+    // Se n??o encontramos 7 sinais, completar com os mais pr??ximos
     if (filteredSignals.length < 7) {
-      // Ordenar todos os sinais por proximidade ao horário atual
-      // Considerando apenas sinais com ativos disponíveis por 30 minutos
+      // Ordenar todos os sinais por proximidade ao hor??rio atual
+      // Considerando apenas sinais com ativos dispon??veis por 30 minutos
       const sortedByTime = [...allSignals]
         .filter(signal => {
-          // Verificar se o ativo estará disponível por pelo menos 30 minutos no horário do sinal
+          // Verificar se o ativo estar?? dispon??vel por pelo menos 30 minutos no hor??rio do sinal
           const [hour, minute] = signal.entry_time.split(':').map(Number);
           const signalDate = new Date();
           signalDate.setHours(hour, minute, 0, 0);
@@ -2476,18 +2479,18 @@ const handleVisibilityChangeConservative = useCallback((
           const timeA = convertTimeStringToDate(a.entry_time);
           const timeB = convertTimeStringToDate(b.entry_time);
           
-          // Priorizar sinais que ainda não aconteceram
+          // Priorizar sinais que ainda n??o aconteceram
           const aInFuture = timeA.getTime() > now.getTime();
           const bInFuture = timeB.getTime() > now.getTime();
           
           if (aInFuture && !bInFuture) return -1;
           if (!aInFuture && bInFuture) return 1;
           
-          // Se ambos são futuros ou ambos já passaram, pegar o mais próximo
+          // Se ambos s??o futuros ou ambos j?? passaram, pegar o mais pr??ximo
           return Math.abs(timeA.getTime() - now.getTime()) - Math.abs(timeB.getTime() - now.getTime());
         });
       
-      // Adicionar sinais até completar 7
+      // Adicionar sinais at?? completar 7
       let index = 0;
       while (filteredSignals.length < 7 && index < sortedByTime.length) {
         const signal = sortedByTime[index++];
@@ -2497,54 +2500,55 @@ const handleVisibilityChangeConservative = useCallback((
       }
     }
     
-    // Ordenar os sinais filtrados por horário de entrada
+    // Ordenar os sinais filtrados por hor??rio de entrada
+    // ? CORRE??O: Ordenar por POSITION (n?o por entry_time)
     filteredSignals.sort((a, b) => {
-      const timeA = a.entry_time || '00:00';
-      const timeB = b.entry_time || '00:00';
-      return timeA.localeCompare(timeB);
+      const posA = (a as PlaceholderSignal & { position?: number }).position || 0;
+      const posB = (b as PlaceholderSignal & { position?: number }).position || 0;
+      return posA - posB;
     });
     
     return filteredSignals.slice(0, 7);
     } catch (error) {
-      console.error('❌ ERRO em filterRelevantSignals:', error);
+      console.error('??? ERRO em filterRelevantSignals:', error);
       return [];
     }
   }, [convertTimeStringToDate]);
 
-  // Mover a definição duplicada de createBasePlaceholderData daqui
+  // Mover a defini????o duplicada de createBasePlaceholderData daqui
   // (Movida para antes de generateMinimumSevenSignals)
 
-  // REMOVIDO: Função executeCorrectRotation não é mais necessária
-  // A rotação é feita exclusivamente pela dashboard
+  // REMOVIDO: Fun????o executeCorrectRotation n??o ?? mais necess??ria
+  // A rota????o ?? feita exclusivamente pela dashboard
 
-  // Função para pegar os sinais diários com base na hora atual
+  // Fun????o para pegar os sinais di??rios com base na hora atual
   const getDailySignalsForCurrentTime = useCallback((): PlaceholderSignal[] => {
     try {
-      console.log('🎯 DIAGNÓSTICO: Iniciando getDailySignalsForCurrentTime');
-    console.log('🎯 GERAÇÃO: Iniciando geração de sinais para o horário atual');
+      console.log('??? DIAGN??STICO: Iniciando getDailySignalsForCurrentTime');
+    console.log('??? GERA????O: Iniciando gera????o de sinais para o hor??rio atual');
     
-    // Verificar se há sinais da dashboard salvos
+    // Verificar se h?? sinais da dashboard salvos
     let dashboardSignalsData = null;
     try {
       dashboardSignalsData = localStorage.getItem('dashboardSignals');
-      console.log('💾 DIAGNÓSTICO: Verificando localStorage dashboardSignals:', dashboardSignalsData ? 'Encontrado' : 'Não encontrado');
+      console.log('??? DIAGN??STICO: Verificando localStorage dashboardSignals:', dashboardSignalsData ? 'Encontrado' : 'N??o encontrado');
     } catch (error) {
-      console.error('❌ ERRO ao acessar localStorage dashboardSignals:', error);
+      console.error('??? ERRO ao acessar localStorage dashboardSignals:', error);
     }
     if (dashboardSignalsData) {
-      console.log('📊 DASHBOARD: Sinais da dashboard encontrados no localStorage');
+      console.log('???? DASHBOARD: Sinais da dashboard encontrados no localStorage');
       
       try {
         const { signals: dashboardSignals } = JSON.parse(dashboardSignalsData);
         if (dashboardSignals && Array.isArray(dashboardSignals) && dashboardSignals.length >= 3) {
-          console.log('✅ USANDO: Sinais da dashboard como base para a página de sinais');
-          console.log('📋 DASHBOARD SIGNALS:', dashboardSignals.map(s => ({
+          console.log('?? USANDO: Sinais da dashboard como base para a p??gina de sinais');
+          console.log('???? DASHBOARD SIGNALS:', dashboardSignals.map(s => ({
             symbol: s.symbol,
             entry_time: s.entry_time,
             id: s.id
           })));
           
-          // REGRA 1: Os 3 primeiros sinais são IDÊNTICOS aos da dashboard
+          // REGRA 1: Os 3 primeiros sinais s??o ID??NTICOS aos da dashboard
           const firstThreeSignals = dashboardSignals
             .filter(signal => 
               !signal.symbol?.toLowerCase().includes('binance') &&
@@ -2559,28 +2563,28 @@ const handleVisibilityChangeConservative = useCallback((
               exchange: inferExchangeCategory(signal.symbol),
               success_rate: Math.min(signal.success_rate || 0.85, 0.934), // Limitar a 93.4%
               isDashboard: true, // Marcar como sinal da dashboard
-              dashboardPosition: index // Posição na dashboard (0, 1, 2)
+              dashboardPosition: index // Posi????o na dashboard (0, 1, 2)
             }));
           
           if (firstThreeSignals.length < 3) {
-            console.error('❌ ERRO: Menos de 3 sinais válidos da dashboard');
+            console.error('??? ERRO: Menos de 3 sinais v??lidos da dashboard');
             return [];
           }
           
-          console.log('🎯 REGRA 1: 3 primeiros sinais definidos (idênticos à dashboard)');
-          console.log('📊 Sinais 1-3:', firstThreeSignals.map((s, i) => `${i+1}. ${s.symbol} - ${s.entry_time}`));
+          console.log('??? REGRA 1: 3 primeiros sinais definidos (id??nticos ?? dashboard)');
+          console.log('???? Sinais 1-3:', firstThreeSignals.map((s, i) => `${i+1}. ${s.symbol} - ${s.entry_time}`));
           
-          // REGRA 2: O 4º sinal tem entrada EXATAMENTE 20 minutos após o 3º sinal da dashboard
-          const thirdSignal = firstThreeSignals[2]; // Terceiro sinal (índice 2)
+          // REGRA 2: O 4?? sinal tem entrada EXATAMENTE 20 minutos ap??s o 3?? sinal da dashboard
+          const thirdSignal = firstThreeSignals[2]; // Terceiro sinal (??ndice 2)
           const thirdSignalEntryTime = thirdSignal.entry_time;
           
-          console.log(`🕒 REGRA 2: Terceiro sinal da dashboard tem entrada: ${thirdSignalEntryTime}`);
+          console.log(`???? REGRA 2: Terceiro sinal da dashboard tem entrada: ${thirdSignalEntryTime}`);
           
-          // Calcular horário EXATO do 4º sinal: +20 minutos do 3º sinal
+          // Calcular hor??rio EXATO do 4?? sinal: +20 minutos do 3?? sinal
           const fourthSignalTime = calculateNextTime(thirdSignalEntryTime, 20);
-          console.log(`⏰ REGRA 2: Quarto sinal terá entrada EXATA: ${fourthSignalTime} (${thirdSignalEntryTime} + 20min)`);
+          console.log(`??? REGRA 2: Quarto sinal ter?? entrada EXATA: ${fourthSignalTime} (${thirdSignalEntryTime} + 20min)`);
           
-          // REGRA 3: Sinais 5, 6, 7 seguem sequência 03→23→43→03 a partir do 4º sinal
+          // REGRA 3: Sinais 5, 6, 7 seguem sequ??ncia 03???23???43???03 a partir do 4?? sinal
           const calculateNextPatternTime = (previousTime: string): string => {
             const [hour, minute] = previousTime.split(':').map(Number);
             let nextHour = hour;
@@ -2591,7 +2595,7 @@ const handleVisibilityChangeConservative = useCallback((
             } else if (minute < 23 || minute === 23) {
               nextMinute = 43;
             } else {
-              // minute >= 43, próximo é XX+1:03
+              // minute >= 43, pr??ximo ?? XX+1:03
               nextHour = (hour + 1) % 24;
               nextMinute = 3;
             }
@@ -2599,31 +2603,31 @@ const handleVisibilityChangeConservative = useCallback((
             return `${nextHour.toString().padStart(2, '0')}:${nextMinute.toString().padStart(2, '0')}`;
           };
           
-          // Calcular horários dos sinais 4, 5, 6, 7
+          // Calcular hor??rios dos sinais 4, 5, 6, 7
           const additionalSignalTimes: string[] = [];
           
-          // 4º sinal: 20 minutos após o 3º
+          // 4?? sinal: 20 minutos ap??s o 3??
           additionalSignalTimes.push(fourthSignalTime);
           
-          // 5º sinal: seguindo padrão baseado no 4º
+          // 5?? sinal: seguindo padr??o baseado no 4??
           const fifthSignalTime = calculateNextPatternTime(fourthSignalTime);
           additionalSignalTimes.push(fifthSignalTime);
           
-          // 6º sinal: seguindo padrão baseado no 5º
+          // 6?? sinal: seguindo padr??o baseado no 5??
           const sixthSignalTime = calculateNextPatternTime(fifthSignalTime);
           additionalSignalTimes.push(sixthSignalTime);
           
-          // 7º sinal: seguindo padrão baseado no 6º
+          // 7?? sinal: seguindo padr??o baseado no 6??
           const seventhSignalTime = calculateNextPatternTime(sixthSignalTime);
           additionalSignalTimes.push(seventhSignalTime);
           
-          console.log('🎯 REGRA 3: Horários dos sinais adicionais calculados:');
-          console.log(`4º sinal: ${additionalSignalTimes[0]} (${thirdSignalEntryTime} + 20min)`);
-          console.log(`5º sinal: ${additionalSignalTimes[1]} (padrão 03,23,43 baseado no 4º)`);
-          console.log(`6º sinal: ${additionalSignalTimes[2]} (padrão 03,23,43 baseado no 5º)`);
-          console.log(`7º sinal: ${additionalSignalTimes[3]} (padrão 03,23,43 baseado no 6º)`);
+          console.log('??? REGRA 3: Hor??rios dos sinais adicionais calculados:');
+          console.log(`4?? sinal: ${additionalSignalTimes[0]} (${thirdSignalEntryTime} + 20min)`);
+          console.log(`5?? sinal: ${additionalSignalTimes[1]} (padr??o 03,23,43 baseado no 4??)`);
+          console.log(`6?? sinal: ${additionalSignalTimes[2]} (padr??o 03,23,43 baseado no 5??)`);
+          console.log(`7?? sinal: ${additionalSignalTimes[3]} (padr??o 03,23,43 baseado no 6??)`);
           
-          // REGRA 4: Gerar os 4 sinais adicionais com ativos únicos
+          // REGRA 4: Gerar os 4 sinais adicionais com ativos ??nicos
           const usedSymbols = new Set(firstThreeSignals.map(s => s.symbol));
           const additionalSignals: PlaceholderSignal[] = [];
           
@@ -2633,7 +2637,7 @@ const handleVisibilityChangeConservative = useCallback((
             const gale1Time = expiryTime;
             const gale2Time = calculateNextTime(gale1Time, SIGNAL_EXPIRY_TIME);
             
-            // Obter um ativo disponível que não foi usado ainda
+            // Obter um ativo dispon??vel que n??o foi usado ainda
             let symbol = getRandomAsset();
             let attempts = 0;
             while (usedSymbols.has(symbol) && attempts < 20) {
@@ -2641,7 +2645,7 @@ const handleVisibilityChangeConservative = useCallback((
               attempts++;
             }
             
-            // Se não conseguimos um ativo único, usar lista de backup
+            // Se n??o conseguimos um ativo ??nico, usar lista de backup
             if (usedSymbols.has(symbol)) {
               const backupAssets = [
                 "Ethereum", "Litecoin", "Dash", "Bitcoin Cash",
@@ -2668,41 +2672,41 @@ const handleVisibilityChangeConservative = useCallback((
               gale2_time: gale2Time,
               success_rate: 0.8 + Math.random() * 0.15,
               isDashboard: false, // Marcar como sinal adicional
-              signalPosition: i + 4 // Posição 4, 5, 6, 7
+              signalPosition: i + 4 // Posi????o 4, 5, 6, 7
             });
             
             additionalSignals.push(additionalSignal);
           }
           
-          console.log('🎯 REGRA 4: 4 sinais adicionais gerados');
-          console.log('📊 Sinais 4-7:', additionalSignals.map((s, i) => `${i+4}. ${s.symbol} - ${s.entry_time}`));
+          console.log('??? REGRA 4: 4 sinais adicionais gerados');
+          console.log('???? Sinais 4-7:', additionalSignals.map((s, i) => `${i+4}. ${s.symbol} - ${s.entry_time}`));
           
           // COMBINAR: 3 sinais da dashboard + 4 sinais adicionais = 7 sinais totais
           const finalSignals = [...firstThreeSignals, ...additionalSignals];
           
-          console.log('🎉 RESULTADO FINAL: 7 sinais gerados seguindo todas as regras');
-          console.log('📊 ESTRUTURA COMPLETA:');
+          console.log('???? RESULTADO FINAL: 7 sinais gerados seguindo todas as regras');
+          console.log('???? ESTRUTURA COMPLETA:');
           finalSignals.forEach((signal, index) => {
             const position = index + 1;
             const type = index < 3 ? 'DASHBOARD' : 'ADICIONAL';
             console.log(`${position}. ${signal.symbol} - ${signal.entry_time} (${type})`);
           });
           
-          // VERIFICAÇÃO DA DIFERENÇA DE 20 MINUTOS
+          // VERIFICA????O DA DIFEREN??A DE 20 MINUTOS
           const thirdTime = finalSignals[2].entry_time;
           const fourthTime = finalSignals[3].entry_time;
           const [h3, m3] = thirdTime.split(':').map(Number);
           const [h4, m4] = fourthTime.split(':').map(Number);
           const diff = (h4 * 60 + m4) - (h3 * 60 + m3);
-          console.log(`⏰ VERIFICAÇÃO: Diferença entre 3º e 4º sinal: ${diff} minutos (deve ser 20)`);
+          console.log(`??? VERIFICA????O: Diferen??a entre 3?? e 4?? sinal: ${diff} minutos (deve ser 20)`);
           
           if (diff !== 20) {
-            console.warn(`⚠️ ATENÇÃO: Diferença incorreta detectada! 3º: ${thirdTime}, 4º: ${fourthTime}, Diff: ${diff}min`);
+            console.warn(`???? ATEN????O: Diferen??a incorreta detectada! 3??: ${thirdTime}, 4??: ${fourthTime}, Diff: ${diff}min`);
           } else {
-            console.log(`✅ VERIFICAÇÃO OK: Diferença de exatamente 20 minutos confirmada`);
+            console.log(`?? VERIFICA????O OK: Diferen??a de exatamente 20 minutos confirmada`);
           }
           
-          // Verificar duplicatas de ativos (não deve haver)
+          // Verificar duplicatas de ativos (n??o deve haver)
           const assetCounts = new Map();
           finalSignals.forEach(signal => {
             const count = assetCounts.get(signal.symbol) || 0;
@@ -2711,21 +2715,21 @@ const handleVisibilityChangeConservative = useCallback((
           
           const duplicates = Array.from(assetCounts.entries()).filter(([_, count]) => count > 1);
           if (duplicates.length > 0) {
-            console.error('❌ ERRO: Ativos duplicados detectados:', duplicates);
+            console.error('??? ERRO: Ativos duplicados detectados:', duplicates);
           } else {
-            console.log('✅ VERIFICAÇÃO: Nenhuma duplicata de ativo encontrada');
+            console.log('?? VERIFICA????O: Nenhuma duplicata de ativo encontrada');
           }
           
           return finalSignals;
         }
       } catch (error) {
-        console.error('❌ ERRO: Falha ao processar sinais da dashboard:', error);
+        console.error('??? ERRO: Falha ao processar sinais da dashboard:', error);
       }
     }
     
-    console.log('⚠️ FALLBACK: Não há sinais da dashboard, usando fluxo normal');
+    console.log('???? FALLBACK: N??o h?? sinais da dashboard, usando fluxo normal');
     
-    // Se não conseguimos usar os sinais da dashboard, seguir com o fluxo normal
+    // Se n??o conseguimos usar os sinais da dashboard, seguir com o fluxo normal
     const allDailySignals = generateDailySignals();
     
     // Salvar em cache
@@ -2736,7 +2740,7 @@ const handleVisibilityChangeConservative = useCallback((
     // Filtrar os sinais para mostrar apenas os relevantes no momento atual
     return filterRelevantSignals(allDailySignals);
     } catch (error) {
-      console.error('❌ ERRO FATAL em getDailySignalsForCurrentTime:', error);
+      console.error('??? ERRO FATAL em getDailySignalsForCurrentTime:', error);
       // Retornar um array vazio como fallback para evitar tela preta
       return [];
     }
@@ -2746,29 +2750,57 @@ const handleVisibilityChangeConservative = useCallback((
   // NOVO SISTEMA: SINAIS EM TEMPO REAL
   // =============================================
   // Nota: Sistema agora mostra 3 sinais ativos em tempo real
-  // TODO: Implementar histórico para mostrar mais sinais no futuro
+  // TODO: Implementar hist??rico para mostrar mais sinais no futuro
   const { 
     signals: realtimeSignals, 
     isLoading, 
     error: realtimeError,
     refresh: refetch 
-  } = useRealtimeSignals();
+  } = useExtendedSignals(); // ? Busca 7 sinais (3 ativos + 4 adicionais)
+  
+  console.log('?? [Signals] useExtendedSignals RETORNOU:', {
+    quantidade: realtimeSignals?.length || 0,
+    isLoading,
+    hasError: !!realtimeError,
+    errorMessage: realtimeError?.message,
+    sinaisRaw: realtimeSignals,
+    sinaisComPosicao: realtimeSignals?.map(s => ({ 
+      pos: s.position, 
+      symbol: s.symbol, 
+      entry: s.entry_time 
+    }))
+  });
 
-  // Converter sinais do Realtime para o formato esperado pela página
+  // Converter sinais do Realtime para o formato esperado pela p??gina
   const signals = useMemo(() => {
+    console.log('?? [useMemo signals] Processando...', {
+      temSignals: !!realtimeSignals,
+      quantidade: realtimeSignals?.length || 0,
+      isLoading,
+      hasError: !!realtimeError
+    });
+    
     if (!realtimeSignals || realtimeSignals.length === 0) {
-      console.warn('⚠️ SIGNALS PAGE: Nenhum sinal do Realtime disponível');
+      console.warn('?? SIGNALS PAGE: Nenhum sinal do Realtime dispon?vel!');
+      console.warn('   Motivo: ', {
+        realtimeSignalsIsNull: realtimeSignals === null,
+        realtimeSignalsIsUndefined: realtimeSignals === undefined,
+        length: realtimeSignals?.length,
+        isLoading,
+        error: realtimeError?.message
+      });
       return [];
     }
 
-    console.log(`✅ SIGNALS PAGE: ${realtimeSignals.length} sinais recebidos do Realtime:`, {
-      'Sinais': realtimeSignals.map(s => `${s.symbol} ${s.entry_time}`)
+    console.log(`? SIGNALS PAGE: ${realtimeSignals.length} sinais recebidos do Realtime:`, {
+      'Sinais com nomes': realtimeSignals.map(s => `${s.symbol} (${s.display_name || 'sem nome'}) - ${s.entry_time}`)
     });
 
-    // Converter para o formato TradingSignal esperado pela página
+    // Converter para o formato TradingSignal esperado pela p??gina
     const converted = realtimeSignals.map((signal) => ({
       id: signal.id,
       symbol: signal.symbol,
+      display_name: signal.display_name, // ? Nome completo do ativo
       entry_time: signal.entry_time,
       signal: signal.signal_type,
       strength: (signal.strength as SignalStrengthEnum) || SignalStrengthEnum.STRONG,
@@ -2781,7 +2813,7 @@ const handleVisibilityChangeConservative = useCallback((
       gale1_time: signal.gale1_time,
       gale2_time: signal.gale2_time,
       position: signal.position,
-      // Propriedades adicionais necessárias para TradingSignal
+      // Propriedades adicionais necess??rias para TradingSignal
       type: SignalType.TECHNICAL,
       reason: 'Technical Analysis',
       price: 0,
@@ -2809,11 +2841,11 @@ const handleVisibilityChangeConservative = useCallback((
   // Efeito para log de erro caso a query falhe
   useEffect(() => {
     if (queryError) {
-      console.error('❌ ERRO NA QUERY DE SINAIS:', queryError);
+      console.error('??? ERRO NA QUERY DE SINAIS:', queryError);
     }
   }, [queryError]);
 
-  // Agendar notificações quando os sinais mudarem
+  // Agendar notifica????es quando os sinais mudarem
   useEffect(() => {
     if (signals && signals.length > 0) {
       // Converter TradingSignal[] para PlaceholderSignal[] de forma segura
@@ -2829,25 +2861,25 @@ const handleVisibilityChangeConservative = useCallback((
 
   // Efeito para atualizar os sinais relevantes com intervalo muito grande
   useEffect(() => {
-    // Manter controle do estado interno sem causar renderizações
+    // Manter controle do estado interno sem causar renderiza????es
     const internalState = {
       lastUpdateTimestamp: 0,
       lastSignalIDs: ""
     };
     
-    // Função otimizada para atualizar sinais apenas quando realmente necessário
+    // Fun????o otimizada para atualizar sinais apenas quando realmente necess??rio
     const silentUpdateSignalsIfNeeded = async () => {
       const now = new Date();
       const currentTimestamp = now.getTime();
       
-      // Verificar se já se passou pelo menos 15 minutos desde a última atualização
+      // Verificar se j?? se passou pelo menos 15 minutos desde a ??ltima atualiza????o
       // Intervalo MUITO maior para eliminar completamente piscadas
       if (currentTimestamp - internalState.lastUpdateTimestamp < 15 * 60 * 1000) {
         return;
       }
       
-      // Verificar se estamos em um minuto específico que justifique a atualização
-      // Reduzir para apenas minutos específicos para evitar atualizações constantes
+      // Verificar se estamos em um minuto espec??fico que justifique a atualiza????o
+      // Reduzir para apenas minutos espec??ficos para evitar atualiza????es constantes
       const currentMinute = now.getMinutes();
       const isRelevantMinute = (
         currentMinute === 3 ||
@@ -2855,26 +2887,26 @@ const handleVisibilityChangeConservative = useCallback((
         currentMinute === 43
       );
       
-      // Só continuar se estivermos em um minuto realmente relevante
+      // S?? continuar se estivermos em um minuto realmente relevante
       if (!isRelevantMinute) return;
       
       // Obter sinais atuais do cache
       const existingSignals = queryClient.getQueryData<TradingSignal[]>(['tradingSignals']) || [];
       
-      // Verificar se temos sinais em processamento ou animação
+      // Verificar se temos sinais em processamento ou anima????o
       const hasActiveSignals = existingSignals.some(signal => {
         const extSignal = signal as ExtendedSignal;
         return extSignal.isAnimating || 
           (extSignal.processed && Date.now() - (extSignal.completedTime || 0) < 30000);
       });
       
-      // Se temos sinais ativos, não atualizar agora
+      // Se temos sinais ativos, n??o atualizar agora
       if (hasActiveSignals) {
-        console.log('Atualização adiada - sinais ativos detectados');
+        console.log('Atualiza????o adiada - sinais ativos detectados');
         return;
       }
       
-      // Verificar se temos sinais não processados que já expiraram
+      // Verificar se temos sinais n??o processados que j?? expiraram
       const hasExpiredUnprocessed = existingSignals.some(signal => {
         if (signal.processed || !signal.entry_time) return false;
         
@@ -2884,10 +2916,10 @@ const handleVisibilityChangeConservative = useCallback((
         return now > expiryDate;
       });
       
-      // Se não temos sinais expirados, tentar atualizar só a cada 20 minutos
+      // Se n??o temos sinais expirados, tentar atualizar s?? a cada 20 minutos
       if (!hasExpiredUnprocessed && 
           currentTimestamp - internalState.lastUpdateTimestamp < 20 * 60 * 1000) {
-          console.log('Atualização ignorada - sem sinais expirados e intervalo insuficiente');
+          console.log('Atualiza????o ignorada - sem sinais expirados e intervalo insuficiente');
           return;
       }
       
@@ -2898,43 +2930,43 @@ const handleVisibilityChangeConservative = useCallback((
         // Tentar obter novos sinais relevantes
         const currentSignals = await getDailySignalsForCurrentTime();
       
-        // Verificar se são realmente diferentes antes de atualizar a UI
+        // Verificar se s??o realmente diferentes antes de atualizar a UI
         const newSignalIDs = currentSignals.map(s => s.id).join(',');
         
         if (newSignalIDs === internalState.lastSignalIDs) {
-          console.log('Nenhuma mudança real nos sinais, evitando atualização');
-          return; // Nenhuma mudança real, evitar atualização da UI
+          console.log('Nenhuma mudan??a real nos sinais, evitando atualiza????o');
+          return; // Nenhuma mudan??a real, evitar atualiza????o da UI
         }
         
-        // Salvar IDs para próxima comparação
+        // Salvar IDs para pr??xima compara????o
         internalState.lastSignalIDs = newSignalIDs;
         
-        // Verificar se algum dos sinais atuais está em processo de animação
+        // Verificar se algum dos sinais atuais est?? em processo de anima????o
         const processingSignals = existingSignals.filter(s => {
           const extSignal = s as ExtendedSignal;
           return extSignal.isAnimating || (extSignal.processed && Date.now() - (extSignal.completedTime || 0) < 30000);
         });
         
-        // Se temos sinais sendo animados/processados, não atualizar agora
+        // Se temos sinais sendo animados/processados, n??o atualizar agora
         if (processingSignals.length > 0) {
-          console.log('Adiando atualização - sinais em processamento detectados');
+          console.log('Adiando atualiza????o - sinais em processamento detectados');
           return;
         }
         
-        // Aplicar a atualização apenas se realmente necessária
-        console.log('Aplicando atualização controlada de sinais');
+        // Aplicar a atualiza????o apenas se realmente necess??ria
+        console.log('Aplicando atualiza????o controlada de sinais');
         setTimeout(() => {
           safeSetTradingSignals(currentSignals);
         }, 500);
       } catch (error) {
-        console.error("Erro na atualização de sinais silenciosa:", error);
+        console.error("Erro na atualiza????o de sinais silenciosa:", error);
       }
     };
     
-    // Intervalo muito mais longo (a cada 5 minutos) para reduzir drasticamente atualizações
+    // Intervalo muito mais longo (a cada 5 minutos) para reduzir drasticamente atualiza????es
     const intervalId = setInterval(silentUpdateSignalsIfNeeded, 5 * 60 * 1000);
     
-    // Primeira verificação após 60 segundos da montagem (dar tempo para UI inicializar)
+    // Primeira verifica????o ap??s 60 segundos da montagem (dar tempo para UI inicializar)
     const initialTimeoutId = setTimeout(silentUpdateSignalsIfNeeded, 60000);
     
     return () => {
@@ -2943,7 +2975,7 @@ const handleVisibilityChangeConservative = useCallback((
     };
   }, [getDailySignalsForCurrentTime, queryClient, safeSetTradingSignals]);
 
-  // Atualizar o horário atual apenas quando realmente necessário
+  // Atualizar o hor??rio atual apenas quando realmente necess??rio
   useEffect(() => {
     const updateTime = () => {
       // Verificar se a hora ou minuto mudaram antes de atualizar a UI
@@ -2951,51 +2983,51 @@ const handleVisibilityChangeConservative = useCallback((
       const newTime = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
       const currentDisplayedTime = `${currentTime.getHours().toString().padStart(2, '0')}:${currentTime.getMinutes().toString().padStart(2, '0')}`;
       
-      // Só atualizar se realmente o tempo mudou
+      // S?? atualizar se realmente o tempo mudou
       if (newTime !== currentDisplayedTime) {
         setCurrentTime(now);
       }
     };
     
     // Atualizar apenas a cada 2 minutos para eliminar piscadas constantes
-    // O relógio interno continuará funcionando, mas UI só atualiza ocasionalmente
+    // O rel??gio interno continuar?? funcionando, mas UI s?? atualiza ocasionalmente
     const timeInterval = setInterval(updateTime, 120000);
     
     // Chamar imediatamente na montagem
     updateTime();
     
     return () => clearInterval(timeInterval);
-  }, [currentTime]); // Adicionar currentTime como dependência
+  }, [currentTime]); // Adicionar currentTime como depend??ncia
 
-  // Dados para sinais quando não há dados suficientes disponíveis
+  // Dados para sinais quando n??o h?? dados suficientes dispon??veis
   const placeholderSignals: PlaceholderSignal[] = useMemo(() => {
-    // Gerar sinais diários para o dia todo e pegar os 3 primeiros
+    // Gerar sinais di??rios para o dia todo e pegar os 3 primeiros
     const dailySignals = generateDailySignals();
     const now = new Date();
     
-    // Ordenar por horário de entrada
+    // Ordenar por hor??rio de entrada
     dailySignals.sort((a, b) => {
       const timeA = convertTimeStringToDate(a.entry_time);
       const timeB = convertTimeStringToDate(b.entry_time);
       
-      // Priorizar sinais que ainda não aconteceram
+      // Priorizar sinais que ainda n??o aconteceram
       const aInFuture = timeA.getTime() > now.getTime();
       const bInFuture = timeB.getTime() > now.getTime();
       
       if (aInFuture && !bInFuture) return -1;
       if (!aInFuture && bInFuture) return 1;
       
-      // Se ambos são futuros ou ambos já passaram, pegar o mais próximo
+      // Se ambos s??o futuros ou ambos j?? passaram, pegar o mais pr??ximo
       return Math.abs(timeA.getTime() - now.getTime()) - Math.abs(timeB.getTime() - now.getTime());
     });
     
-    // Retornar no máximo 3 sinais
+    // Retornar no m??ximo 3 sinais
     return dailySignals.slice(0, 3) as PlaceholderSignal[];
   }, [generateDailySignals, convertTimeStringToDate]);
 
   // Buscar os sinais da dashboard
   useEffect(() => {
-    // Função para buscar os sinais da dashboard de localStorage
+    // Fun????o para buscar os sinais da dashboard de localStorage
     const fetchDashboardSignals = () => {
       try {
         const cachedSignalsData = localStorage.getItem('dashboardSignals');
@@ -3005,9 +3037,9 @@ const handleVisibilityChangeConservative = useCallback((
             // Garantir que temos exatamente 3 sinais da dashboard
             const limitedSignals = signals.slice(0, 3);
             
-            // Converter para o formato correto se necessário
+            // Converter para o formato correto se necess??rio
             const formattedSignals = limitedSignals.map(signal => {
-              // Garantir que todos os campos necessários estão presentes
+              // Garantir que todos os campos necess??rios est??o presentes
               return {
                 ...signal,
                 id: signal.id || 'dashboard-' + Math.random().toString(36).substring(2, 9),
@@ -3017,7 +3049,7 @@ const handleVisibilityChangeConservative = useCallback((
               };
             });
             
-            // Verificar se os sinais mudaram (comparar IDs e horários)
+            // Verificar se os sinais mudaram (comparar IDs e hor??rios)
             const currentDashboardSignals = dashboardSignals;
             const hasChanged = !currentDashboardSignals || 
                               currentDashboardSignals.length !== formattedSignals.length ||
@@ -3030,32 +3062,32 @@ const handleVisibilityChangeConservative = useCallback((
                               });
             
             if (hasChanged) {
-              console.log("📊 DASHBOARD: Mudança detectada nos sinais da dashboard");
+              console.log("???? DASHBOARD: Mudan??a detectada nos sinais da dashboard");
               console.log("Novos sinais:", formattedSignals.map(s => ({
                 symbol: s.symbol,
                 entry_time: s.entry_time,
                 id: s.id
               })));
               
-              // Limpar cache de navegação para forçar regeneração com nova lógica
+              // Limpar cache de navega????o para for??ar regenera????o com nova l??gica
               clearNavigationCacheOnDashboardChange();
             
             // Sempre armazenar apenas 3 sinais de dashboard
             setDashboardSignals(formattedSignals);
             
-            // Forçar uma atualização da lista de sinais
+            // For??ar uma atualiza????o da lista de sinais
             queryClient.invalidateQueries({ queryKey: ['tradingSignals'] });
             } else {
-              console.log("📊 DASHBOARD: Nenhuma mudança detectada nos sinais");
+              console.log("???? DASHBOARD: Nenhuma mudan??a detectada nos sinais");
             }
             
             return;
           }
         }
         
-        // Se não há sinais da dashboard, limpar estado
+        // Se n??o h?? sinais da dashboard, limpar estado
         if (dashboardSignals && dashboardSignals.length > 0) {
-          console.log("📊 DASHBOARD: Sinais da dashboard removidos");
+          console.log("???? DASHBOARD: Sinais da dashboard removidos");
         setDashboardSignals([]);
           clearNavigationCacheOnDashboardChange();
           queryClient.invalidateQueries({ queryKey: ['tradingSignals'] });
@@ -3066,55 +3098,55 @@ const handleVisibilityChangeConservative = useCallback((
       }
     };
 
-    // Primeira verificação imediata
+    // Primeira verifica????o imediata
     fetchDashboardSignals();
     
-    // Verificação adicional após 1 segundo (garante sincronização inicial)
+    // Verifica????o adicional ap??s 1 segundo (garante sincroniza????o inicial)
     setTimeout(() => {
-      console.log('🔄 SYNC: Verificação adicional de sincronização');
+      console.log('???? SYNC: Verifica????o adicional de sincroniza????o');
       fetchDashboardSignals();
     }, 1000);
 
-    // CORREÇÃO: Verificar a cada 5 segundos para sincronização rápida
+    // CORRE????O: Verificar a cada 5 segundos para sincroniza????o r??pida
     const interval = setInterval(fetchDashboardSignals, 5000); // 5 segundos
     
     return () => clearInterval(interval);
   }, [queryClient, dashboardSignals]);
 
-  // Função para verificar e evitar sinais com horários duplicados
+  // Fun????o para verificar e evitar sinais com hor??rios duplicados
   const validateUniqueEntryTimes = useCallback((signals: TradingSignal[]): TradingSignal[] => {
     if (!signals || signals.length < 2) return signals;
     
-    // Filtrar os sinais que não contêm "binance" no nome
+    // Filtrar os sinais que n??o cont??m "binance" no nome
     const filteredSignals = signals.filter(signal => 
       !signal.symbol.toLowerCase().includes('binance') &&
       !String(signal.exchange || '').toLowerCase().includes('binance')
     );
     
-    // Separar os sinais da dashboard (os primeiros 3) e garantir que mantemos seus horários originais
+    // Separar os sinais da dashboard (os primeiros 3) e garantir que mantemos seus hor??rios originais
     const dashboardSignals = filteredSignals
       .filter(s => (s as ExtendedSignal).isDashboard === true)
       .filter(s => !s.symbol.toLowerCase().includes('binance'))
       .slice(0, 3); // Limitar a exatamente 3
     
-    // Se não temos sinais da dashboard suficientes, retornar os sinais como estão
+    // Se n??o temos sinais da dashboard suficientes, retornar os sinais como est??o
     if (dashboardSignals.length < 3) {
-      console.log("⚠️ Menos de 3 sinais da dashboard encontrados, usando lógica padrão");
+      console.log("???? Menos de 3 sinais da dashboard encontrados, usando l??gica padr??o");
       return filteredSignals.slice(0, 7);
     }
     
-    console.log("📊 Sinais da dashboard encontrados:", dashboardSignals.map(s => ({
+    console.log("???? Sinais da dashboard encontrados:", dashboardSignals.map(s => ({
       symbol: s.symbol,
       entry_time: s.entry_time
     })));
       
-    // Obter o terceiro sinal da dashboard para calcular os horários dos sinais complementares
+    // Obter o terceiro sinal da dashboard para calcular os hor??rios dos sinais complementares
     const thirdDashboardSignal = dashboardSignals[2];
     const thirdSignalEntryTime = thirdDashboardSignal.entry_time;
     
-    console.log(`🕒 Terceiro sinal da dashboard: ${thirdSignalEntryTime}`);
+    console.log(`???? Terceiro sinal da dashboard: ${thirdSignalEntryTime}`);
     
-    // Função para calcular próximo horário seguindo padrão 03,23,43
+    // Fun????o para calcular pr??ximo hor??rio seguindo padr??o 03,23,43
     const calculateNextPatternTime = (previousTime: string): string => {
       const [hour, minute] = previousTime.split(':').map(Number);
       let nextHour = hour;
@@ -3125,7 +3157,7 @@ const handleVisibilityChangeConservative = useCallback((
       } else if (minute < 23 || minute === 23) {
         nextMinute = 43;
     } else {
-        // minute >= 43, próximo é XX+1:03
+        // minute >= 43, pr??ximo ?? XX+1:03
         nextHour = (hour + 1) % 24;
         nextMinute = 3;
       }
@@ -3133,41 +3165,41 @@ const handleVisibilityChangeConservative = useCallback((
       return `${nextHour.toString().padStart(2, '0')}:${nextMinute.toString().padStart(2, '0')}`;
     };
     
-    // Calcular horários dos 4 sinais complementares
+    // Calcular hor??rios dos 4 sinais complementares
     const complementaryTimes: string[] = [];
     
-    // 4º sinal: 20 minutos após o 3º da dashboard
+    // 4?? sinal: 20 minutos ap??s o 3?? da dashboard
     const fourthSignalTime = calculateNextTime(String(thirdSignalEntryTime), 20);
     complementaryTimes.push(fourthSignalTime);
     
-    // 5º sinal: seguindo padrão baseado no 4º
+    // 5?? sinal: seguindo padr??o baseado no 4??
     const fifthSignalTime = calculateNextPatternTime(fourthSignalTime);
     complementaryTimes.push(fifthSignalTime);
     
-    // 6º sinal: seguindo padrão baseado no 5º
+    // 6?? sinal: seguindo padr??o baseado no 5??
     const sixthSignalTime = calculateNextPatternTime(fifthSignalTime);
     complementaryTimes.push(sixthSignalTime);
     
-    // 7º sinal: seguindo padrão baseado no 6º
+    // 7?? sinal: seguindo padr??o baseado no 6??
     const seventhSignalTime = calculateNextPatternTime(sixthSignalTime);
     complementaryTimes.push(seventhSignalTime);
     
-    console.log("⏰ Horários dos sinais complementares calculados:", complementaryTimes);
-    console.log(`4º sinal: ${complementaryTimes[0]} (20min após 3º: ${thirdSignalEntryTime})`);
-    console.log(`5º sinal: ${complementaryTimes[1]} (padrão baseado no 4º)`);
-    console.log(`6º sinal: ${complementaryTimes[2]} (padrão baseado no 5º)`);
-    console.log(`7º sinal: ${complementaryTimes[3]} (padrão baseado no 6º)`);
+    console.log("??? Hor??rios dos sinais complementares calculados:", complementaryTimes);
+    console.log(`4?? sinal: ${complementaryTimes[0]} (20min ap??s 3??: ${thirdSignalEntryTime})`);
+    console.log(`5?? sinal: ${complementaryTimes[1]} (padr??o baseado no 4??)`);
+    console.log(`6?? sinal: ${complementaryTimes[2]} (padr??o baseado no 5??)`);
+    console.log(`7?? sinal: ${complementaryTimes[3]} (padr??o baseado no 6??)`);
     
-    // Criar conjunto de símbolos já usados para evitar duplicatas
+    // Criar conjunto de s??mbolos j?? usados para evitar duplicatas
     const usedSymbols = new Set(dashboardSignals.map(s => s.symbol));
     
-    // Coletar sinais não-dashboard únicos para os sinais complementares
+    // Coletar sinais n??o-dashboard ??nicos para os sinais complementares
     const additionalSignals: TradingSignal[] = [];
     const nonDashboardSignals = filteredSignals
       .filter(s => (s as ExtendedSignal).isDashboard !== true)
       .filter(s => !usedSymbols.has(s.symbol) && !s.symbol.toLowerCase().includes('binance'));
     
-    // Adicionar sinais únicos até ter 4 sinais complementares
+    // Adicionar sinais ??nicos at?? ter 4 sinais complementares
     for (const signal of nonDashboardSignals) {
       if (additionalSignals.length >= 4) break;
       if (!usedSymbols.has(signal.symbol)) {
@@ -3176,7 +3208,7 @@ const handleVisibilityChangeConservative = useCallback((
       }
     }
     
-    // Se ainda não temos sinais suficientes, gerar novos com ativos únicos
+    // Se ainda n??o temos sinais suficientes, gerar novos com ativos ??nicos
     if (additionalSignals.length < 4) {
       const availableAssetNames = getAllAssetNames()
         .filter(asset => 
@@ -3190,7 +3222,7 @@ const handleVisibilityChangeConservative = useCallback((
       // Embaralhar a lista para variedade
       const shuffledAssets = availableAssetNames.sort(() => Math.random() - 0.5);
       
-      // Adicionar novos sinais até completar 4 sinais complementares
+      // Adicionar novos sinais at?? completar 4 sinais complementares
       for (let i = additionalSignals.length; i < 4 && shuffledAssets.length > 0; i++) {
         const assetName = shuffledAssets.shift()!;
         
@@ -3206,19 +3238,19 @@ const handleVisibilityChangeConservative = useCallback((
       }
     }
     
-    // Aplicar os horários calculados aos sinais complementares
+    // Aplicar os hor??rios calculados aos sinais complementares
     const fixedComplementarySignals: TradingSignal[] = [];
     
     for (let i = 0; i < Math.min(additionalSignals.length, 4); i++) {
       const signal = additionalSignals[i];
       const entryTime = complementaryTimes[i];
       
-      // Calcular os horários de expiração e reentradas
+      // Calcular os hor??rios de expira????o e reentradas
       const expiryTime = calculateNextTime(entryTime, SIGNAL_EXPIRY_TIME);
       const gale1Time = expiryTime;
       const gale2Time = calculateNextTime(gale1Time, SIGNAL_EXPIRY_TIME);
       
-      // Criar o sinal com os horários corretos
+      // Criar o sinal com os hor??rios corretos
       const updatedSignal = {
         ...signal,
         id: signal.id || `complementary-signal-${i}-${Date.now()}`,
@@ -3232,11 +3264,11 @@ const handleVisibilityChangeConservative = useCallback((
       fixedComplementarySignals.push(updatedSignal);
     }
     
-    // Combinar sinais da dashboard (mantendo horários originais) + sinais complementares (com novos horários)
+    // Combinar sinais da dashboard (mantendo hor??rios originais) + sinais complementares (com novos hor??rios)
     const finalSignals = [...dashboardSignals, ...fixedComplementarySignals].slice(0, 7);
     
-    // Log para depuração
-    console.log("✅ Sinais finais com nova lógica:", 
+    // Log para depura????o
+    console.log("?? Sinais finais com nova l??gica:", 
       finalSignals.map((s, idx) => ({
         index: idx + 1,
       asset: s.symbol,
@@ -3247,7 +3279,7 @@ const handleVisibilityChangeConservative = useCallback((
       }))
     );
     
-    // Verificar se não há duplicatas de ativos
+    // Verificar se n??o h?? duplicatas de ativos
     const assetOccurrences = new Map();
     finalSignals.forEach((signal, idx) => {
       const asset = signal.symbol;
@@ -3257,15 +3289,15 @@ const handleVisibilityChangeConservative = useCallback((
     const duplicatedAssets = Array.from(assetOccurrences.entries()).filter(([_, count]) => count > 1);
     
     if (duplicatedAssets.length > 0) {
-      console.error("❌ ERRO: Ativos duplicados detectados:", duplicatedAssets);
+      console.error("??? ERRO: Ativos duplicados detectados:", duplicatedAssets);
     } else {
-      console.log("✅ Verificação OK: Nenhuma duplicata de ativo encontrada");
+      console.log("?? Verifica????o OK: Nenhuma duplicata de ativo encontrada");
     }
     
     return finalSignals;
   }, [calculateNextTime, createBasePlaceholderData]);
 
-  // Cache local para os 4 últimos sinais
+  // Cache local para os 4 ??ltimos sinais
   const lastFourSignalsCache = useRef<{
     signals: TradingSignal[],
     timestamp: number,
@@ -3276,39 +3308,39 @@ const handleVisibilityChangeConservative = useCallback((
     isValid: false
   });
 
-  // Função auxiliar para calcular o próximo horário seguindo o padrão XX:03, XX:23, XX:43
+  // Fun????o auxiliar para calcular o pr??ximo hor??rio seguindo o padr??o XX:03, XX:23, XX:43
   const calculateNextTimeInPattern = useCallback((currentTime: string): string => {
     const [hours, minutes] = currentTime.split(':').map(Number);
     let newHours = hours;
     let newMinutes = minutes;
     
-    // Avançar para o próximo horário na sequência correta
+    // Avan??ar para o pr??ximo hor??rio na sequ??ncia correta
     if (newMinutes === 3) {
       newMinutes = 23; // 03 -> 23 (mesma hora)
     } else if (newMinutes === 23) {
       newMinutes = 43; // 23 -> 43 (mesma hora)
     } else if (newMinutes === 43) {
-      newMinutes = 3; // 43 -> 03 (próxima hora)
+      newMinutes = 3; // 43 -> 03 (pr??xima hora)
       newHours = (newHours + 1) % 24;
     }
     
     return `${newHours.toString().padStart(2, '0')}:${newMinutes.toString().padStart(2, '0')}`;
   }, []);
 
-  // Função para ajustar horário para seguir o padrão 19:23, 19:43, 20:03, etc.
+  // Fun????o para ajustar hor??rio para seguir o padr??o 19:23, 19:43, 20:03, etc.
   const adjustToTimePattern = useCallback((timeStr: string): string => {
     const [hours, minutes] = timeStr.split(':').map(Number);
     let newHours = hours;
     
-    // O primeiro horário é sempre 19:23, seguido por incrementos de 20 minutos
-    // Encontrar qual o horário base mais próximo do atual 
-    // Padrão: XX:03, XX:23, XX:43 (minutos 3, 23, 43)
+    // O primeiro hor??rio ?? sempre 19:23, seguido por incrementos de 20 minutos
+    // Encontrar qual o hor??rio base mais pr??ximo do atual 
+    // Padr??o: XX:03, XX:23, XX:43 (minutos 3, 23, 43)
     let baseMinute = 3;
     
     if (minutes > 3) {
       if (minutes > 23) {
         if (minutes > 43) {
-          // Se já passamos de 43, avanço para 03 da próxima hora
+          // Se j?? passamos de 43, avan??o para 03 da pr??xima hora
           baseMinute = 3;
           newHours = (hours + 1) % 24;
         } else {
@@ -3322,12 +3354,12 @@ const handleVisibilityChangeConservative = useCallback((
     return `${newHours.toString().padStart(2, '0')}:${baseMinute.toString().padStart(2, '0')}`;
   }, []);
 
-  // 🛡️ FUNÇÃO PRESERVATIVA: Garantir 7 sinais preservando os existentes
+  // ??????? FUN????O PRESERVATIVA: Garantir 7 sinais preservando os existentes
   const ensureSevenSignals = useCallback((inputSignals: TradingSignal[]): TradingSignal[] => {
     return ensureSevenSignalsPreservative(inputSignals as PlaceholderSignal[]);
   }, [ensureSevenSignalsPreservative]);
 
-  // Memorizar os IDs dos sinais para evitar recriação quando apenas a ordem muda
+  // Memorizar os IDs dos sinais para evitar recria????o quando apenas a ordem muda
   const signalIds = useMemo(() => {
     return signals ? signals.map(s => s.id).join('|') : '';
   }, [signals]);
@@ -3336,25 +3368,41 @@ const handleVisibilityChangeConservative = useCallback((
   const filteredSignals = useMemo(() => {
     if (!signals) return ensureSevenSignals([]);
     
-    // FILTRO GLOBAL DE SEGURANÇA: Remover QUALQUER sinal com "binance" ou horários incorretos
+// ? FAST PATH: Se temos 7 sinais v?lidos do useExtendedSignals, apenas ordenar por position e retornar
+    if (signals.length === 7) {
+      const allValid = signals.every(s => s.symbol && s.entry_time && s.id);
+      if (allValid) {
+        console.log('? [filteredSignals] FAST PATH: 7 sinais v?lidos - ordenando por position e retornando');
+        const ordered = [...signals].sort((a, b) => {
+          const posA = (a as PlaceholderSignal & { position?: number }).position || 0;
+          const posB = (b as PlaceholderSignal & { position?: number }).position || 0;
+          return posA - posB;
+        });
+        console.log('   Ordem final:', ordered.map(s => `Pos ${(s as PlaceholderSignal & { position?: number }).position}: ${s.symbol} ${s.entry_time}`));
+        return ordered;
+      }
+    }
+    
+
+    // FILTRO GLOBAL DE SEGURAN??A: Remover QUALQUER sinal com "binance" ou hor??rios incorretos
     const safeSignals = signals.filter(signal => {
-      // Verificar se contém "binance" (case insensitive)
+      // Verificar se cont??m "binance" (case insensitive)
       const symbolLower = (signal.symbol || '').toLowerCase();
       const exchangeLower = (signal.exchange || '').toLowerCase();
       
       if (symbolLower.includes('binance') || exchangeLower.includes('binance')) {
-        console.warn(`🚫 FILTRO GLOBAL: Removendo sinal com binance: ${signal.symbol} - ${signal.exchange}`);
+        console.warn(`??? FILTRO GLOBAL: Removendo sinal com binance: ${signal.symbol} - ${signal.exchange}`);
         return false;
       }
       
-      // Verificar se o horário segue o padrão correto (XX:03, XX:23, XX:43)
+      // Verificar se o hor??rio segue o padr??o correto (XX:03, XX:23, XX:43)
       const entryTime = signal.entry_time || '';
       if (entryTime) {
         const [_, minutes] = entryTime.split(':').map(Number);
         const validMinutes = [3, 23, 43];
         
         if (!validMinutes.includes(minutes)) {
-          console.warn(`🚫 FILTRO GLOBAL: Removendo sinal com horário incorreto: ${signal.symbol} - ${entryTime} (minuto: ${minutes})`);
+          console.warn(`??? FILTRO GLOBAL: Removendo sinal com hor??rio incorreto: ${signal.symbol} - ${entryTime} (minuto: ${minutes})`);
           return false;
         }
       }
@@ -3362,7 +3410,7 @@ const handleVisibilityChangeConservative = useCallback((
       return true;
     });
     
-    // VERIFICAÇÃO DE DUPLICATAS: Detectar horários ou ativos repetidos
+    // VERIFICA????O DE DUPLICATAS: Detectar hor??rios ou ativos repetidos
     const timeCount = new Map();
     const assetCount = new Map();
     
@@ -3378,36 +3426,36 @@ const handleVisibilityChangeConservative = useCallback((
     const hasDuplicateAsset = Array.from(assetCount.values()).some(count => count > 1);
     
     if (hasDuplicateTime || hasDuplicateAsset) {
-      console.warn("🔄 DETECTADAS DUPLICATAS - Forçando regeneração de sinais únicos");
-      console.warn("Duplicatas de horário:", Array.from(timeCount.entries()).filter(([_, count]) => count > 1));
+      console.warn("???? DETECTADAS DUPLICATAS - For??ando regenera????o de sinais ??nicos");
+      console.warn("Duplicatas de hor??rio:", Array.from(timeCount.entries()).filter(([_, count]) => count > 1));
       console.warn("Duplicatas de ativo:", Array.from(assetCount.entries()).filter(([_, count]) => count > 1));
       
-      // Forçar regeneração com sinais únicos
+      // For??ar regenera????o com sinais ??nicos
       return ensureSevenSignals(safeSignals);
     }
     
-    console.log(`✅ FILTRO GLOBAL: ${signals.length} sinais originais → ${safeSignals.length} sinais seguros`);
+    console.log(`?? FILTRO GLOBAL: ${signals.length} sinais originais ??? ${safeSignals.length} sinais seguros`);
     
-    // Usar a função ensureSevenSignals para garantir:
-    // 1. Os 3 primeiros sinais serão sempre da dashboard
-    // 2. Os 4 sinais restantes terão horários no padrão XX:03, XX:23, XX:43
-    // 3. Os sinais serão organizados em ordem crescente de horário de entrada
-    // 4. Não haverá sinais repetidos com o mesmo horário
-    // 5. Haverá exatamente 7 sinais no total
+    // Usar a fun????o ensureSevenSignals para garantir:
+    // 1. Os 3 primeiros sinais ser??o sempre da dashboard
+    // 2. Os 4 sinais restantes ter??o hor??rios no padr??o XX:03, XX:23, XX:43
+    // 3. Os sinais ser??o organizados em ordem crescente de hor??rio de entrada
+    // 4. N??o haver?? sinais repetidos com o mesmo hor??rio
+    // 5. Haver?? exatamente 7 sinais no total
     
     // Verificar se temos exatamente 3 sinais da dashboard
     if (dashboardSignals.length < 3) {
-      console.warn(`Atenção: filteredSignals - apenas ${dashboardSignals.length} sinais da dashboard encontrados.`);
+      console.warn(`Aten????o: filteredSignals - apenas ${dashboardSignals.length} sinais da dashboard encontrados.`);
     } else if (dashboardSignals.length > 3) {
-      console.warn(`Atenção: limitando número de sinais da dashboard para exatamente 3`);
+      console.warn(`Aten????o: limitando n??mero de sinais da dashboard para exatamente 3`);
     }
     
-    // Forçar o uso explícito dos sinais da dashboard como os 3 primeiros, limitando a exatamente 3
+    // For??ar o uso expl??cito dos sinais da dashboard como os 3 primeiros, limitando a exatamente 3
     let originalSignals = safeSignals as TradingSignal[];
     
     // Se temos sinais da dashboard, garantir que sejam exatamente os 3 primeiros
     if (dashboardSignals.length > 0) {
-             // Limitar a dashboard para exatamente 3 sinais e aplicar filtros de segurança
+             // Limitar a dashboard para exatamente 3 sinais e aplicar filtros de seguran??a
        const limitedDashboardSignals = dashboardSignals
          .filter(signal => {
            const symbolLower = (signal.symbol || '').toLowerCase();
@@ -3416,7 +3464,7 @@ const handleVisibilityChangeConservative = useCallback((
          })
          .slice(0, 3)
          .map(signal => {
-           // Garantir que o sinal tenha todas as propriedades necessárias
+           // Garantir que o sinal tenha todas as propriedades necess??rias
            const safeCopy = { ...signal } as ExtendedSignal;
            safeCopy.exchange = inferExchangeCategory(signal.symbol); // Usar categoria correta
            safeCopy.isDashboard = true; // Marcar explicitamente como sinal da dashboard
@@ -3427,10 +3475,10 @@ const handleVisibilityChangeConservative = useCallback((
       const dashboardIds = new Set(limitedDashboardSignals.map(s => String(s.id)));
       originalSignals = originalSignals.filter(s => !dashboardIds.has(String(s.id)));
       
-      // Adicionar os sinais da dashboard (limitados a 3) no início da lista
+      // Adicionar os sinais da dashboard (limitados a 3) no in??cio da lista
       originalSignals = [...limitedDashboardSignals, ...originalSignals];
       
-      console.log("Sinais reconstruídos com dashboard no início:", 
+      console.log("Sinais reconstru??dos com dashboard no in??cio:", 
         originalSignals.slice(0, 3).map(s => `${s.symbol} - ${s.entry_time}`).join(", "));
     }
     
@@ -3446,21 +3494,21 @@ const handleVisibilityChangeConservative = useCallback((
       } as TradingSignal;
     });
     
-    // 🔒 SALVAMENTO AUTOMÁTICO IMEDIATO: SEMPRE salvar os sinais finais no cache de navegação
+    // ???? SALVAMENTO AUTOM??TICO IMEDIATO: SEMPRE salvar os sinais finais no cache de navega????o
     if (processedSignals && processedSignals.length >= 7) {
       saveSignalsToNavigationCache(processedSignals as PlaceholderSignal[]);
-      console.log('🔒 PERSISTÊNCIA: 7 sinais salvos automaticamente para navegação');
+      console.log('???? PERSIST??NCIA: 7 sinais salvos automaticamente para navega????o');
     } else if (processedSignals && processedSignals.length >= 4) {
       saveSignalsToNavigationCache(processedSignals as PlaceholderSignal[]);
-      console.log('🔒 PERSISTÊNCIA: Sinais parciais salvos para navegação');
+      console.log('???? PERSIST??NCIA: Sinais parciais salvos para navega????o');
     }
     
     return processedSignals;
   }, [signals, dashboardSignals, ensureSevenSignals]);
 
-  // Usar hook para notificações 5 minutos antes do horário de entrada
+  // Usar hook para notifica????es 5 minutos antes do hor??rio de entrada
   const { upcomingSignals, notificationsEnabled } = useSignalNotifications(
-    // Usar TODOS os sinais filtrados da página (não apenas da dashboard)
+    // Usar TODOS os sinais filtrados da p??gina (n??o apenas da dashboard)
     filteredSignals?.map(signal => ({
       ...signal,
       timestamp: typeof signal.timestamp === 'string' ? new Date(signal.timestamp).getTime() : Date.now(),
@@ -3471,25 +3519,25 @@ const handleVisibilityChangeConservative = useCallback((
     {
       notifyMinutesBefore: 5,       // Notificar 5 minutos antes da entrada
       enabled: true,
-      notificationType: 'signals' // Classificação para a aba de notificações
+      notificationType: 'signals' // Classifica????o para a aba de notifica????es
     }
   );
 
-  // Paginação
+  // Pagina????o
   const indexOfLastSignal = activePage * signalsPerPage;
   const indexOfFirstSignal = indexOfLastSignal - signalsPerPage;
   const paginatedSignals = filteredSignals.slice(indexOfFirstSignal, indexOfLastSignal);
   const totalPages = Math.ceil(filteredSignals.length / signalsPerPage);
 
-  // Função para lidar com a atualização de dados de forma segura
+  // Fun????o para lidar com a atualiza????o de dados de forma segura
   const handleRefresh = async () => {
     if (isRefreshing) return;
     
     try {
-      // Verificar se há uma sessão ativa antes de atualizar
+      // Verificar se h?? uma sess??o ativa antes de atualizar
       const supabaseSession = localStorage.getItem('supabase.auth.token');
       if (!supabaseSession) {
-        console.log('Sessão não encontrada, evitando atualização para prevenir redirecionamento');
+        console.log('Sess??o n??o encontrada, evitando atualiza????o para prevenir redirecionamento');
         return;
       }
       
@@ -3508,7 +3556,7 @@ const handleVisibilityChangeConservative = useCallback((
         await refetch();
       }
       
-      // Sempre atualizar preços
+      // Sempre atualizar pre??os
       await updatePrices();
     } catch (error) {
       console.error('Erro ao atualizar sinais:', error);
@@ -3517,27 +3565,27 @@ const handleVisibilityChangeConservative = useCallback((
     }
   };
 
-  // Função para atualizar preços
+  // Fun????o para atualizar pre??os
   const updatePrices = useCallback(async () => {
     try {
       const currentSignals = queryClient.getQueryData<TradingSignal[]>(['tradingSignals']);
       
       if (!currentSignals || currentSignals.length === 0) return;
       
-      // Extrair símbolos únicos para os quais precisamos de preços
+      // Extrair s??mbolos ??nicos para os quais precisamos de pre??os
       const symbols = [...new Set(currentSignals.map(s => s.symbol))];
       
-      // Buscar preços atualizados
+      // Buscar pre??os atualizados
       const prices = await getLatestPrices(symbols);
       
       if (!prices || prices.length === 0) return;
       
-      // Atualizar preços nos sinais
+      // Atualizar pre??os nos sinais
       const updatedSignals = currentSignals.map(signal => {
         const price = prices.find(p => p.symbol === signal.symbol)?.price;
         
         if (price) {
-          // Garantir coerência de tipos: TradingSignal espera `price` como number
+          // Garantir coer??ncia de tipos: TradingSignal espera `price` como number
           const normalizedPrice = typeof price === 'number' ? price : parseFloat(String(price));
           return {
             ...signal,
@@ -3552,7 +3600,7 @@ const handleVisibilityChangeConservative = useCallback((
       // Atualizar no cache
       safeSetTradingSignals(updatedSignals);
       
-      // Atualizar preços anteriores
+      // Atualizar pre??os anteriores
       setPreviousPrices(prev => {
         const newPrices: Record<string, string> = {...prev};
         
@@ -3565,11 +3613,11 @@ const handleVisibilityChangeConservative = useCallback((
         return newPrices;
       });
     } catch (error) {
-      console.error("Erro ao atualizar preços:", error);
+      console.error("Erro ao atualizar pre??os:", error);
     }
   }, [queryClient, safeSetTradingSignals]);
 
-  // Funções auxiliares para exibir informações do sinal
+  // Fun????es auxiliares para exibir informa????es do sinal
   const getPriceChange = (symbol: string): 'up' | 'down' | 'equal' => {
     if (!previousPrices[symbol] || !currentPrices[symbol]) return 'equal';
     
@@ -3601,7 +3649,7 @@ const handleVisibilityChangeConservative = useCallback((
       // Se expira em mais de 24 horas
       return `${t('signals.expires')} ${format(expiryDate, "dd 'de' MMM", { locale: ptBR })}`;
     } catch (error) {
-      return t('signals.invalid.date') || "Data inválida";
+      return t('signals.invalid.date') || "Data inv??lida";
     }
   };
 
@@ -3635,17 +3683,17 @@ const handleVisibilityChangeConservative = useCallback((
     }
   };
 
-  // Substituir a verificação de sinal expirando pelo formato da taxa de sucesso
+  // Substituir a verifica????o de sinal expirando pelo formato da taxa de sucesso
   const formatSuccessRate = (rate: number): string => {
-    // Garantir que a taxa está entre 77% e 100%
+    // Garantir que a taxa est?? entre 77% e 100%
     const validRate = Math.min(Math.max(rate || 0.77, 0.77), 1.0);
-    // Formatação com uma casa decimal
+    // Formata????o com uma casa decimal
     return `${(validRate * 100).toFixed(1)}%`;
   };
 
-  // Efeito para limpar cache antigo na inicialização
+  // Efeito para limpar cache antigo na inicializa????o
   useEffect(() => {
-    // Verificar se há sinais em cache e se estão desatualizados
+    // Verificar se h?? sinais em cache e se est??o desatualizados
     const cachedSignalsData = localStorage.getItem('dailyTradingSignals');
     const cachedDate = localStorage.getItem('dailyTradingSignalsDate');
     
@@ -3661,7 +3709,7 @@ const handleVisibilityChangeConservative = useCallback((
       }
     }
     
-    // Também limpar localStorage do dashboard se estiver desatualizado
+    // Tamb??m limpar localStorage do dashboard se estiver desatualizado
     const dashboardData = localStorage.getItem('dashboardSignals');
     if (dashboardData) {
       try {
@@ -3678,22 +3726,22 @@ const handleVisibilityChangeConservative = useCallback((
     }
   }, [resultCounter]);
   
-  // Função para gerar resultado seguindo a proporção 4:1 (agora com implementação fixada)
+  // Fun????o para gerar resultado seguindo a propor????o 4:1 (agora com implementa????o fixada)
   const generateResultWithRatio = useCallback((): 'win' | 'loss' => {
-    // Incrementar contador e retornar 'loss' a cada 5 sinais (no 5º sinal)
+    // Incrementar contador e retornar 'loss' a cada 5 sinais (no 5?? sinal)
     const nextCounter = (resultCounter + 1) % WIN_LOSS_RATIO;
     setResultCounter(nextCounter);
     return nextCounter === 0 ? 'loss' : 'win';
   }, [resultCounter]);
   
-  // Função que verifica sinais expirados - Movida antes de sua utilização
+  // Fun????o que verifica sinais expirados - Movida antes de sua utiliza????o
   const checkExpiredSignals = useCallback(() => {
     const now = new Date();
     const currentHour = now.getHours();
     const currentMinute = now.getMinutes();
     const currentSecond = now.getSeconds();
     
-    // Formato de hora atual para comparações precisas
+    // Formato de hora atual para compara????es precisas
     const currentTimeStr = `${currentHour.toString().padStart(2, '0')}:${currentMinute.toString().padStart(2, '0')}:${currentSecond.toString().padStart(2, '0')}`;
     
           // Verificando sinais expirados
@@ -3702,32 +3750,32 @@ const handleVisibilityChangeConservative = useCallback((
     queryClient.getQueryData<TradingSignal[]>(['tradingSignals'])?.forEach(signal => {
       const typedSignal = signal as PlaceholderSignal;
       
-      // Se o sinal já foi processado ou não tem entrada, ignorar
+      // Se o sinal j?? foi processado ou n??o tem entrada, ignorar
       if (typedSignal.processed || !typedSignal.entry_time) return;
       
-      // Extrair horário de entrada
+      // Extrair hor??rio de entrada
       const [entryHour, entryMin] = typedSignal.entry_time.split(':').map(Number);
       
-      // Calcular horário de animação (exatamente 16 minutos após a entrada)
+      // Calcular hor??rio de anima????o (exatamente 16 minutos ap??s a entrada)
       let animationHour = entryHour;
       let animationMinute = entryMin + 16;
       
-      // Ajustar para hora seguinte se necessário
+      // Ajustar para hora seguinte se necess??rio
       if (animationMinute >= 60) {
         animationHour = (animationHour + 1) % 24;
         animationMinute = animationMinute - 60;
       }
       
-      // Formatar o horário de animação
+      // Formatar o hor??rio de anima????o
       const animationTime = `${animationHour.toString().padStart(2, '0')}:${animationMinute.toString().padStart(2, '0')}`;
       
-      // Verificar se o horário atual é igual ou posterior ao horário de animação
+      // Verificar se o hor??rio atual ?? igual ou posterior ao hor??rio de anima????o
       const isAnimationTime = 
         (currentHour > animationHour) || 
         (currentHour === animationHour && currentMinute >= animationMinute);
       
       if (isAnimationTime && !typedSignal.isAnimating && !typedSignal.processed) {
-        // Sinal atingiu o tempo para animação
+        // Sinal atingiu o tempo para anima????o
        
         // Gerar resultado (4 ganhos para 1 perda)
         setWinLossCounter(prev => (prev + 1) % 5);
@@ -3752,7 +3800,7 @@ const handleVisibilityChangeConservative = useCallback((
         // Atualizar o cache com os sinais atualizados
         safeSetTradingSignals(updatedSignals);
         
-        // Após 3 segundos, remover a animação e processar o sinal
+        // Ap??s 3 segundos, remover a anima????o e processar o sinal
         setTimeout(() => {
           const signalsWithoutAnimation = queryClient.getQueryData<TradingSignal[]>(['tradingSignals'])?.map(s => {
             if (s.id === typedSignal.id) {
@@ -3768,9 +3816,9 @@ const handleVisibilityChangeConservative = useCallback((
           if (signalsWithoutAnimation) {
             safeSetTradingSignals(signalsWithoutAnimation);
            
-           // Após 1 segundo, rotacionar os sinais
+           // Ap??s 1 segundo, rotacionar os sinais
            setTimeout(() => {
-                           // Rotacionando sinais após animação
+                           // Rotacionando sinais ap??s anima????o
             
             // Rotacionar sinais
             const signalsAfterRotation = rotateSignals(signalsWithoutAnimation);
@@ -3784,35 +3832,35 @@ const handleVisibilityChangeConservative = useCallback((
     });
   }, [queryClient, rotateSignals, winLossCounter, setWinLossCounter, safeSetTradingSignals]);
   
-  // Atualização periódica MUITO menos frequente, apenas quando realmente necessário
+  // Atualiza????o peri??dica MUITO menos frequente, apenas quando realmente necess??rio
   useEffect(() => {
-    // Função de verificação interna sem atualização visual
+    // Fun????o de verifica????o interna sem atualiza????o visual
     const silentBackgroundCheck = () => {
       try {
-        // Verificar se há uma sessão ativa antes de fazer qualquer verificação
+        // Verificar se h?? uma sess??o ativa antes de fazer qualquer verifica????o
         const supabaseSession = localStorage.getItem('supabase.auth.token');
         if (!supabaseSession) {
-          console.log('Sessão não encontrada, evitando verificação em segundo plano');
+          console.log('Sess??o n??o encontrada, evitando verifica????o em segundo plano');
           return;
         }
         
         const now = Date.now();
         const state = stateRef.current;
         
-        // Evitar atualizações sobrepostas - IMPORTANTE
+        // Evitar atualiza????es sobrepostas - IMPORTANTE
         if (state.isUpdating) return;
         
-        // Verificar sinais expirados a cada 15 minutos (aumento do intervalo para reduzir atualizações)
+        // Verificar sinais expirados a cada 15 minutos (aumento do intervalo para reduzir atualiza????es)
         if (now - state.lastCheckTime > 15 * 60 * 1000) {
-          // Verificar em silêncio
+          // Verificar em sil??ncio
           state.lastCheckTime = now;
           
-          // Só verificar se houver sinais não processados
+          // S?? verificar se houver sinais n??o processados
           const currentSignals = queryClient.getQueryData<TradingSignal[]>(['tradingSignals']) || [];
           
-          // Se não temos sinais, não fazer nada
+          // Se n??o temos sinais, n??o fazer nada
           if (!currentSignals || currentSignals.length === 0) {
-            console.log('Nenhum sinal atual encontrado, evitando verificação em segundo plano');
+            console.log('Nenhum sinal atual encontrado, evitando verifica????o em segundo plano');
             return;
           }
           
@@ -3821,77 +3869,77 @@ const handleVisibilityChangeConservative = useCallback((
             !signal.processed && signal.entry_time);
           
           if (hasUnprocessedSignals) {
-            // Usar um lock para evitar atualizações simultâneas
+            // Usar um lock para evitar atualiza????es simult??neas
             state.isUpdating = true;
             
-            // Só verificar quando realmente necessário
+            // S?? verificar quando realmente necess??rio
             checkExpiredSignals();
             
-            // Liberar o lock após 10 segundos (tempo seguro para completar operações)
+            // Liberar o lock ap??s 10 segundos (tempo seguro para completar opera????es)
             setTimeout(() => {
               state.isUpdating = false;
             }, 10000);
           }
         }
         
-        // Atualizar preços muito menos frequentemente (a cada 20 minutos)
+        // Atualizar pre??os muito menos frequentemente (a cada 20 minutos)
         if (now - state.lastPriceUpdate > 20 * 60 * 1000) {
           state.lastPriceUpdate = now;
           
-          // Verificar se temos sinais antes de atualizar preços
+          // Verificar se temos sinais antes de atualizar pre??os
           const currentSignals = queryClient.getQueryData<TradingSignal[]>(['tradingSignals']) || [];
           if (currentSignals && currentSignals.length > 0) {
             updatePrices();
           }
         }
       } catch (error) {
-        console.error('Erro durante verificação em segundo plano:', error);
+        console.error('Erro durante verifica????o em segundo plano:', error);
       }
     };
     
-    // Verificar silenciosamente com frequência muito reduzida (10 minutos) 
+    // Verificar silenciosamente com frequ??ncia muito reduzida (10 minutos) 
     const autoUpdateInterval = setInterval(silentBackgroundCheck, 10 * 60 * 1000);
     
     // Limpar intervalo ao desmontar componente
     return () => clearInterval(autoUpdateInterval);
   }, [queryClient, resultCounter, checkExpiredSignals, updatePrices]);
   
-  // Configurar atualização completa de dados a cada 20 minutos em vez de 5 minutos
+  // Configurar atualiza????o completa de dados a cada 20 minutos em vez de 5 minutos
   useEffect(() => {
-    // Função para buscar e atualizar sinais completos com proteção contra updates simultâneos e redirecionamentos
+    // Fun????o para buscar e atualizar sinais completos com prote????o contra updates simult??neos e redirecionamentos
     const fetchAndUpdateSignals = async () => {
       try {
-        // Verificar se há uma sessão ativa antes de atualizar
+        // Verificar se h?? uma sess??o ativa antes de atualizar
         const supabaseSession = localStorage.getItem('supabase.auth.token');
         if (!supabaseSession) {
-          console.log('Sessão não encontrada, evitando atualização automática para prevenir redirecionamento');
+          console.log('Sess??o n??o encontrada, evitando atualiza????o autom??tica para prevenir redirecionamento');
           return;
         }
         
-        // Evitar atualizações sobrepostas
+        // Evitar atualiza????es sobrepostas
         if (updateLockRef.current.isUpdating) {
-          console.log('Atualização de sinais já em andamento, ignorando esta chamada');
+          console.log('Atualiza????o de sinais j?? em andamento, ignorando esta chamada');
           return;
         }
         
-        // Evitar atualizações muito frequentes (mínimo 45 minutos entre updates)
+        // Evitar atualiza????es muito frequentes (m??nimo 45 minutos entre updates)
         const now = Date.now();
         const timeSinceLastUpdate = now - updateLockRef.current.lastUpdateTime;
         if (timeSinceLastUpdate < 45 * 60 * 1000) {
-          console.log(`Ignorando atualização - última foi há apenas ${Math.floor(timeSinceLastUpdate/1000)} segundos`);
+          console.log(`Ignorando atualiza????o - ??ltima foi h?? apenas ${Math.floor(timeSinceLastUpdate/1000)} segundos`);
           return;
         }
         
-        // Verificar se a página está visível - se estiver minimizada, não atualizar
+        // Verificar se a p??gina est?? vis??vel - se estiver minimizada, n??o atualizar
         if (document.hidden) {
-          console.log('Página não visível, ignorando atualização de sinais');
+          console.log('P??gina n??o vis??vel, ignorando atualiza????o de sinais');
           return;
         }
         
         // Obter sinais atuais
         const currentSignals = queryClient.getQueryData<TradingSignal[]>(['tradingSignals']) || [];
         
-        // Se não temos sinais atuais, gerar localmente em vez de buscar do servidor
+        // Se n??o temos sinais atuais, gerar localmente em vez de buscar do servidor
         if (!currentSignals || currentSignals.length === 0) {
           console.log('Nenhum sinal atual encontrado, gerando novos sinais localmente');
           
@@ -3901,16 +3949,16 @@ const handleVisibilityChangeConservative = useCallback((
           return;
         }
         
-        // Verificar se temos algum sinal em processamento/animação
+        // Verificar se temos algum sinal em processamento/anima????o
         const hasActiveSignals = currentSignals.some(signal => {
           const extSignal = signal as ExtendedSignal;
           return extSignal.isAnimating === true || 
             (extSignal.processed && Date.now() - (extSignal.completedTime || 0) < 30000);
         });
         
-        // Se temos animações ou processamentos ativos, adiar a atualização
+        // Se temos anima????es ou processamentos ativos, adiar a atualiza????o
         if (hasActiveSignals) {
-          console.log('Sinais em animação ou processamento detectados, adiando atualização');
+          console.log('Sinais em anima????o ou processamento detectados, adiando atualiza????o');
           return;
         }
         
@@ -3919,23 +3967,23 @@ const handleVisibilityChangeConservative = useCallback((
         updateLockRef.current.lastUpdateTime = now;
         
         try {
-          console.log('Iniciando atualização segura de sinais...');
+          console.log('Iniciando atualiza????o segura de sinais...');
           
-          // Verificar se os sinais atuais têm horários válidos
+          // Verificar se os sinais atuais t??m hor??rios v??lidos
           const hasValidTimes = currentSignals.every(signal => {
             if (!signal.entry_time) return false;
             
-            // Verificar se o horário segue o padrão XX:23, XX:43, XX:03, etc.
+            // Verificar se o hor??rio segue o padr??o XX:23, XX:43, XX:03, etc.
             const [_, minutes] = String(signal.entry_time).split(':').map(Number);
             const validMinutes = [3, 23, 43];
             return validMinutes.includes(minutes);
           });
           
-          // Se os sinais atuais têm horários válidos, apenas reorganizar e atualizar
+          // Se os sinais atuais t??m hor??rios v??lidos, apenas reorganizar e atualizar
           if (hasValidTimes && currentSignals.length === 7) {
-            console.log('Sinais atuais têm horários válidos, apenas reorganizando');
+            console.log('Sinais atuais t??m hor??rios v??lidos, apenas reorganizando');
             
-            // Aplicar função validateUniqueEntryTimes para garantir horários corretos
+            // Aplicar fun????o validateUniqueEntryTimes para garantir hor??rios corretos
             const reorganizedSignals = validateUniqueEntryTimes(currentSignals);
             
             // Atualizar cache do React Query com um pequeno delay
@@ -3946,12 +3994,12 @@ const handleVisibilityChangeConservative = useCallback((
           }
           
           // Se chegamos aqui, precisamos gerar novos sinais
-          console.log('Gerando novos sinais com horários corretos');
+          console.log('Gerando novos sinais com hor??rios corretos');
           
-          // Gerar novos sinais com horários corretos
+          // Gerar novos sinais com hor??rios corretos
           const newSignals = validateUniqueEntryTimes(generateDailySignals());
           
-          // Preservar IDs estáveis sempre que possível
+          // Preservar IDs est??veis sempre que poss??vel
           const preservedSignals = newSignals.map(signal => {
             const matchingSignal = currentSignals.find(s => s.symbol === signal.symbol);
             if (matchingSignal) {
@@ -3970,13 +4018,13 @@ const handleVisibilityChangeConservative = useCallback((
         } catch (error) {
           console.error("Erro ao atualizar sinais:", error);
         } finally {
-          // Liberar o lock após um delay para garantir que a operação foi concluída
+          // Liberar o lock ap??s um delay para garantir que a opera????o foi conclu??da
           setTimeout(() => {
             updateLockRef.current.isUpdating = false;
           }, 5000);
         }
       } catch (error) {
-        console.error("Erro durante atualização automática:", error);
+        console.error("Erro durante atualiza????o autom??tica:", error);
         // Garantir que o lock seja liberado mesmo em caso de erro
         setTimeout(() => {
           if (updateLockRef.current) {
@@ -3986,13 +4034,13 @@ const handleVisibilityChangeConservative = useCallback((
       }
     };
     
-    // Só executar atualização automática se auto-refresh estiver habilitado
+    // S?? executar atualiza????o autom??tica se auto-refresh estiver habilitado
     if (!autoRefresh) return;
     
-    // Definir intervalo extremamente longo (45 minutos) para atualização automática
+    // Definir intervalo extremamente longo (45 minutos) para atualiza????o autom??tica
     const autoUpdateInterval = setInterval(fetchAndUpdateSignals, 45 * 60 * 1000);
     
-    // Primeira execução após 5 minutos (dar tempo para interface se estabilizar completamente)
+    // Primeira execu????o ap??s 5 minutos (dar tempo para interface se estabilizar completamente)
     const initialTimeoutId = setTimeout(fetchAndUpdateSignals, 5 * 60 * 1000);
     
     // Limpar intervalos quando o componente for desmontado
@@ -4002,19 +4050,19 @@ const handleVisibilityChangeConservative = useCallback((
     };
   }, [autoRefresh, queryClient, ensureSevenSignals, generateDailySignals, safeSetTradingSignals, validateUniqueEntryTimes]);
 
-  // 🛡️ SISTEMA CONSERVATIVO DE NAVEGAÇÃO - SÓ atua em casos críticos
+  // ??????? SISTEMA CONSERVATIVO DE NAVEGA????O - S?? atua em casos cr??ticos
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
         try {
-          // Obter sinais atuais SEM forçar invalidação
+          // Obter sinais atuais SEM for??ar invalida????o
           const currentSignals = queryClient.getQueryData<TradingSignal[]>(['tradingSignals']) as PlaceholderSignal[];
           
-          // Usar sistema conservativo que PRESERVA sinais válidos
+          // Usar sistema conservativo que PRESERVA sinais v??lidos
           handleVisibilityChangeConservative(queryClient, currentSignals);
           
         } catch (error) {
-          console.error('Erro no sistema conservativo de navegação:', error);
+          console.error('Erro no sistema conservativo de navega????o:', error);
         }
       }
     };
@@ -4026,25 +4074,25 @@ const handleVisibilityChangeConservative = useCallback((
     };
   }, [queryClient, handleVisibilityChangeConservative]);
 
-  // Comentário removido pois a função foi movida para antes da ensureSevenSignals
+  // Coment??rio removido pois a fun????o foi movida para antes da ensureSevenSignals
 
-  // Função de rotação para a página principal de sinais (remove o primeiro e adiciona novo no final)
+  // Fun????o de rota????o para a p??gina principal de sinais (remove o primeiro e adiciona novo no final)
   const rotateSignalsPage = (currentSignals: TradingSignal[]): TradingSignal[] => {
-    // Simplesmente retornar os sinais atuais, sem rotação
+    // Simplesmente retornar os sinais atuais, sem rota????o
     return currentSignals;
   };
   
-  // Função de rotação para a dashboard (move tudo para cima e adiciona novo no final)
+  // Fun????o de rota????o para a dashboard (move tudo para cima e adiciona novo no final)
   const rotateDashboardSignals = (currentSignals: TradingSignal[]): TradingSignal[] => {
-    // Simplesmente retornar os sinais atuais, sem rotação
+    // Simplesmente retornar os sinais atuais, sem rota????o
     return currentSignals;
   };
 
-  // Verificar se há sinais que expiraram e devem mostrar resultado
+  // Verificar se h?? sinais que expiraram e devem mostrar resultado
   useEffect(() => {
     const checkExpiredSignals = () => {
-      // Função desativada conforme solicitação do cliente
-      // Não mostramos mais os ícones de resultado (ganho/perda) nos sinais
+      // Fun????o desativada conforme solicita????o do cliente
+      // N??o mostramos mais os ??cones de resultado (ganho/perda) nos sinais
       return;
     };
     
@@ -4056,76 +4104,76 @@ const handleVisibilityChangeConservative = useCallback((
     return () => clearInterval(intervalId);
   }, [signals, queryClient]);
 
-  // Sistema de verificação para rotação automática a cada 60 segundos
+  // Sistema de verifica????o para rota????o autom??tica a cada 60 segundos
   useEffect(() => {
-    console.log('⏰ Timer de verificação para rotação automática iniciado (60s)');
+    console.log('??? Timer de verifica????o para rota????o autom??tica iniciado (60s)');
     
-    // Função que verifica se é hora de rotacionar os sinais
+    // Fun????o que verifica se ?? hora de rotacionar os sinais
     const checkSignalRotation = () => {
       try {
         // Obter sinais atuais
         const currentSignals = queryClient.getQueryData<TradingSignal[]>(['tradingSignals']);
         if (!currentSignals || currentSignals.length < 7) {
-          console.log('❌ Verificação de rotação: número insuficiente de sinais');
+          console.log('??? Verifica????o de rota????o: n??mero insuficiente de sinais');
           return;
         }
         
-        // Verificar se o primeiro sinal existe e tem horário de entrada
+        // Verificar se o primeiro sinal existe e tem hor??rio de entrada
         const firstSignal = currentSignals[0];
         if (!firstSignal || !firstSignal.entry_time) {
-          console.log('❌ Verificação de rotação: primeiro sinal inválido');
+          console.log('??? Verifica????o de rota????o: primeiro sinal inv??lido');
           return;
         }
         
-        // Verificar se já se passaram 20 minutos desde a entrada do primeiro sinal
+        // Verificar se j?? se passaram 20 minutos desde a entrada do primeiro sinal
         const [entryHour, entryMin] = String(firstSignal.entry_time).split(':').map(Number);
         
-        // Criar horário de entrada
+        // Criar hor??rio de entrada
         const entryTime = new Date();
         entryTime.setHours(entryHour, entryMin, 0, 0);
         
-        // Se o horário de entrada for no futuro, ajustar para o dia anterior
+        // Se o hor??rio de entrada for no futuro, ajustar para o dia anterior
         const currentTime = new Date();
         if (entryTime > currentTime) {
           entryTime.setDate(entryTime.getDate() - 1);
         }
         
-        // Calcular diferença em minutos desde a entrada
+        // Calcular diferen??a em minutos desde a entrada
         const timeDiffMs = currentTime.getTime() - entryTime.getTime();
         const minutesSinceEntry = Math.floor(timeDiffMs / (1000 * 60));
         
-        // Verificar se já se passaram 20 minutos
+        // Verificar se j?? se passaram 20 minutos
         if (minutesSinceEntry >= 20) {
-          console.log(`🔄 ROTAÇÃO AUTOMÁTICA: ${minutesSinceEntry} minutos desde entrada do primeiro sinal (${firstSignal.entry_time})`);
+          console.log(`???? ROTA????O AUTOM??TICA: ${minutesSinceEntry} minutos desde entrada do primeiro sinal (${firstSignal.entry_time})`);
           
-          // Executar a rotação
+          // Executar a rota????o
           const rotatedSignals = rotateSignals(currentSignals);
           
           // Atualizar os sinais no cache do React Query
           safeSetTradingSignals(rotatedSignals);
         } else {
-          console.log(`⏱️ Tempo até rotação: ${20 - minutesSinceEntry} minutos (${minutesSinceEntry}/20 min desde entrada)`);
+          console.log(`?????? Tempo at?? rota????o: ${20 - minutesSinceEntry} minutos (${minutesSinceEntry}/20 min desde entrada)`);
         }
       } catch (error) {
-        console.error('❌ Erro durante verificação de rotação automática:', error);
+        console.error('??? Erro durante verifica????o de rota????o autom??tica:', error);
       }
     };
     
     // Verificar a cada 60 segundos
     const rotationCheckInterval = setInterval(checkSignalRotation, 60 * 1000);
     
-    // Verificar uma vez na inicialização (após 5 segundos para dar tempo de carregar os sinais)
+    // Verificar uma vez na inicializa????o (ap??s 5 segundos para dar tempo de carregar os sinais)
     const initialCheckTimeout = setTimeout(checkSignalRotation, 5 * 1000);
     
     // Limpar intervalo e timeout ao desmontar componente
     return () => {
       clearInterval(rotationCheckInterval);
       clearTimeout(initialCheckTimeout);
-      console.log('⏰ Timer de rotação automática desativado');
+      console.log('??? Timer de rota????o autom??tica desativado');
     };
   }, [queryClient, rotateSignals, safeSetTradingSignals]);
 
-  // Efeito para limpar cache na inicialização se houver horários inconsistentes
+  // Efeito para limpar cache na inicializa????o se houver hor??rios inconsistentes
   useEffect(() => {
     // Verificar a hora atual para validar sinais em cache
     const now = new Date();
@@ -4140,23 +4188,23 @@ const handleVisibilityChangeConservative = useCallback((
       try {
         const cachedData = JSON.parse(cachedSignals);
         if (cachedData && cachedData.signals && Array.isArray(cachedData.signals)) {
-          // Verificar se há sinais com horários inconsistentes
+          // Verificar se h?? sinais com hor??rios inconsistentes
           const hasInvalidTimes = cachedData.signals.some(signal => {
             if (!signal.entry_time) return false;
             
             const [hours] = signal.entry_time.split(':').map(Number);
             const hourDiff = Math.abs(hours - currentHour);
             
-            // Se a diferença for mais de 2 horas (exceto para sinais programados futuros)
+            // Se a diferen??a for mais de 2 horas (exceto para sinais programados futuros)
             return hourDiff > 2 && hourDiff < 22; // Considerando ciclo de 24h
           });
           
-          // Verificar se há número inválido de sinais
+          // Verificar se h?? n??mero inv??lido de sinais
           const hasInvalidCount = cachedData.signals.length !== 7;
           
           if (hasInvalidTimes || hasInvalidCount) {
             console.log('Detectados problemas no cache de sinais:');
-            console.log(`- Horários inconsistentes: ${hasInvalidTimes}`);
+            console.log(`- Hor??rios inconsistentes: ${hasInvalidTimes}`);
             console.log(`- Quantidade incorreta: ${cachedData.signals.length} (deve ser 7)`);
             console.log('Limpando cache de sinais...');
             
@@ -4171,48 +4219,48 @@ const handleVisibilityChangeConservative = useCallback((
         }
       } catch (e) {
         console.error('Erro ao analisar cache de sinais:', e);
-        // Em caso de erro, limpar cache por segurança
+        // Em caso de erro, limpar cache por seguran??a
         localStorage.removeItem('trading-signals-cache');
         localStorage.removeItem('signals-lastUpdated');
       }
     }
   }, []);
 
-  // 🔒 SISTEMA AUTOMÁTICO DE SALVAMENTO (substituindo limpeza de cache)
+  // ???? SISTEMA AUTOM??TICO DE SALVAMENTO (substituindo limpeza de cache)
   useEffect(() => {
-    console.log('🔒 SISTEMA PRESERVATIVO: Página de Sinais iniciada');
+    console.log('???? SISTEMA PRESERVATIVO: P??gina de Sinais iniciada');
     
-    // Tentar recuperar sinais salvos da navegação anterior
+    // Tentar recuperar sinais salvos da navega????o anterior
     const savedSignals = loadSignalsFromNavigationCache();
     if (savedSignals && savedSignals.length >= 4) {
-      console.log('🔒 RECUPERAÇÃO: Sinais encontrados da navegação anterior');
+      console.log('???? RECUPERA????O: Sinais encontrados da navega????o anterior');
       safeSetTradingSignals(savedSignals);
       return;
     }
     
-    // Se não há sinais salvos, sincronizar com dashboard sem limpar cache
-    console.log('🔒 SINCRONIZAÇÃO: Sincronizando com dashboard preservando cache');
+    // Se n??o h?? sinais salvos, sincronizar com dashboard sem limpar cache
+    console.log('???? SINCRONIZA????O: Sincronizando com dashboard preservando cache');
     refetch();
   }, [refetch, queryClient, safeSetTradingSignals]);
 
-  // 🔒 SALVAMENTO IMEDIATO sempre que os sinais mudarem
+  // ???? SALVAMENTO IMEDIATO sempre que os sinais mudarem
   useEffect(() => {
     if (filteredSignals && filteredSignals.length >= 7) {
-      console.log('🔒 SALVAMENTO IMEDIATO: Salvando sinais após filtro');
+      console.log('???? SALVAMENTO IMEDIATO: Salvando sinais ap??s filtro');
       saveSignalsToNavigationCache(filteredSignals as PlaceholderSignal[]);
     }
   }, [filteredSignals]);
 
-  // Solicitar permissão para notificações quando a página carregar
+  // Solicitar permiss??o para notifica????es quando a p??gina carregar
   useEffect(() => {
     if (!hasPermission) {
-      // Aguardar 2 segundos antes de solicitar permissão para não ser muito intrusivo
+      // Aguardar 2 segundos antes de solicitar permiss??o para n??o ser muito intrusivo
       const timeoutId = setTimeout(() => {
         requestPermission().then(granted => {
           if (granted) {
-            console.log('✅ Permissão para notificações concedida');
+            console.log('?? Permiss??o para notifica????es concedida');
           } else {
-            console.log('❌ Permissão para notificações negada');
+            console.log('??? Permiss??o para notifica????es negada');
           }
         });
       }, 2000);
@@ -4221,35 +4269,35 @@ const handleVisibilityChangeConservative = useCallback((
     }
   }, [hasPermission, requestPermission]);
 
-  // SISTEMA DE SINCRONIZAÇÃO DEFINITIVO: 3 sinais da dashboard + 4 sinais adicionais
+  // SISTEMA DE SINCRONIZA????O DEFINITIVO: 3 sinais da dashboard + 4 sinais adicionais
   useEffect(() => {
     const handleDashboardUpdate = (event: CustomEvent<{ signals: PlaceholderSignal[]; timestamp?: number }>) => {
-      console.log('🔄 SINCRONIZAÇÃO DEFINITIVA: Sinais da dashboard atualizados detectados');
+      console.log('???? SINCRONIZA????O DEFINITIVA: Sinais da dashboard atualizados detectados');
       
-      // VALIDAÇÃO DOS DADOS DO EVENTO
+      // VALIDA????O DOS DADOS DO EVENTO
       let eventData = event.detail;
       
       if (!eventData || !eventData.signals || !Array.isArray(eventData.signals)) {
-        console.warn('⚠️ SYNC: Dados do evento inválidos, tentando fallback para localStorage');
+        console.warn('???? SYNC: Dados do evento inv??lidos, tentando fallback para localStorage');
         
-        // Fallback para localStorage se evento não tem dados válidos
+        // Fallback para localStorage se evento n??o tem dados v??lidos
         try {
           const dashboardData = localStorage.getItem('dashboardSignals');
           if (dashboardData) {
             const { signals: dashboardSignals } = JSON.parse(dashboardData);
             if (dashboardSignals && dashboardSignals.length >= 3) {
-                console.log('🔄 FALLBACK: Usando dados do localStorage');
+                console.log('???? FALLBACK: Usando dados do localStorage');
                 eventData = { signals: dashboardSignals.slice(0, 3) };
               } else {
-                console.error('❌ FALLBACK: Dados do localStorage também inválidos');
+                console.error('??? FALLBACK: Dados do localStorage tamb??m inv??lidos');
                 return;
               }
             } else {
-              console.error('❌ FALLBACK: Nenhum dado no localStorage');
+              console.error('??? FALLBACK: Nenhum dado no localStorage');
               return;
             }
           } catch (error) {
-            console.error('❌ FALLBACK: Erro ao ler localStorage:', error);
+            console.error('??? FALLBACK: Erro ao ler localStorage:', error);
             return;
           }
         }
@@ -4257,40 +4305,40 @@ const handleVisibilityChangeConservative = useCallback((
         // Garantir que temos exatamente 3 sinais da dashboard
         const dashboardSignals = eventData.signals.slice(0, 3);
         if (dashboardSignals.length !== 3) {
-          console.warn(`⚠️ SYNC: Evento tem ${dashboardSignals.length} sinais, mas precisa de 3`);
+          console.warn(`???? SYNC: Evento tem ${dashboardSignals.length} sinais, mas precisa de 3`);
           return;
         }
         
-        // DIAGNÓSTICO: Verificar os sinais da dashboard
-        console.log('🔄 SINCRONIZAÇÃO: Sinais da dashboard recebidos:');
+        // DIAGN??STICO: Verificar os sinais da dashboard
+        console.log('???? SINCRONIZA????O: Sinais da dashboard recebidos:');
         dashboardSignals.forEach((signal, idx) => {
-          console.log(`  • ${idx+1}º: ${signal.symbol} (${signal.entry_time})`);
+          console.log(`  ??? ${idx+1}??: ${signal.symbol} (${signal.entry_time})`);
         });
         
-        // NOVA IMPLEMENTAÇÃO DA SINCRONIZAÇÃO COM DASHBOARD
+        // NOVA IMPLEMENTA????O DA SINCRONIZA????O COM DASHBOARD
         try {
-          console.log('🎯 SINCRONIZAÇÃO NOVA: Preservando lógica de rotação específica da aba Sinais');
+          console.log('??? SINCRONIZA????O NOVA: Preservando l??gica de rota????o espec??fica da aba Sinais');
           
           // Obter sinais atuais
           const currentSignals = queryClient.getQueryData<TradingSignal[]>(['tradingSignals']) || [];
           
-          // Verificar se já temos sinais e se eles estão na quantidade correta (7)
+          // Verificar se j?? temos sinais e se eles est??o na quantidade correta (7)
           if (currentSignals && currentSignals.length === 7) {
-            console.log('✅ Já temos 7 sinais - apenas sincronizando os 3 primeiros com a dashboard');
+            console.log('?? J?? temos 7 sinais - apenas sincronizando os 3 primeiros com a dashboard');
             
-            // VERIFICAÇÃO MELHORADA: Comparar símbolos e horários para verificar sincronização
+            // VERIFICA????O MELHORADA: Comparar s??mbolos e hor??rios para verificar sincroniza????o
             const currentSymbols = currentSignals.slice(0, 3).map(s => s.symbol);
             const newSymbols = dashboardSignals.map(s => s.symbol);
             
-            // Verificar se os símbolos são os mesmos
+            // Verificar se os s??mbolos s??o os mesmos
             const symbolsMatch = currentSymbols.every((symbol, idx) => 
               symbol === newSymbols[idx]
             );
             
             if (symbolsMatch) {
-              console.log('🔄 Símbolos idênticos, verificando se horários também são iguais');
+              console.log('???? S??mbolos id??nticos, verificando se hor??rios tamb??m s??o iguais');
               
-              // Verificar se os horários também são idênticos
+              // Verificar se os hor??rios tamb??m s??o id??nticos
               const currentTimes = currentSignals.slice(0, 3).map(s => s.entry_time);
               const newTimes = dashboardSignals.map(s => s.entry_time);
               
@@ -4299,15 +4347,15 @@ const handleVisibilityChangeConservative = useCallback((
               );
               
               if (timesMatch) {
-                console.log('✅ Horários também idênticos, sincronização não necessária');
-                return; // Não precisa sincronizar se tudo já está igual
+                console.log('?? Hor??rios tamb??m id??nticos, sincroniza????o n??o necess??ria');
+                return; // N??o precisa sincronizar se tudo j?? est?? igual
               }
             }
             
-            // Se chegou aqui, é porque precisamos sincronizar
-            console.log('⚠️ SINCRONIZAÇÃO NECESSÁRIA: Diferenças encontradas');
-            console.log(`Símbolos atuais: ${currentSymbols.join(', ')}`);
-            console.log(`Símbolos novos: ${newSymbols.join(', ')}`);
+            // Se chegou aqui, ?? porque precisamos sincronizar
+            console.log('???? SINCRONIZA????O NECESS??RIA: Diferen??as encontradas');
+            console.log(`S??mbolos atuais: ${currentSymbols.join(', ')}`);
+            console.log(`S??mbolos novos: ${newSymbols.join(', ')}`);
             
             // Substituir apenas os 3 primeiros sinais pelos da dashboard
             const updatedSignals = [...currentSignals];
@@ -4326,17 +4374,17 @@ const handleVisibilityChangeConservative = useCallback((
             saveSignalsToNavigationCache(updatedSignals as PlaceholderSignal[]);
             
             // Log detalhado dos sinais sincronizados
-            console.log('✅ SINCRONIZAÇÃO COMPLETADA: 3 primeiros sinais atualizados da dashboard');
+            console.log('?? SINCRONIZA????O COMPLETADA: 3 primeiros sinais atualizados da dashboard');
             dashboardSignals.forEach((signal, idx) => {
-              console.log(`   • Sinal ${idx+1}: ${signal.symbol} (${signal.entry_time})`);
+              console.log(`   ??? Sinal ${idx+1}: ${signal.symbol} (${signal.entry_time})`);
             });
             return;
           }
           
-          // Se não temos sinais ou quantidade errada, gerar conjunto completo
-          console.log('🔄 Gerando conjunto completo de 7 sinais (3 da dashboard + 4 adicionais)');
+          // Se n??o temos sinais ou quantidade errada, gerar conjunto completo
+          console.log('???? Gerando conjunto completo de 7 sinais (3 da dashboard + 4 adicionais)');
           
-          // 1. Os 3 primeiros sinais são IGUAIS aos da dashboard
+          // 1. Os 3 primeiros sinais s??o IGUAIS aos da dashboard
           const firstThreeSignals = dashboardSignals.map((signal, index) => ({
             ...signal,
             isDashboard: true,
@@ -4344,16 +4392,16 @@ const handleVisibilityChangeConservative = useCallback((
           }));
           
           // 2. Gerar 4 sinais adicionais
-          // O primeiro dos 4 deve ter 20 minutos de diferença do terceiro sinal da dashboard
+          // O primeiro dos 4 deve ter 20 minutos de diferen??a do terceiro sinal da dashboard
           const thirdDashboardSignal = dashboardSignals[2];
           if (!thirdDashboardSignal || !thirdDashboardSignal.entry_time) {
-            console.error('❌ ERRO: Terceiro sinal da dashboard inválido');
+            console.error('??? ERRO: Terceiro sinal da dashboard inv??lido');
             return;
           }
           
           const [hours, minutes] = thirdDashboardSignal.entry_time.split(':').map(Number);
           
-          // Calcular horário base: terceiro sinal + 20 minutos
+          // Calcular hor??rio base: terceiro sinal + 20 minutos
           let baseHour = hours;
           let baseMinute = minutes + 20;
           
@@ -4362,28 +4410,28 @@ const handleVisibilityChangeConservative = useCallback((
             baseHour = (baseHour + 1) % 24;
           }
           
-          // Usar função getNextValidTime para garantir horário válido (03, 23, 43)
+          // Usar fun????o getNextValidTime para garantir hor??rio v??lido (03, 23, 43)
           const baseTime = `${baseHour.toString().padStart(2, '0')}:${baseMinute.toString().padStart(2, '0')}`;
           
-          // CORREÇÃO: Calcular próximo horário válido com base no padrão 03→23→43→03
+          // CORRE????O: Calcular pr??ximo hor??rio v??lido com base no padr??o 03???23???43???03
           let firstAdditionalTime = "";
           if (minutes === 3) {
-            // Se o terceiro sinal é XX:03, o quarto deve ser XX:23 + 20min = XX+1:43
+            // Se o terceiro sinal ?? XX:03, o quarto deve ser XX:23 + 20min = XX+1:43
             firstAdditionalTime = `${((hours + 1) % 24).toString().padStart(2, '0')}:43`;
           } else if (minutes === 23) {
-            // Se o terceiro sinal é XX:23, o quarto deve ser XX:43 + 20min = XX+1:03
+            // Se o terceiro sinal ?? XX:23, o quarto deve ser XX:43 + 20min = XX+1:03
             firstAdditionalTime = `${((hours + 1) % 24).toString().padStart(2, '0')}:03`;
           } else if (minutes === 43) {
-            // Se o terceiro sinal é XX:43, o quarto deve ser XX+1:03 + 20min = XX+1:23
+            // Se o terceiro sinal ?? XX:43, o quarto deve ser XX+1:03 + 20min = XX+1:23
             firstAdditionalTime = `${((hours + 1) % 24).toString().padStart(2, '0')}:23`;
           } else {
             // Fallback - usar base calculada anteriormente
             firstAdditionalTime = adjustToTimePattern(baseTime);
           }
           
-          console.log(`🆕 PRIMEIRO SINAL ADICIONAL: ${thirdDashboardSignal.entry_time} + 20min = ${baseTime} → horário exato: ${firstAdditionalTime}`);
+          console.log(`???? PRIMEIRO SINAL ADICIONAL: ${thirdDashboardSignal.entry_time} + 20min = ${baseTime} ??? hor??rio exato: ${firstAdditionalTime}`);
           
-          // Gerar os 4 sinais adicionais seguindo padrão 03→23→43→03
+          // Gerar os 4 sinais adicionais seguindo padr??o 03???23???43???03
           const additionalSignals: PlaceholderSignal[] = [];
           let currentTime = firstAdditionalTime;
           
@@ -4392,7 +4440,7 @@ const handleVisibilityChangeConservative = useCallback((
             const gale1Time = expiryTime;
             const gale2Time = calculateNextTime(expiryTime, 5);
             
-            // Usar ativos diferentes dos já usados
+            // Usar ativos diferentes dos j?? usados
             const usedSymbols = [...firstThreeSignals, ...additionalSignals].map(s => s.symbol);
             let symbol = getRandomAsset();
             let attempts = 0;
@@ -4431,7 +4479,7 @@ const handleVisibilityChangeConservative = useCallback((
             
             additionalSignals.push(additionalSignal);
             
-            // Calcular próximo horário válido (seguindo padrão 03→23→43→03)
+            // Calcular pr??ximo hor??rio v??lido (seguindo padr??o 03???23???43???03)
             const [currentHour, currentMinute] = currentTime.split(':').map(Number);
             if (currentMinute === 3) {
               currentTime = `${currentHour.toString().padStart(2, '0')}:23`;
@@ -4448,7 +4496,7 @@ const handleVisibilityChangeConservative = useCallback((
           
           // Verificar que temos exatamente 7 sinais
           if (allSevenSignals.length !== 7) {
-            console.error(`❌ ERRO: Número incorreto de sinais (${allSevenSignals.length}), deveria ser 7`);
+            console.error(`??? ERRO: N??mero incorreto de sinais (${allSevenSignals.length}), deveria ser 7`);
             return;
           }
           
@@ -4460,34 +4508,34 @@ const handleVisibilityChangeConservative = useCallback((
           // 5. Atualizar estado da dashboard
           setDashboardSignals(firstThreeSignals);
           
-          // 6. Salvar no cache de navegação
+          // 6. Salvar no cache de navega????o
           saveSignalsToNavigationCache(allSevenSignals);
           
           // 7. Aplicar no React Query
           safeSetTradingSignals(allSevenSignals);
           
-          console.log('✅ SINCRONIZAÇÃO DEFINITIVA CONCLUÍDA');
+          console.log('?? SINCRONIZA????O DEFINITIVA CONCLU??DA');
           
           // Log detalhado de todos os 7 sinais
-          console.log('📊 Sinais da Dashboard (3 primeiros):');
+          console.log('???? Sinais da Dashboard (3 primeiros):');
           firstThreeSignals.forEach((signal, idx) => {
-            console.log(`   • Sinal ${idx+1}: ${signal.symbol} (${signal.entry_time})`);
+            console.log(`   ??? Sinal ${idx+1}: ${signal.symbol} (${signal.entry_time})`);
           });
-          console.log('📊 Sinais Adicionais (4 últimos):');
+          console.log('???? Sinais Adicionais (4 ??ltimos):');
           additionalSignals.forEach((signal, idx) => {
-            console.log(`   • Sinal ${idx+4}: ${signal.symbol} (${signal.entry_time})`);
+            console.log(`   ??? Sinal ${idx+4}: ${signal.symbol} (${signal.entry_time})`);
           });
-          console.log('📊 ESTRUTURA FINAL:', {
+          console.log('???? ESTRUTURA FINAL:', {
             'Sinais 1-3 (Dashboard)': firstThreeSignals.map(s => `${s.symbol} - ${s.entry_time}`),
             'Sinais 4-7 (Adicionais)': additionalSignals.map(s => `${s.symbol} - ${s.entry_time}`),
-            'Diferença 3º→4º': `${thirdDashboardSignal.entry_time} → ${firstAdditionalTime} (20 min)`
+            'Diferen??a 3?????4??': `${thirdDashboardSignal.entry_time} ??? ${firstAdditionalTime} (20 min)`
           });
           
         } catch (error) {
-          console.error('❌ ERRO na sincronização definitiva:', error);
+          console.error('??? ERRO na sincroniza????o definitiva:', error);
           
-          // Fallback: forçar refetch como última opção
-          console.log('🔄 FALLBACK: Forçando refetch completo...');
+          // Fallback: for??ar refetch como ??ltima op????o
+          console.log('???? FALLBACK: For??ando refetch completo...');
           setTimeout(() => {
             queryClient.invalidateQueries({ queryKey: ['tradingSignals'] });
             refetch();
@@ -4495,17 +4543,17 @@ const handleVisibilityChangeConservative = useCallback((
         }
     };
 
-    // Listener para evento de força de sincronização (backup)
+    // Listener para evento de for??a de sincroniza????o (backup)
     const handleForceDashboardSync = (event: CustomEvent<{ signals: PlaceholderSignal[]; timestamp?: number }>) => {
-      console.log('🚀 FORÇA DE SINCRONIZAÇÃO: Evento forçado detectado');
-      handleDashboardUpdate(event); // Reutilizar a mesma lógica
+      console.log('???? FOR??A DE SINCRONIZA????O: Evento for??ado detectado');
+      handleDashboardUpdate(event); // Reutilizar a mesma l??gica
     };
 
     // Adicionar ambos os listeners
     window.addEventListener('dashboardSignalsUpdated', handleDashboardUpdate as EventListener);
     window.addEventListener('forceDashboardSync', handleForceDashboardSync as EventListener);
     
-    // VERIFICAÇÃO PERIÓDICA adicional para garantir sincronização
+    // VERIFICA????O PERI??DICA adicional para garantir sincroniza????o
     const syncInterval = setInterval(() => {
       try {
         // Tentar obter dados mais recentes da dashboard
@@ -4513,18 +4561,18 @@ const handleVisibilityChangeConservative = useCallback((
         if (dashboardData) {
           const { signals, timestamp } = JSON.parse(dashboardData);
           
-          // Verificar se dados são válidos e recentes (menos de 5 minutos)
+          // Verificar se dados s??o v??lidos e recentes (menos de 5 minutos)
           const isRecent = (Date.now() - (timestamp || 0)) < 5 * 60 * 1000;
           
           if (isRecent && signals && Array.isArray(signals) && signals.length >= 3) {
-            // Verificar se os sinais atuais estão sincronizados com a dashboard
+            // Verificar se os sinais atuais est??o sincronizados com a dashboard
             const currentSignals = queryClient.getQueryData<TradingSignal[]>(['tradingSignals']);
             if (currentSignals && currentSignals.length >= 3) {
-              // Verificar se os 3 primeiros sinais são diferentes
+              // Verificar se os 3 primeiros sinais s??o diferentes
               const firstThreeCurrentSignals = currentSignals.slice(0, 3);
               const firstThreeDashboardSignals = signals.slice(0, 3);
               
-              // Comparar símbolos e horários
+              // Comparar s??mbolos e hor??rios
               let needsSync = false;
               for (let i = 0; i < 3; i++) {
                 if (
@@ -4536,16 +4584,16 @@ const handleVisibilityChangeConservative = useCallback((
                 }
               }
               
-              // Se precisa sincronizar, forçar atualização
+              // Se precisa sincronizar, for??ar atualiza????o
               if (needsSync) {
-                console.log('🔄 VERIFICAÇÃO PERIÓDICA: Detectada diferença entre sinais atuais e dashboard');
+                console.log('???? VERIFICA????O PERI??DICA: Detectada diferen??a entre sinais atuais e dashboard');
                 handleDashboardUpdate(new CustomEvent('forceDashboardSync', { detail: { signals } }));
               }
             }
           }
         }
       } catch (error) {
-        console.error('❌ Erro durante verificação periódica de sincronização:', error);
+        console.error('??? Erro durante verifica????o peri??dica de sincroniza????o:', error);
       }
     }, 30 * 1000); // Verificar a cada 30 segundos
     
@@ -4557,18 +4605,18 @@ const handleVisibilityChangeConservative = useCallback((
     };
   }, [queryClient, refetch, setDashboardSignals, calculateNextTime, getRandomAsset, adjustToTimePattern, safeSetTradingSignals]);
 
-  // SINCRONIZAÇÃO ULTRA-MELHORADA com Dashboard: Reage a mudanças nos sinais da dashboard
+  // SINCRONIZA????O ULTRA-MELHORADA com Dashboard: Reage a mudan??as nos sinais da dashboard
   useEffect(() => {
-    console.log('🔄 SINCRONIZAÇÃO: Configurando listeners para sinais da dashboard');
+    console.log('???? SINCRONIZA????O: Configurando listeners para sinais da dashboard');
     
-    // Variáveis para evitar loops infinitos
+    // Vari??veis para evitar loops infinitos
     let isProcessingEvent = false;
     let lastProcessedTimestamp = 0;
 
     const handleDashboardSignalsUpdate = (event: CustomEvent<{ signals: PlaceholderSignal[]; timestamp?: number }>)=> {
       // Evitar processamento recursivo
       if (isProcessingEvent) {
-        console.log('🛑 Evitando processamento recursivo de eventos');
+        console.log('???? Evitando processamento recursivo de eventos');
         return;
       }
       
@@ -4577,33 +4625,33 @@ const handleVisibilityChangeConservative = useCallback((
       const timestamp = event?.detail?.timestamp || now;
       
       if ((now - lastProcessedTimestamp) < 500 && timestamp <= lastProcessedTimestamp) {
-        console.log('🕒 Ignorando evento recente já processado');
+        console.log('???? Ignorando evento recente j?? processado');
         return;
       }
       
       lastProcessedTimestamp = timestamp;
       isProcessingEvent = true;
-      console.log('📡 EVENTO: dashboardSignalsUpdated recebido', event.detail);
+      console.log('???? EVENTO: dashboardSignalsUpdated recebido', event.detail);
       
       try {
-        // Verificar se os dados são válidos
+        // Verificar se os dados s??o v??lidos
         const { signals: dashboardSignals, timestamp } = event.detail;
         
         if (!dashboardSignals || !Array.isArray(dashboardSignals) || dashboardSignals.length < 3) {
-          console.error('❌ ERRO: Dados do evento inválidos');
+          console.error('??? ERRO: Dados do evento inv??lidos');
           return;
         }
         
-        console.log(`📊 Sinais da dashboard recebidos (${dashboardSignals.length}):`);
+        console.log(`???? Sinais da dashboard recebidos (${dashboardSignals.length}):`);
         dashboardSignals.forEach((signal, idx) => {
-          console.log(`   • Sinal ${idx+1}: ${signal.symbol} (${signal.entry_time})`);
+          console.log(`   ??? Sinal ${idx+1}: ${signal.symbol} (${signal.entry_time})`);
         });
         
         // Obter sinais atuais
         const currentSignals = queryClient.getQueryData<TradingSignal[]>(['tradingSignals']) || [];
         
-        // SINCRONIZAÇÃO PRIORITÁRIA: Sempre garantir que os 3 primeiros sinais são idênticos
-        // Fazer cópia profunda dos sinais para evitar problemas de referência
+        // SINCRONIZA????O PRIORIT??RIA: Sempre garantir que os 3 primeiros sinais s??o id??nticos
+        // Fazer c??pia profunda dos sinais para evitar problemas de refer??ncia
         const updatedSignals = [...currentSignals];
         
         // Garantir que temos pelo menos 7 sinais
@@ -4620,7 +4668,7 @@ const handleVisibilityChangeConservative = useCallback((
               isAnimating?: boolean;
             };
             
-            // Criar nova referência para evitar problemas
+            // Criar nova refer??ncia para evitar problemas
             updatedSignals[i] = {
               ...dashboardSignals[i],
               // Marcar como vindo da dashboard
@@ -4629,7 +4677,7 @@ const handleVisibilityChangeConservative = useCallback((
               // Preservar metadata importante
               processed: currentMetadata.processed,
               isAnimating: currentMetadata.isAnimating,
-              // Timestamp para diagnóstico
+              // Timestamp para diagn??stico
               syncTimestamp: Date.now()
             };
           }
@@ -4637,7 +4685,7 @@ const handleVisibilityChangeConservative = useCallback((
         
         // Garantir que temos 7 sinais no total
         if (updatedSignals.length !== 7) {
-          console.log('⚠️ CORREÇÃO: Ajustando para ter exatamente 7 sinais');
+          console.log('???? CORRE????O: Ajustando para ter exatamente 7 sinais');
           
           if (updatedSignals.length < 7) {
             // Completar com sinais do getDailySignalsForCurrentTime
@@ -4661,16 +4709,16 @@ const handleVisibilityChangeConservative = useCallback((
         // Atualizar no React Query
         safeSetTradingSignals(updatedSignals);
         
-        // Salvar no cache de navegação
+        // Salvar no cache de navega????o
         saveSignalsToNavigationCache(updatedSignals as PlaceholderSignal[]);
         
         // Verificar se conseguimos sincronizar com sucesso
-        console.log('✅ SINCRONIZAÇÃO COMPLETA: Os 3 primeiros sinais agora são idênticos aos da dashboard');
+        console.log('?? SINCRONIZA????O COMPLETA: Os 3 primeiros sinais agora s??o id??nticos aos da dashboard');
         console.log('   Sinais atualizados:', updatedSignals.map((s, idx) => 
           `${idx+1}. ${s.symbol} ${s.entry_time} ${idx < 3 ? '(DASHBOARD)' : ''}`
         ).join('\n   '));
       } catch (error) {
-        console.error('❌ ERRO durante sincronização com a dashboard:', error);
+        console.error('??? ERRO durante sincroniza????o com a dashboard:', error);
       } finally {
         // Garantir que a flag seja resetada
         isProcessingEvent = false;
@@ -4678,15 +4726,15 @@ const handleVisibilityChangeConservative = useCallback((
     };
 
     const handleForceDashboardSync = (event: CustomEvent<{ signals: PlaceholderSignal[]; timestamp?: number }>) => {
-      console.log('📡 EVENTO: forceDashboardSync recebido', event.detail);
-      handleDashboardSignalsUpdate(event); // Reutilizar a mesma lógica
+      console.log('???? EVENTO: forceDashboardSync recebido', event.detail);
+      handleDashboardSignalsUpdate(event); // Reutilizar a mesma l??gica
     };
 
     // Adicionar listeners para eventos da dashboard
     window.addEventListener('dashboardSignalsUpdated', handleDashboardSignalsUpdate);
     window.addEventListener('forceDashboardSync', handleForceDashboardSync);
 
-    // Verificar a situação atual do localStorage e sincronizar se necessário
+    // Verificar a situa????o atual do localStorage e sincronizar se necess??rio
     const checkLocalStorageAndSync = () => {
       try {
         const dashboardSignalsData = localStorage.getItem('dashboardSignals');
@@ -4694,44 +4742,44 @@ const handleVisibilityChangeConservative = useCallback((
           const data = JSON.parse(dashboardSignalsData);
           
           if (data && data.signals && Array.isArray(data.signals) && data.signals.length >= 3) {
-            console.log('🔍 VERIFICAÇÃO: Dados encontrados no localStorage, sincronizando...');
+            console.log('???? VERIFICA????O: Dados encontrados no localStorage, sincronizando...');
             handleDashboardSignalsUpdate(new CustomEvent('dashboardSignalsUpdated', { detail: data }));
           }
         }
       } catch (error) {
-        console.error('❌ ERRO: Falha ao verificar localStorage:', error);
+        console.error('??? ERRO: Falha ao verificar localStorage:', error);
       }
     };
     
-    // Verificar localStorage após 3 segundos (dar tempo para componente montar)
+    // Verificar localStorage ap??s 3 segundos (dar tempo para componente montar)
     const initialSyncTimeout = setTimeout(checkLocalStorageAndSync, 3000);
 
-    // Verificar mudanças no localStorage a cada 10 segundos (mais frequente)
+    // Verificar mudan??as no localStorage a cada 10 segundos (mais frequente)
     const syncInterval = setInterval(() => {
       const dashboardSignalsData = localStorage.getItem('dashboardSignals');
       if (dashboardSignalsData) {
         try {
           const { signals: dashboardSignals, timestamp } = JSON.parse(dashboardSignalsData);
           
-          // Verificar se os sinais são recentes (menos de 1 minuto)
+          // Verificar se os sinais s??o recentes (menos de 1 minuto)
           const isRecent = (Date.now() - (timestamp || 0)) < 60 * 1000;
           
           if (isRecent && dashboardSignals && Array.isArray(dashboardSignals) && dashboardSignals.length >= 3) {
-            // Comparar símbolos dos 3 primeiros sinais
+            // Comparar s??mbolos dos 3 primeiros sinais
             const currentSignals = queryClient.getQueryData<TradingSignal[]>(['tradingSignals']);
             if (!currentSignals || currentSignals.length < 3) {
-              console.log('📡 SINCRONIZAÇÃO AUTOMÁTICA: Sinais insuficientes, forçando atualização');
+              console.log('???? SINCRONIZA????O AUTOM??TICA: Sinais insuficientes, for??ando atualiza????o');
               handleDashboardSignalsUpdate(new CustomEvent('dashboardSignalsUpdated', { 
                 detail: { signals: dashboardSignals, timestamp } 
               }));
               return;
             }
             
-            // Verificar se os 3 primeiros sinais são diferentes
+            // Verificar se os 3 primeiros sinais s??o diferentes
             const currentSymbols = currentSignals.slice(0, 3).map(s => s.symbol);
             const dashboardSymbols = dashboardSignals.slice(0, 3).map(s => s.symbol);
             
-            // Verificar se algum símbolo é diferente
+            // Verificar se algum s??mbolo ?? diferente
             let needsSync = false;
             for (let i = 0; i < 3; i++) {
               if (currentSymbols[i] !== dashboardSymbols[i]) {
@@ -4741,7 +4789,7 @@ const handleVisibilityChangeConservative = useCallback((
             }
             
             if (needsSync) {
-              console.log('📡 SINCRONIZAÇÃO AUTOMÁTICA: Sinais diferentes, atualizando');
+              console.log('???? SINCRONIZA????O AUTOM??TICA: Sinais diferentes, atualizando');
               console.log(`   - Dashboard: ${dashboardSymbols.join(', ')}`);
               console.log(`   - Trades:    ${currentSymbols.join(', ')}`);
               handleDashboardSignalsUpdate(new CustomEvent('dashboardSignalsUpdated', { 
@@ -4749,16 +4797,16 @@ const handleVisibilityChangeConservative = useCallback((
               }));
             }
           }
-          // Verificar se os dados são recentes (menos de 30 minutos)
+          // Verificar se os dados s??o recentes (menos de 30 minutos)
           const isRecentExtended = Date.now() - timestamp < 30 * 60 * 1000;
           
-          // Verificar se há sinais da dashboard e se são diferentes dos atuais
+          // Verificar se h?? sinais da dashboard e se s??o diferentes dos atuais
           if (isRecentExtended && dashboardSignals && Array.isArray(dashboardSignals) && dashboardSignals.length >= 3 && signals && signals.length >= 3) {
             // Verificar os 3 primeiros sinais
             const firstThreeCurrent = signals.slice(0, 3);
             const firstThreeDashboard = dashboardSignals.slice(0, 3);
             
-            // Comparar IDs, símbolos e horários
+            // Comparar IDs, s??mbolos e hor??rios
             let needsSync = false;
             for (let i = 0; i < 3; i++) {
               // Se qualquer um dos principais atributos for diferente, precisa sincronizar
@@ -4774,7 +4822,7 @@ const handleVisibilityChangeConservative = useCallback((
             
             // Se precisa sincronizar, disparar evento
             if (needsSync) {
-              console.log('🔄 VERIFICAÇÃO PERIÓDICA: Detectada diferença entre sinais atuais e dashboard');
+              console.log('???? VERIFICA????O PERI??DICA: Detectada diferen??a entre sinais atuais e dashboard');
               
               // Criar evento com dados atualizados
               const event = new CustomEvent('forceDashboardSync', { 
@@ -4786,7 +4834,7 @@ const handleVisibilityChangeConservative = useCallback((
             }
           }
         } catch (error) {
-          console.error('❌ ERRO: Falha ao verificar sinais da dashboard:', error);
+          console.error('??? ERRO: Falha ao verificar sinais da dashboard:', error);
         }
       }
     }, 30 * 1000); // Verificar a cada 30 segundos
@@ -4797,22 +4845,22 @@ const handleVisibilityChangeConservative = useCallback((
       window.removeEventListener('forceDashboardSync', handleForceDashboardSync);
       clearInterval(syncInterval);
       clearTimeout(initialSyncTimeout);
-      console.log('🧹 LIMPEZA: Listeners de sincronização removidos');
+      console.log('???? LIMPEZA: Listeners de sincroniza????o removidos');
     };
   }, [getDailySignalsForCurrentTime, queryClient, safeSetTradingSignals, signals, createBasePlaceholderData]);
 
   const [traderLink, setTraderLink] = useState<string>('');
   
-  // Carregar o link do trader no início
+  // Carregar o link do trader no in??cio
   useEffect(() => {
     const loadTraderLink = async () => {
       try {
       const link = await traderLinkService.getCurrentTraderLink();
-        console.log('📌 Signals - Link do trader carregado:', link);
+        console.log('???? Signals - Link do trader carregado:', link);
       setTraderLink(link);
       } catch (error) {
-        console.error('❌ Signals - Erro ao carregar link do trader:', error);
-        // Em caso de erro, manter o link padrão
+        console.error('??? Signals - Erro ao carregar link do trader:', error);
+        // Em caso de erro, manter o link padr??o
         setTraderLink('https://trade.avalonbroker.io/register?aff=385853&aff_model=revenue&afftrack=mesnagensfree');
       }
     };
@@ -4820,25 +4868,25 @@ const handleVisibilityChangeConservative = useCallback((
     loadTraderLink();
   }, []);
   
-  // Função para abrir o link do trader
+  // Fun????o para abrir o link do trader
   const openTraderLink = useCallback(() => {
     if (!traderLink) {
-      console.warn('⚠️ Signals - Tentativa de abrir link do trader, mas o link ainda não foi carregado');
-      // Fallback para o link padrão caso o traderLink ainda não tenha sido carregado
+      console.warn('???? Signals - Tentativa de abrir link do trader, mas o link ainda n??o foi carregado');
+      // Fallback para o link padr??o caso o traderLink ainda n??o tenha sido carregado
       window.open('https://trade.avalonbroker.io/register?aff=385853&aff_model=revenue&afftrack=mesnagensfree', '_blank');
       return;
     }
-    console.log('🔗 Signals - Abrindo link do trader:', traderLink);
+    console.log('???? Signals - Abrindo link do trader:', traderLink);
     window.open(traderLink, '_blank');
   }, [traderLink]);
 
-  // Função para diagnóstico do localStorage (DESATIVADA - removida para limpar console)
+  // Fun????o para diagn??stico do localStorage (DESATIVADA - removida para limpar console)
   const diagnosticoLocalStorage = () => {
-    // Diagnóstico desativado para evitar poluição do console
+    // Diagn??stico desativado para evitar polui????o do console
     return;
   };
   
-  // Executar diagnóstico (DESATIVADO)
+  // Executar diagn??stico (DESATIVADO)
   // diagnosticoLocalStorage();
 
   return (
@@ -4849,7 +4897,7 @@ const handleVisibilityChangeConservative = useCallback((
         transition={{ duration: 0.5 }}
         className="space-y-6 relative p-4 rounded-xl min-h-screen -mx-4 -my-4"
       >
-        {/* Cabeçalho da página */}
+        {/* Cabe??alho da p??gina */}
         <motion.div 
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -4876,23 +4924,23 @@ const handleVisibilityChangeConservative = useCallback((
                   size="sm"
                 />
                 
-                {/* Botão de diagnóstico - visível apenas no navegador Operar para ajudar na depuração */}
+                {/* Bot??o de diagn??stico - vis??vel apenas no navegador Operar para ajudar na depura????o */}
                 {(window.BROWSER_INFO?.isOperar || navigator.userAgent.includes('Opera')) && (
                   <Button
                     onClick={() => {
                       if (window.dumpDebugLogs) {
                         window.dumpDebugLogs();
-                        alert('Diagnóstico completo exibido no console. Abra as ferramentas de desenvolvedor (F12) para verificar.');
+                        alert('Diagn??stico completo exibido no console. Abra as ferramentas de desenvolvedor (F12) para verificar.');
                       } else {
-                        alert('Ferramenta de diagnóstico não disponível.');
+                        alert('Ferramenta de diagn??stico n??o dispon??vel.');
                       }
                     }}
                     size="sm"
                     variant="outline"
                     className="ml-2 bg-amber-900/20 border-amber-500/30 text-amber-400"
                   >
-                    <span className="mr-2">🔍</span>
-                    Diagnóstico
+                    <span className="mr-2">????</span>
+                    Diagn??stico
                   </Button>
                 )}
               </div>
@@ -4903,7 +4951,7 @@ const handleVisibilityChangeConservative = useCallback((
         {/* Injetar estilos CSS */}
         <style>{styles}</style>
 
-        {/* Conteúdo principal com os sinais */}
+        {/* Conte??do principal com os sinais */}
         <motion.div 
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -4928,21 +4976,21 @@ const handleVisibilityChangeConservative = useCallback((
               {(() => {
                 try {
                   if (!Array.isArray(paginatedSignals)) {
-                    console.error('❌ ERRO: paginatedSignals não é um array:', paginatedSignals);
-                    return <div className="col-span-full text-center py-4">Erro ao processar sinais. Tente atualizar a página.</div>;
+                    console.error('??? ERRO: paginatedSignals n??o ?? um array:', paginatedSignals);
+                    return <div className="col-span-full text-center py-4">Erro ao processar sinais. Tente atualizar a p??gina.</div>;
                   }
                   
                   if (paginatedSignals.length === 0) {
-                    return <div className="col-span-full text-center py-4">Nenhum sinal disponível no momento.</div>;
+                    return <div className="col-span-full text-center py-4">Nenhum sinal dispon??vel no momento.</div>;
                   }
                   
                   return paginatedSignals.map((signal: PlaceholderSignal, index) => {
                     if (!signal || !signal.entry_time) {
-                      console.error('❌ ERRO: Sinal inválido em paginatedSignals[' + index + ']:', signal);
+                      console.error('??? ERRO: Sinal inv??lido em paginatedSignals[' + index + ']:', signal);
                       return null;
                     }
                     try {
-                  // Converter horários para o fuso horário selecionado
+                  // Converter hor??rios para o fuso hor??rio selecionado
                   const entryTime = convertTimeToSelected(signal.entry_time || '00:00');
                   const expiryTime = convertTimeToSelected(signal.expiry_time_str || '00:00');
                   const gale1Time = convertTimeToSelected(signal.gale1_time || '00:00');
@@ -4962,7 +5010,7 @@ const handleVisibilityChangeConservative = useCallback((
                       <div className="flex items-start justify-between gap-3">
                         <div className="flex-1 min-w-0">
                           <h3 className="text-lg font-semibold text-white leading-tight overflow-hidden text-ellipsis line-clamp-2 break-words">
-                            {signal.symbol}
+                            {String(signal.display_name || signal.symbol)}
                           </h3>
                           <div className="flex items-center text-sm text-white/70 mt-1">
                             <span className="truncate">{signal.exchange || 'Corretora'}</span>
@@ -4988,7 +5036,7 @@ const handleVisibilityChangeConservative = useCallback((
                                 <CheckCheck className="w-3 h-3 mr-1" />
                                 {formatSuccessRate(signal.success_rate || 0.77)}
                                 </span>
-                        {/* Nível de expectativa */}
+                        {/* N??vel de expectativa */}
                         <span className={`text-xs h-6 px-2 py-1 rounded-full flex items-center text-teal-300/70 bg-teal-900/30 border border-white/5`}>
                           <CheckCheck className="w-3 h-3 mr-1" />
                           {getStrengthText(signal.strength)}
@@ -5007,7 +5055,7 @@ const handleVisibilityChangeConservative = useCallback((
                           
                           <div className="flex items-center justify-between bg-black/80 backdrop-blur-md rounded-lg p-3 border border-white/5 shadow-inner min-h-[50px] signal-info-box gap-2">
                             <div>
-                              <p className="text-sm font-medium text-white/70">{t('dashboard.signals.expiration') || "Expiração"}</p>
+                              <p className="text-sm font-medium text-white/70">{t('dashboard.signals.expiration') || "Expira????o"}</p>
                             </div>
                             <div className="flex items-center gap-1 text-base font-semibold text-white/80">
                               <span>5m</span>
@@ -5033,7 +5081,7 @@ const handleVisibilityChangeConservative = useCallback((
                         </div>
                       </div>
                       
-                    {/* Botão de ação */}
+                    {/* Bot??o de a????o */}
                     <div className="p-4 border-t signal-divider bg-black/80">
                       <button
                         className="w-full py-3 px-4 rounded-lg bg-gradient-to-r from-amber-700/80 via-yellow-600/70 to-amber-600/90 hover:from-amber-800/80 hover:via-yellow-700/70 hover:to-amber-700/90 text-amber-50 font-medium transition-all duration-300 flex items-center justify-center relative overflow-hidden shadow-lg backdrop-blur-sm border border-amber-500/20 group golden-button golden-shadow"
@@ -5051,14 +5099,14 @@ const handleVisibilityChangeConservative = useCallback((
                     </motion.div>
                   );
                 } catch (error) {
-                  console.error('❌ ERRO ao processar sinal:', error);
+                  console.error('??? ERRO ao processar sinal:', error);
                   return null;
                 }
                                 });
                 } catch (renderError) {
-                  console.error('❌ [Operar] ERRO NA RENDERIZAÇÃO DE SINAIS:', renderError);
+                  console.error('??? [Operar] ERRO NA RENDERIZA????O DE SINAIS:', renderError);
                   if (window.DEBUG_LOGS) {
-                    window.DEBUG_LOGS.push(`❌ ERRO DE RENDERIZAÇÃO: ${renderError.message}`);
+                    window.DEBUG_LOGS.push(`??? ERRO DE RENDERIZA????O: ${renderError.message}`);
                     window.DEBUG_LOGS.push(`Stack: ${renderError.stack?.slice(0, 500)}`);
                   }
                   window.lastRenderError = renderError;
@@ -5068,7 +5116,7 @@ const handleVisibilityChangeConservative = useCallback((
                       onClick={() => window.location.reload()}
                       className="px-3 py-1 bg-white/10 rounded text-sm hover:bg-white/20"
                     >
-                      Recarregar página
+                      Recarregar p??gina
                     </button>
                   </div>;
                 }
@@ -5084,8 +5132,8 @@ const handleVisibilityChangeConservative = useCallback((
               </h3>
               <p className="text-white/60 text-center max-w-md mb-6">
                 {filterType !== 'ALL' 
-                  ? `Não encontramos sinais do tipo ${filterType} com os filtros atuais.` 
-                  : 'Não encontramos sinais de trading ativos no momento.'}
+                  ? `N??o encontramos sinais do tipo ${filterType} com os filtros atuais.` 
+                  : 'N??o encontramos sinais de trading ativos no momento.'}
               </p>
               <button
                 onClick={() => {
@@ -5099,7 +5147,7 @@ const handleVisibilityChangeConservative = useCallback((
             </div>
           )}
           
-          {/* Paginação */}
+          {/* Pagina????o */}
           {totalPages > 1 && (
             <motion.div 
               initial={{ opacity: 0 }}
@@ -5111,14 +5159,14 @@ const handleVisibilityChangeConservative = useCallback((
                 onClick={() => setActivePage(prev => Math.max(1, prev - 1))}
                 disabled={activePage === 1}
                 className="p-2 rounded-lg bg-black/80 hover:bg-gray-900/80 disabled:opacity-50 disabled:pointer-events-none transition-all"
-                aria-label="Página anterior"
+                aria-label="P??gina anterior"
               >
                 <ChevronRight className="w-5 h-5 rotate-180" />
               </button>
               
               <div className="flex gap-1">
                 {Array.from({ length: totalPages }).map((_, index) => {
-                  // Mostrar apenas 5 botões de página no total
+                  // Mostrar apenas 5 bot??es de p??gina no total
                   if (totalPages <= 5 || 
                       index === 0 || 
                       index === totalPages - 1 || 
@@ -5149,7 +5197,7 @@ const handleVisibilityChangeConservative = useCallback((
                 onClick={() => setActivePage(prev => Math.min(totalPages, prev + 1))}
                 disabled={activePage === totalPages}
                 className="p-2 rounded-lg bg-black/80 hover:bg-gray-900/80 disabled:opacity-50 disabled:pointer-events-none transition-all"
-                aria-label="Próxima página"
+                aria-label="Pr??xima p??gina"
               >
                 <ChevronRight className="w-5 h-5" />
               </button>
@@ -5157,7 +5205,7 @@ const handleVisibilityChangeConservative = useCallback((
           )}
         </motion.div>
         
-        {/* Rodapé com ticker de criptomoedas */}
+        {/* Rodap?? com ticker de criptomoedas */}
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
