@@ -396,6 +396,7 @@ supabaseInstance.auth.getSession().then(({ data, error }) => {
           // ignorar erros de migração
         }
       }).catch(() => {});
+    }
   }
 });
 
