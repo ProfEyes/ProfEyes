@@ -21,117 +21,145 @@ interface AuthProviderProps {
   children: ReactNode;
 }
 
+// 🚀 Função para tentar restaurar sessão do localStorage (FAST RESTORE)
+const tryFastRestore = (): AuthState => {
+  try {
+    const authKey = `sb-${import.meta.env.VITE_SUPABASE_URL?.split('//')[1]?.split('.')[0] || 'arkrjextwpwqhrvcijyr'}-auth-token`;
+    const storedAuth = localStorage.getItem(authKey);
+    
+    if (storedAuth) {
+      try {
+        const authData = JSON.parse(storedAuth);
+        if (authData?.access_token && authData?.user) {
+          // Sessão restaurada (silenciado)
+          return {
+            user: authData.user,
+            session: authData,
+            profile: null,
+            isAdmin: false,
+            loading: false, // ✅ INSTANTÂNEO!
+            error: null
+          };
+        }
+      } catch (parseError) {
+        // Erro ao parsear sessão (silenciado)
+      }
+    }
+  } catch (error) {
+    // Erro no fast restore (silenciado)
+  }
+  
+  // Se não conseguiu restaurar, usar estado inicial padrão
+  return initialAuthState;
+};
+
 // Componente provedor de autenticação 
 export const AuthProvider = React.memo<AuthProviderProps>(({ children }) => {
-  const [state, setState] = useState<AuthState>(initialAuthState);
+  const [state, setState] = useState<AuthState>(() => tryFastRestore());
   
-  // Inicializar autenticação quando o componente monta
+  // DEBUG: Monitorar mudanças de estado (silenciado)
+  useEffect(() => {
+    // Estado mudou
+  }, [state.user, state.session, state.profile, state.loading, state.error, state.isAdmin]);
+  
+  // ✅ SIMPLIFICAÇÃO RADICAL: Apenas um useEffect simples
   useEffect(() => {
     let isMounted = true;
     
-    // Gerar um ID para esta sessão de autenticação para rastreamento de logs
-    const authId = Math.random().toString(36).substring(2, 9);
-    console.log(`Iniciando verificação de autenticação [${authId}]...`);
+    // 🚀 Verificar se já temos sessão restaurada (do estado inicial)
+    const hasRestoredSession = !!state.user && !state.loading;
+    if (hasRestoredSession) {
+      // Sessão já restaurada (silenciado)
+    }
     
-    // Timeout de segurança para evitar loading infinito
+    // ⚡ Timeout de segurança AUMENTADO: se após 20s não terminou, forçar loading=false
     const safetyTimeout = setTimeout(() => {
       if (isMounted) {
-        console.warn('Timeout de segurança do AuthContext: forçando fim do loading');
-        setState(prevState => ({ ...prevState, loading: false }));
+        // Timeout de segurança (silenciado)
+        setState(prev => ({ ...prev, loading: false }));
       }
-    }, 15000); // 15 segundos
+    }, 20000);
     
-    const fetchSession = async () => {
+    const initAuth = async () => {
       try {
+        // Iniciando autenticação (silenciado)
+        
+        // Verificar localStorage antes de chamar Supabase (silenciado)
+        const authKeys = Object.keys(localStorage).filter(k => 
+          k.includes('auth') || k.includes('supabase') || k.includes('sb-')
+        );
+        
         const supabase = getSupabase();
         
-        // Limpar chaves antigas conflitantes (apenas uma vez)
-        const cleanupKey = 'auth-storage-cleanup-done';
-        if (!sessionStorage.getItem(cleanupKey)) {
-          const keysToRemove = ['supabase-auth-client', 'supabase-auth-client-nopkce', 'supabase-auth-client-admin'];
-          keysToRemove.forEach(key => {
-            if (localStorage.getItem(key)) {
-              console.log(`🧹 Removendo chave conflitante: ${key}`);
-              localStorage.removeItem(key);
-            }
-          });
-          sessionStorage.setItem(cleanupKey, 'true');
+        // Timeout OTIMIZADO para 8s
+        // Chamando getSession (silenciado)
+        const getSessionStart = Date.now();
+        const sessionPromise = supabase.auth.getSession();
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('getSession timeout')), 8000)
+        );
+        
+        let session;
+        try {
+          const result = await Promise.race([
+            sessionPromise,
+            timeoutPromise
+          ]) as any;
+          session = result.data.session;
+          // getSession completou (silenciado)
+        } catch (timeoutError) {
+          const getSessionDuration = Date.now() - getSessionStart;
+          // getSession timeout (silenciado)
+          // 🔥 NÃO limpar localStorage - apenas prosseguir sem sessão
+          session = null;
         }
+        if (!isMounted) return;
         
-        // O Supabase gerencia automaticamente a sessão no localStorage
-        // Chave padrão: sb-arkrjextwpwqhrvcijyr-auth-token
-        console.log('Verificando sessão armazenada pelo Supabase...');
-        
-        // Debug: Verificar o que existe no localStorage ANTES de tentar recuperar
-        const storageKeys = Object.keys(localStorage).filter(key => key.includes('supabase') || key.includes('auth'));
-        console.log('🔍 DEBUG [AuthContext] - Chaves de autenticação no localStorage:', storageKeys);
-        
-        storageKeys.forEach(key => {
-          try {
-            const value = localStorage.getItem(key);
-            if (value) {
-              const parsed = JSON.parse(value);
-              console.log(`🔍 DEBUG [AuthContext] - ${key}:`, {
-                hasSession: !!parsed,
-                hasAccessToken: !!(parsed?.access_token || parsed?.currentSession?.access_token),
-                expiresAt: parsed?.expires_at || parsed?.currentSession?.expires_at || 'N/A'
-              });
-            }
-          } catch (e) {
-            console.log(`🔍 DEBUG [AuthContext] - ${key}: (não é JSON)`);
-          }
-        });
-        
-        // Obter sessão atual do Supabase
-        const { data: { session: initialSession }, error: sessionError } = await supabase.auth.getSession();
-
-        if (sessionError) {
-          console.error('Erro ao obter sessão:', sessionError);
-          throw sessionError;
-        }
-
-        let session = initialSession;
-
         if (session?.user) {
           const user = session.user;
-          console.log('Sessão válida encontrada para usuário:', user.email);
-
-          // Verificar se o token está próximo de expirar
-          const expiresAt = session.expires_at;
-          const now = Math.floor(Date.now() / 1000);
-          const timeUntilExpiry = expiresAt - now;
+          // Usuário encontrado, buscando perfil (silenciado)
           
-          // Se faltar menos de 5 minutos para expirar, renovar o token
-          if (timeUntilExpiry < 300) {
-            console.log('Token próximo de expirar, renovando...');
-            const { data: { session: newSession }, error: refreshError } = await supabase.auth.refreshSession();
-            
-            if (refreshError) {
-              console.error('Erro ao renovar token:', refreshError);
-              throw refreshError;
-            }
-            
-            if (newSession) {
-              console.log('Token renovado com sucesso');
-              session = newSession;
-            }
+          // 🚀 Se já temos sessão restaurada, apenas ATUALIZAR profile/admin em background
+          if (hasRestoredSession) {
+            // Sessão já restaurada (silenciado)
           }
-
-          // Verificar se o usuário existe na tabela user_profiles
-          const { data: profile, error: profileError } = await supabase
+          
+          // ✅ CRÍTICO: Limpar TODOS os caches de sinais ao fazer login para garantir dados frescos
+          localStorage.removeItem('realtime_signals_cache'); // Dashboard (3 sinais)
+          localStorage.removeItem('extended_signals_cache'); // Aba Trades (7 sinais)
+          localStorage.removeItem('extended_signals_cache_date'); // Data do cache
+          // Caches de sinais limpos (silenciado)
+          
+          // Buscar perfil do usuário com timeout
+          const profileSearchStart = Date.now();
+          const profilePromise = supabase
             .from('user_profiles')
             .select('*')
             .eq('user_id', user.id)
             .maybeSingle();
-
-          if (profileError) {
-            console.error('Erro ao buscar perfil:', profileError);
+          
+          const profileTimeout = new Promise<any>((_, reject) => 
+            setTimeout(() => reject(new Error('Profile search timeout')), 5000)
+          );
+          
+          let profile;
+          try {
+            const result = await Promise.race([profilePromise, profileTimeout]);
+            profile = result.data;
+            const profileSearchDuration = Date.now() - profileSearchStart;
+            // Perfil buscado (silenciado)
+          } catch (timeoutError) {
+            const profileSearchDuration = Date.now() - profileSearchStart;
+            // Busca timeout (silenciado)
+            profile = null;
           }
-
-          // Se não existir perfil, criar um básico
-          if (!profile && !profileError) {
-            console.log('Criando perfil básico para usuário:', user.email);
-            const { data: newProfile, error: createError } = await supabase
+          
+          // Perfil encontrado (silenciado)
+          
+          // Se não existe perfil, criar um básico
+          if (!profile) {
+            // Criando perfil básico (silenciado)
+            const { data: newProfile } = await supabase
               .from('user_profiles')
               .upsert({
                 user_id: user.id,
@@ -142,174 +170,290 @@ export const AuthProvider = React.memo<AuthProviderProps>(({ children }) => {
               })
               .select()
               .maybeSingle();
-
-            if (createError) {
-              console.error('Erro ao criar perfil:', createError);
+            
+            if (isMounted) {
+              // Estado atualizado (silenciado)
+              clearTimeout(safetyTimeout);
+              setState(prev => ({
+                user,
+                session,
+                profile: newProfile || null,
+                loading: hasRestoredSession ? prev.loading : false, // 🔥 MANTER loading se fast restore
+                error: null,
+                isAdmin: false
+              }));
             }
-
-            if (!createError && newProfile) {
-              if (isMounted) {
-                setState(prevState => ({
-                  ...prevState,
-                  session,
+          } else {
+            if (isMounted) {
+              // Estado atualizado com perfil (silenciado)
+              clearTimeout(safetyTimeout);
+              
+              // 🚀 Se já temos sessão restaurada, MANTER loading=false, apenas atualizar perfil/admin
+              setState(prev => {
+                // setState chamado (silenciado)
+                
+                const newState = {
                   user,
-                  profile: newProfile,
-                  loading: false
-                }));
-              }
-              return;
+                  session,
+                  profile,
+                  loading: hasRestoredSession ? prev.loading : false, // 🔥 MANTER loading se fast restore
+                  error: null,
+                  isAdmin: false
+                };
+                // Novo loading (silenciado)
+                return newState;
+              });
+              
+              // setState executado (silenciado)
             }
-          }
-
-          // Atualizar estado com os dados disponíveis
-          if (isMounted) {
-            setState(prevState => ({
-              ...prevState,
-              session,
-              user,
-              profile: profile || null,
-              loading: false
-            }));
           }
         } else {
-          console.log('Nenhuma sessão ativa encontrada');
           if (isMounted) {
-            setState({ ...initialAuthState, loading: false });
+            // Sem sessão (silenciado)
+            clearTimeout(safetyTimeout);
+            
+            // 🔥 Se não há sessão, limpar estado completamente (sem fast restore)
+            setState(prev => {
+              // setState chamado sem sessão (silenciado)
+              const newState = { ...initialAuthState, loading: false };
+              // Novo loading (silenciado)
+              return newState;
+            });
           }
         }
       } catch (error) {
-        console.error('Erro ao carregar sessão:', error);
+        console.error('❌ AuthContext: Erro ao inicializar:', error);
         if (isMounted) {
-          setState(prevState => ({
-            ...prevState,
-            error: error as Error,
-            loading: false
-          }));
+          clearTimeout(safetyTimeout);
+          setState({ ...initialAuthState, loading: false, error: error as Error });
         }
       }
     };
-
-    fetchSession();
-
-    // Configurar listeners de mudanças de autenticação
+    
+    initAuth();
+    
+    // Configurar listener de mudanças de autenticação
     const supabase = getSupabase();
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        console.log('Evento de autenticação:', event);
+        const authStartTime = Date.now();
+        // onAuthStateChange (silenciado)
+        // onAuthStateChange iniciado
         
         if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
-          if (session) {
-            console.log('Sessão atualizada:', event);
+          if (session?.user) {
             const user = session.user;
             
-            // ULTRA-CRÍTICO: BLOQUEIO MÁXIMO de login automático após cadastro
+            // 🔥 CRÍTICO: Verificar se é um LOGIN NORMAL (não cadastro)
+            const isNormalLogin = sessionStorage.getItem('normal-login-in-progress') === 'true';
+            
+            // Verificar flags de proteção contra login automático após cadastro
             const justRegistered = sessionStorage.getItem('just-registered') === 'true';
             const preventAuthRedirect = sessionStorage.getItem('prevent_auth_redirect') === 'true';
             const preventDashboardRedirect = localStorage.getItem('prevent_dashboard_redirect') === 'true';
             
-            // Verificar expiração da flag prevent_dashboard_redirect
-            let preventDashboardRedirectValid = preventDashboardRedirect;
-            if (preventDashboardRedirect) {
-              const expirationTime = localStorage.getItem('prevent_dashboard_redirect_expiration');
-              if (expirationTime && parseInt(expirationTime) < Date.now()) {
-                console.log('🕒 Flag prevent_dashboard_redirect expirada, removendo...');
-                localStorage.removeItem('prevent_dashboard_redirect');
-                localStorage.removeItem('prevent_dashboard_redirect_expiration');
-                preventDashboardRedirectValid = false;
-              }
+            // 🔥 Se é login normal, LIMPAR todas as flags preventivas
+            if (isNormalLogin) {
+              // Login normal detectado (silenciado)
+              sessionStorage.removeItem('just-registered');
+              sessionStorage.removeItem('prevent_auth_redirect');
+              localStorage.removeItem('prevent_dashboard_redirect');
+              localStorage.removeItem('prevent_dashboard_redirect_expiration');
+              sessionStorage.removeItem('normal-login-in-progress');
             }
             
-            // Qualquer uma das flags de proteção bloqueia o login automático
-            if ((justRegistered || preventAuthRedirect || preventDashboardRedirectValid) && event === 'SIGNED_IN') {
-              console.log('🛑 BLOQUEIO MÁXIMO: Usuário acabou de se cadastrar, IGNORANDO login automático');
-              console.log('🔒 Proteções ativas:', { justRegistered, preventAuthRedirect, preventDashboardRedirect: preventDashboardRedirectValid });
-              
-              // Fazer logout imediato para garantir que não haverá redirecionamento
+            // Só bloquear login se houver flags E não for login normal
+            if ((justRegistered || preventAuthRedirect || preventDashboardRedirect) && event === 'SIGNED_IN' && !isNormalLogin) {
+              // Bloqueando login automático (silenciado)
               try {
-                getSupabase().auth.signOut();
-                console.log('🔒 Logout automático preventivo executado com sucesso');
-                
-                // Garantir que o estado não seja atualizado
-                setState(prevState => ({
-                  ...prevState,
-                  loading: false
-                }));
-                
-                // Forçar retorno para evitar qualquer processamento adicional
-                return;
+                await supabase.auth.signOut();
               } catch (e) {
-                console.warn('Erro no logout preventivo:', e);
+                // Erro no logout (silenciado)
               }
-              
-              // Não atualizar estado para manter na tela de cadastro concluído
               return;
             }
             
-            setState(prevState => ({
-              ...prevState,
-              user, 
-              session,
-              loading: true
-            }));
+            // Buscar perfil
+            // Buscando perfil do usuário (silenciado)
+            
+            let profile = null;
+            let profileError = null;
             
             try {
-              // Verificar se o usuário existe na tabela user_profiles
-              const { data: profile, error: profileError } = await supabase
+              // Executando query (silenciado)
+              const searchStartTime = Date.now();
+              
+              // 🔥 TIMEOUT ESPECÍFICO para busca de perfil
+              const profilePromise = supabase
                 .from('user_profiles')
                 .select('*')
                 .eq('user_id', user.id)
                 .maybeSingle();
               
-              if (profileError) {
-                console.error('Erro ao buscar perfil após evento:', profileError);
+              const profileTimeout = new Promise<any>((_, reject) => 
+                setTimeout(() => reject(new Error('Profile search timeout')), 5000)
+              );
+              
+              let result;
+              try {
+                result = await Promise.race([profilePromise, profileTimeout]);
+                const searchDuration = Date.now() - searchStartTime;
+                // Busca completou (silenciado)
+              } catch (timeoutError) {
+                const searchDuration = Date.now() - searchStartTime;
+                // Busca timeout (silenciado)
+                throw timeoutError;
               }
               
-              if (!profile) {
-                console.log('Perfil não encontrado após evento de autenticação');
-                await supabase.auth.signOut();
-                setState({ ...initialAuthState, loading: false });
-                return;
+              profile = result.data;
+              profileError = result.error;
+              
+              // Resultado da busca (silenciado)
+            } catch (searchError) {
+              // EXCEÇÃO ao buscar perfil (silenciado)
+              profileError = searchError;
+              // 🔥 CRIAR perfil mesmo se a busca falhar
+              profile = null;
+            }
+            
+            // 🔥 CRIAR perfil se não existir (NÃO fazer logout!)
+            if (!profile) {
+              // Perfil não encontrado (silenciado)
+              
+              try {
+                const createStartTime = Date.now();
+                // Executando upsert (silenciado)
+                
+                // 🔥 TIMEOUT de 10s para criar perfil
+                const createPromise = supabase
+                  .from('user_profiles')
+                  .upsert({
+                    user_id: user.id,
+                    email: user.email,
+                    created_at: new Date().toISOString(),
+                    updated_at: new Date().toISOString(),
+                    verified_email: true
+                  })
+                  .select()
+                  .maybeSingle();
+                
+                const createTimeout = new Promise<any>((_, reject) => 
+                  setTimeout(() => reject(new Error('Profile creation timeout')), 5000)
+                );
+                
+                let createResult;
+                try {
+                  createResult = await Promise.race([createPromise, createTimeout]);
+                  const createDuration = Date.now() - createStartTime;
+                  // Upsert completou (silenciado)
+                } catch (timeoutError) {
+                  const createDuration = Date.now() - createStartTime;
+                  // Timeout (silenciado)
+                  // Continuar sem perfil
+                  profile = null;
+                  createResult = { data: null, error: timeoutError };
+                }
+                
+                const { data: newProfile, error: createError } = createResult;
+                
+                // Resultado da criação (silenciado)
+                
+                if (createError) {
+                  // Erro ao criar perfil (silenciado)
+                  profile = null;
+                } else {
+                  profile = newProfile;
+                  // Perfil criado (silenciado)
+                }
+              } catch (createException) {
+                // EXCEÇÃO ao criar perfil (silenciado)
+                profile = null;
               }
+            } else {
+              // Perfil encontrado (silenciado)
+            }
+            
+            // Verificando se é admin (silenciado)
+            let isAdmin = false;
+            try {
+              const adminCheckStart = Date.now();
+              isAdmin = await userService.isAdmin();
+              const adminCheckDuration = Date.now() - adminCheckStart;
+              // isAdmin verificado (silenciado)
+            } catch (adminError) {
+              // Erro ao verificar admin (silenciado)
+            }
+            
+            // Preparando para atualizar estado (silenciado)
+            
+            // 🔥 CRÍTICO: SEMPRE setar user, mesmo sem perfil!
+            if (!user) {
+              // Erro crítico (silenciado)
+              return; // Não atualizar estado se não tiver usuário
+            }
+            
+            // User válido (silenciado)
+            
+            setState(prev => {
+              // setState executando (silenciado)
               
-              const isAdmin = await userService.isAdmin();
-              
-              setState({
+              const newState = {
                 user,
                 session,
-                profile,
+                profile: profile || null, // Pode ser null!
                 isAdmin,
                 loading: false,
                 error: null
-              });
+              };
               
-              // Disparar evento de login bem-sucedido para componentes
-              setTimeout(() => {
-                window.dispatchEvent(new CustomEvent('auth-login-success'));
-              }, 100);
+              // Novo estado (silenciado)
               
-            } catch (error) {
-              console.error('Erro ao processar evento de autenticação:', error);
-              setState(prevState => ({
-                ...prevState,
-                loading: false,
-                error: error as Error
-              }));
-            }
+              return newState;
+            });
+            
+            // setState chamado (silenciado)
+            
+            // Aguardar React processar
+            await new Promise(resolve => setTimeout(resolve, 100));
+            // React processou o setState (silenciado)
+            
+            // 🔥 Limpar flags e sinalizar sucesso
+            setTimeout(() => {
+              const stillInProgress = sessionStorage.getItem('normal-login-in-progress');
+              if (stillInProgress) {
+                // Limpando flag (silenciado)
+                sessionStorage.removeItem('normal-login-in-progress');
+              }
+              
+              // 🔥 Sinalizar que o login completou com sucesso
+              const loginId = sessionStorage.getItem('current-login-id');
+              if (loginId) {
+                sessionStorage.setItem('login-completed', loginId);
+                sessionStorage.removeItem('current-login-id');
+                // Login completado (silenciado)
+              }
+            }, 500);
+            
+            // Disparar evento de login bem-sucedido
+            setTimeout(() => {
+              // Disparando evento (silenciado)
+              window.dispatchEvent(new CustomEvent('auth-login-success'));
+            }, 100);
           }
         } else if (event === 'SIGNED_OUT') {
-          console.log('Usuário desconectado');
+          // SIGNED_OUT (silenciado)
           setState({ ...initialAuthState, loading: false });
         }
       }
     );
-
+    
     // Cleanup
     return () => {
       clearTimeout(safetyTimeout);
-      subscription.unsubscribe();
       isMounted = false;
+      subscription.unsubscribe();
     };
-  }, []);
+  }, []); // Executar APENAS uma vez
 
   // Função para atualizar o perfil do usuário
   const refreshUserProfile = useCallback(async () => {
@@ -338,12 +482,11 @@ export const AuthProvider = React.memo<AuthProviderProps>(({ children }) => {
   // Função para verificar estado do token e sessão
   const checkTokenState = useCallback(async () => {
     try {
-      // Verificar se há um token no localStorage
       const session = localStorage.getItem('supabase.auth.token');
       if (session) {
-        console.log('Token encontrado no localStorage');
+        // Token encontrado (silenciado)
       } else {
-        console.log('Nenhum token encontrado no localStorage');
+        // Nenhum token (silenciado)
       }
     } catch (error) {
       console.error('Erro ao verificar token:', error);
@@ -352,76 +495,154 @@ export const AuthProvider = React.memo<AuthProviderProps>(({ children }) => {
 
   // Fazer login com email/senha
   const signInWithEmail = useCallback(async (email: string, password: string, remember: boolean = false) => {
+    const totalLoginStart = Date.now();
+    // signInWithEmail chamado (silenciado)
+    
+    // 🔥 MARCAR que é um login normal (não cadastro)
+    sessionStorage.setItem('normal-login-in-progress', 'true');
+    // Flag definida (silenciado)
+    
+    // 🔥 Criar ID único para este login para rastrear
+    const loginId = `login-${Date.now()}`;
+    sessionStorage.setItem('current-login-id', loginId);
+    // Login ID criado (silenciado)
+    
+    // 🔥 TIMEOUT DE SEGURANÇA GLOBAL: Se demorar > 25s, forçar loading=false
+    // Tempo otimizado para melhor experiência do usuário
+    const signInTimeout = setTimeout(() => {
+      console.error('⏰ [AuthContext] TIMEOUT GLOBAL! signInWithEmail demorou > 25s, forçando loading=false');
+      console.error('⚠️ [AuthContext] Se você vê esta mensagem, o Supabase está muito lento!');
+      console.error('⚠️ [AuthContext] Estado atual antes do timeout:', {
+        hasUser: !!state.user,
+        loading: state.loading
+      });
+      setState(prevState => {
+        // Forçando loading=false (silenciado)
+        return { ...prevState, loading: false };
+      });
+    }, 25000);
+    
     try {
+      // Setando loading (silenciado)
       setState(prevState => ({ ...prevState, loading: true }));
       
-      console.time('totalLoginTime');
-      console.log('Iniciando processo de login...');
-      
-      // Verificar estado atual do token antes do login
+      // Verificando token (silenciado)
       await checkTokenState();
       
-      const { data, error } = await userService.signInWithEmail(email, password, remember);
+      // Chamando userService (silenciado)
+      const signInStartTime = Date.now();
+      
+      // 🔥 CRÍTICO: NÃO usar timeout aqui! Deixar o onAuthStateChange fazer o trabalho
+      // O timeout de 20s global (signInTimeout) já protege contra travamento
+      // Aguardando resposta (silenciado)
+      
+      let data, error;
+      try {
+        const result = await userService.signInWithEmail(email, password, remember);
+        const signInDuration = Date.now() - signInStartTime;
+        // userService respondeu (silenciado)
+        
+        data = result.data;
+        error = result.error;
+      } catch (serviceError) {
+        const signInDuration = Date.now() - signInStartTime;
+        console.error('❌ [AuthContext] Erro no userService após', signInDuration, 'ms!', serviceError);
+        clearTimeout(signInTimeout);
+        setState(prevState => ({
+          ...prevState,
+          error: serviceError as Error,
+          loading: false,
+        }));
+        return { error: serviceError as Error };
+      }
+      
+      // Resposta recebida (silenciado)
       
       if (error) {
-        console.error('Erro retornado pelo userService:', error);
+        console.error('❌ [AuthContext] Erro no signIn, retornando erro');
+        clearTimeout(signInTimeout); // Limpar timeout
         setState(prevState => ({
           ...prevState,
           error: error as Error,
           loading: false,
         }));
-        console.timeEnd('totalLoginTime');
         return { error };
       }
       
-      // Obter perfil do usuário
-      console.log('Login bem-sucedido, obtendo perfil...');
-      const { data: profile } = await userService.getUserProfile();
-      const isAdmin = await userService.isAdmin();
+      // Login bem-sucedido (silenciado)
       
-      setState(prevState => ({
-        ...prevState,
-        user: data?.user || null,
-        session: data,
-        profile,
-        isAdmin,
-        loading: false,
-        error: null,
-      }));
+      // 🔥 OTIMIZAÇÃO: onAuthStateChange já vai buscar perfil e isAdmin
+      // Não precisamos fazer aqui para evitar duplicação e race conditions
+      const profile = null;
+      const isAdmin = false;
       
-      console.log('Processo de login completo com sucesso');
-      console.timeEnd('totalLoginTime');
+      // signInWithEmail completou (silenciado)
       
-      // 🚀 Disparar evento para notificar outros componentes sobre login bem-sucedido
-      setTimeout(() => {
-        window.dispatchEvent(new CustomEvent('auth-login-success', {
-          detail: { user: data?.user, profile }
-        }));
-        console.log('🔐 Evento auth-login-success disparado');
-      }, 100);
+      // 🔥 CRÍTICO: NÃO setar loading=false aqui!
+      // O onAuthStateChange vai buscar perfil e ENTÃO setar loading=false
+      // Isso evita race conditions e redirecionamentos prematuros
+      
+      // signInWithEmail com sucesso (silenciado)
       
       // Se a opção "lembrar" estiver marcada, salvar no localStorage
       if (remember) {
         localStorage.setItem('remember-user', 'true');
+        // remember-user salvo (silenciado)
         
-        // Salvar o dispositivo como autorizado para este usuário
         if (data?.user?.id) {
-          await userService.saveAuthorizedDevice(data.user.id);
+          // 🔥 NÃO BLOQUEAR: saveAuthorizedDevice em background
+          userService.saveAuthorizedDevice(data.user.id).catch(err => 
+            console.warn('⚠️ saveAuthorizedDevice falhou (não bloqueante):', err)
+          );
         }
       } else {
         localStorage.removeItem('remember-user');
       }
       
+      // 🔥 IMPORTANTE: NÃO limpar timeout aqui!
+      // Deixar ele ativo para proteger se onAuthStateChange travar
+      // Mantendo timeout ativo (silenciado)
+      
+      // signInWithEmail concluído (silenciado)
       return { error: null };
     } catch (error) {
-      console.error('Erro não tratado no processo de login:', error);
+      console.error('❌ [AuthContext] Erro no processo de login:', error);
+      clearTimeout(signInTimeout); // Limpar timeout de erro
+      
+      // 🔥 Limpar flag de login normal em caso de erro
+      sessionStorage.removeItem('normal-login-in-progress');
+      
       setState(prevState => ({
         ...prevState,
         error: error as Error,
         loading: false,
       }));
-      console.timeEnd('totalLoginTime');
       return { error: error as Error };
+    } finally {
+      // 🔥 Aguardar um pouco para dar tempo do onAuthStateChange completar
+      // signInWithEmail finally (silenciado)
+      
+      // Aguardar até 5 segundos para o onAuthStateChange completar
+      for (let i = 0; i < 50; i++) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
+        const loginCompleted = sessionStorage.getItem('login-completed');
+        if (loginCompleted === loginId) {
+          console.log('✅ [AuthContext] onAuthStateChange completou! Limpando timeout...');
+          clearTimeout(signInTimeout);
+          sessionStorage.removeItem('login-completed');
+          break;
+        }
+        
+        // Log a cada segundo
+        if (i % 10 === 0 && i > 0) {
+          console.log(`⏳ [AuthContext] Aguardando onAuthStateChange... (${i / 10}s)`);
+        }
+      }
+      
+      const totalLoginDuration = Date.now() - totalLoginStart;
+      // signInWithEmail finally completado (silenciado)
+      console.log('⏱️ [PERF] ✅ Login TOTAL em', totalLoginDuration, 'ms');
     }
   }, [checkTokenState]);
 
@@ -433,7 +654,6 @@ export const AuthProvider = React.memo<AuthProviderProps>(({ children }) => {
       const { data, error } = await userService.signUp(email, password, birthdate, displayName, investorType);
       
       if (error) {
-        console.error('Erro retornado pelo userService.signUp:', error);
         setState(prevState => ({
           ...prevState,
           error: error as Error,
@@ -441,8 +661,6 @@ export const AuthProvider = React.memo<AuthProviderProps>(({ children }) => {
         }));
         return { error };
       }
-      
-      console.log('Cadastro processado com sucesso pelo userService');
       
       setState(prevState => ({
         ...prevState,
@@ -452,7 +670,7 @@ export const AuthProvider = React.memo<AuthProviderProps>(({ children }) => {
       
       return { error: null };
     } catch (error) {
-      console.error('Erro no contexto de autenticação durante cadastro:', error);
+      console.error('Erro durante cadastro:', error);
       setState(prevState => ({
         ...prevState,
         error: error as Error,
@@ -478,9 +696,6 @@ export const AuthProvider = React.memo<AuthProviderProps>(({ children }) => {
         return { error };
       }
       
-      // Aqui não atualizamos o estado imediatamente pois o OAuth redireciona o usuário
-      // O estado será atualizado quando o usuário retornar pelo callback
-      
       return { error: null };
     } catch (error) {
       console.error(`Erro ao fazer login com ${provider}:`, error);
@@ -501,7 +716,6 @@ export const AuthProvider = React.memo<AuthProviderProps>(({ children }) => {
       // Salvar o idioma atual antes de fazer logout
       const appLanguage = localStorage.getItem('app-language');
       
-      // Executar o logout
       const { error } = await userService.signOut();
       
       if (error) {
@@ -665,4 +879,4 @@ export function useAuth() {
   }
   
   return context;
-}; 
+}

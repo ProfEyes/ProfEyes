@@ -110,7 +110,19 @@ export const userService = {
     try {
       // Obter identificadores do dispositivo atual
       const deviceId = this.getDeviceIdentifier();
-      const deviceIP = await this.getDeviceIP();
+      
+      // 🔥 OTIMIZAÇÃO: getDeviceIP com timeout de 2s para não bloquear login
+      let deviceIP = 'unknown';
+      try {
+        const ipPromise = this.getDeviceIP();
+        const timeoutPromise = new Promise<string>((_, reject) => 
+          setTimeout(() => reject(new Error('IP timeout')), 2000)
+        );
+        deviceIP = await Promise.race([ipPromise, timeoutPromise]);
+      } catch (ipError) {
+        console.warn('⚠️ Timeout ao buscar IP, usando cached ou unknown:', ipError);
+        deviceIP = localStorage.getItem('device-ip') || 'unknown';
+      }
       
       // Obter lista de dispositivos autorizados
       const authorizedDevicesStr = localStorage.getItem(`auth-devices-${userId}`);
@@ -133,7 +145,7 @@ export const userService = {
         
         // Salvar a lista atualizada
         localStorage.setItem(`auth-devices-${userId}`, JSON.stringify(devices));
-        console.log(`Dispositivo ${deviceId} (IP: ${deviceIP}) adicionado como autorizado para usuário ${userId}`);
+        // Dispositivo adicionado (silenciado)
       } else {
         // Atualizar a data de último uso
         const updatedDevices = devices.map((device: Record<string, unknown>) => {
@@ -148,7 +160,7 @@ export const userService = {
         });
         
         localStorage.setItem(`auth-devices-${userId}`, JSON.stringify(updatedDevices));
-        console.log(`Dispositivo ${deviceId} (IP: ${deviceIP}) atualizado para usuário ${userId}`);
+        // Dispositivo atualizado (silenciado)
       }
     } catch (error) {
       console.error('Erro ao salvar dispositivo autorizado:', error);
@@ -163,7 +175,7 @@ export const userService = {
       if (!deviceId) {
         // Se não for especificado um ID, remover todos os dispositivos
         localStorage.removeItem(`auth-devices-${userId}`);
-        console.log(`Todos os dispositivos foram removidos para o usuário ${userId}`);
+        // Todos os dispositivos removidos (silenciado)
         return;
       }
       
@@ -178,7 +190,7 @@ export const userService = {
       
       // Salvar a lista atualizada
       localStorage.setItem(`auth-devices-${userId}`, JSON.stringify(updatedDevices));
-      console.log(`Dispositivo ${deviceId} removido para usuário ${userId}`);
+      // Dispositivo removido (silenciado)
     } catch (error) {
       console.error('Erro ao remover dispositivo autorizado:', error);
     }
@@ -188,7 +200,8 @@ export const userService = {
    * Autenticação com Email/Senha
    */
   async signInWithEmail(email: string, password: string, remember: boolean = true): Promise<{ data: Session | null; error: Record<string, unknown> }> {
-    await this.init();
+    // 🔥 NÃO BLOQUEAR LOGIN: Init em background
+    this.init().catch(err => console.warn('Init em background falhou:', err));
     
     try {
       // Validações mais rigorosas
@@ -206,8 +219,7 @@ export const userService = {
         };
       }
 
-      console.log(`Tentando login para ${email}...`);
-      console.time('loginTime');
+      // Tentando login (silenciado)
 
       // Tentar fazer login
       const { data, error } = await (supabase as SupabaseClient<Database>).auth.signInWithPassword({
@@ -215,7 +227,7 @@ export const userService = {
         password: password,
       });
 
-      console.timeEnd('loginTime');
+      // loginTime (silenciado)
 
       if (error) {
         console.error('Erro detalhado no login:', {
@@ -257,7 +269,7 @@ export const userService = {
         await this.saveAuthorizedDevice(data.user.id);
         
         // O Supabase já salva a sessão automaticamente no localStorage
-        console.log('Sessão criada com sucesso - Supabase gerenciará a persistência');
+        // Sessão criada (silenciado)
         
         // Debug: Verificar se a sessão foi realmente salva no localStorage
         const storageKeys = Object.keys(localStorage).filter(key => key.includes('supabase') || key.includes('auth'));
@@ -498,23 +510,41 @@ export const userService = {
    */
   async getUserProfile(userId?: string): Promise<{ data: UserProfile | null; error: Record<string, unknown> }> {
     try {
-      // Como a tabela user_profiles pode não existir, retornamos um perfil mínimo
-      const user = userId 
-        ? await (supabase as SupabaseClient<Database>).auth.getUser(userId)
-        : await (supabase as SupabaseClient<Database>).auth.getUser();
+      // Obter usuário autenticado atual
+      const { data: { user }, error: authError } = await (supabase as SupabaseClient<Database>).auth.getUser();
       
-      if (!user.data.user) {
-        return { data: null, error: { message: 'Usuário não encontrado' } };
+      if (authError || !user) {
+        return { data: null, error: { message: 'Usuário não autenticado' } };
       }
       
-      // Criar um perfil básico a partir dos dados de autenticação
+      // Se userId foi fornecido e é diferente do usuário atual, tentar buscar da tabela user_profiles
+      if (userId && userId !== user.id) {
+        try {
+          const { data: profile, error: profileError } = await (supabase as SupabaseClient<Database>)
+            .from('user_profiles')
+            .select('*')
+            .eq('user_id', userId)
+            .single();
+          
+          if (!profileError && profile) {
+            return { data: profile as UserProfile, error: null };
+          }
+        } catch (err) {
+          console.warn('Erro ao buscar perfil de outro usuário:', err);
+        }
+        
+        // Se não encontrou na tabela, retornar erro
+        return { data: null, error: { message: 'Perfil não encontrado' } };
+      }
+      
+      // Criar um perfil básico a partir dos dados de autenticação do usuário atual
       const basicProfile: UserProfile = {
         id: '',
-        user_id: user.data.user.id,
-        created_at: user.data.user.created_at || new Date().toISOString(),
-        updated_at: user.data.user.updated_at || new Date().toISOString(),
-        display_name: user.data.user.user_metadata?.full_name || null,
-        avatar_url: user.data.user.user_metadata?.avatar_url || null,
+        user_id: user.id,
+        created_at: user.created_at || new Date().toISOString(),
+        updated_at: user.updated_at || new Date().toISOString(),
+        display_name: user.user_metadata?.full_name || null,
+        avatar_url: user.user_metadata?.avatar_url || null,
         language: null,
         timezone: null,
         // @ts-expect-error - risk_level não definido no schema
@@ -1058,6 +1088,55 @@ export const userService = {
     } catch (error) {
       console.error(`Erro ao verificar se tabela ${tableName} existe:`, error);
       return false;
+    }
+  },
+  
+  /**
+   * Atualizar o idioma do usuário no banco de dados
+   */
+  async updateUserLanguage(userId: string, language: 'pt' | 'en' | 'es'): Promise<void> {
+    try {
+      // Atualizar na tabela user_profiles
+      const { error } = await supabase
+        .from('user_profiles')
+        .update({ 
+          language,
+          updated_at: new Date().toISOString()
+        })
+        .eq('user_id', userId);
+      
+      if (error) {
+        console.error('❌ [userService] Erro ao atualizar idioma:', error);
+        throw error;
+      }
+    } catch (error) {
+      console.error('❌ [userService] Erro ao atualizar idioma do usuário:', error);
+      throw error;
+    }
+  },
+  
+  /**
+   * Obter o idioma do usuário do banco de dados
+   */
+  async getUserLanguage(userId: string): Promise<{ language: 'pt' | 'en' | 'es' }> {
+    try {
+      const { data, error } = await supabase
+        .from('user_profiles')
+        .select('language')
+        .eq('user_id', userId)
+        .single();
+      
+      if (error) {
+        console.warn('⚠️ [userService] Erro ao buscar idioma:', error);
+        return { language: 'pt' }; // Fallback para português
+      }
+      
+      const language = data?.language as 'pt' | 'en' | 'es' || 'pt';
+      
+      return { language };
+    } catch (error) {
+      console.error('❌ [userService] Erro ao obter idioma do usuário:', error);
+      return { language: 'pt' }; // Fallback para português
     }
   },
 };

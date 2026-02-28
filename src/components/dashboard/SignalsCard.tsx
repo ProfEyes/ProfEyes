@@ -2,8 +2,8 @@ import { ArrowDownRight, ArrowUpRight, Target, Shield, TrendingUp, BarChart2, Cl
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { fetchTradingSignals, fetchCorrelationData, fetchOnChainMetrics, fetchOrderBookData } from "@/services";
-import { getLatestPrices } from "@/services/getSimulatedPrices";
+import { fetchTradingSignals } from "@/services";
+import { getLatestPrices } from "@/services/binanceApi";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { useNavigate } from "react-router-dom";
@@ -12,7 +12,7 @@ import type { TradingSignal as ServiceTradingSignal } from "@/services/types";
 import type { TradingSignal } from "@/types/tradingSignals";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Badge } from "@/components/ui/badge";
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { notificationService } from "@/services/notificationService";
 import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -154,7 +154,7 @@ const getNextSpecificMinuteTime = (currentTime: string, targetMinute: number, ad
   // Garantir que o formato tenha dois dígitos
   const result = `${nextHour.toString().padStart(2, '0')}:${targetMinute.toString().padStart(2, '0')}`;
   
-  console.log(`🕒 getNextSpecificMinuteTime: ${currentTime} → ${result} (target=${targetMinute}, advance=${shouldAdvanceHour})`);
+  // getNextSpecificMinuteTime (silenciado)
   
   return result;
 };
@@ -162,7 +162,7 @@ const getNextSpecificMinuteTime = (currentTime: string, targetMinute: number, ad
 // Função para gerar o próximo horário válido após um determinado horário
 // Implementação que segue ESTRITAMENTE as regras baseadas no padrão 03 → 23 → 43 → 03 (próxima hora)
 const getNextValidTime = (timeStr: string, removedSignalTime?: string): string => {
-  console.log(`🕒 Calculando próximo horário válido. Atual: ${timeStr}, Sinal removido: ${removedSignalTime || 'N/A'}`);
+  // Calculando próximo horário (silenciado)
   
   // Se temos um horário do sinal removido, usamos ele para determinar o próximo horário válido
   if (removedSignalTime) {
@@ -172,17 +172,17 @@ const getNextValidTime = (timeStr: string, removedSignalTime?: string): string =
     if (removedMinutes === 3) {
       // Se o sinal removido tinha entrada XX:03, o novo terá entrada na próxima ocorrência de XX:23
       const result = getNextSpecificMinuteTime(timeStr, 23);
-      console.log(`🕒 Sinal removido tinha entrada :03 → Próximo horário é :23 → ${result}`);
+      // Sinal removido tinha entrada :03 (silenciado)
       return result;
     } else if (removedMinutes === 23) {
       // Se o sinal removido tinha entrada XX:23, o novo terá entrada na próxima ocorrência de XX:43
       const result = getNextSpecificMinuteTime(timeStr, 43);
-      console.log(`🕒 Sinal removido tinha entrada :23 → Próximo horário é :43 → ${result}`);
+      // Sinal removido tinha entrada :23 (silenciado)
       return result;
     } else if (removedMinutes === 43) {
       // Se o sinal removido tinha entrada XX:43, o novo terá entrada na próxima ocorrência de XX:03 (próxima hora)
       const result = getNextSpecificMinuteTime(timeStr, 3, true); // true = avançar hora
-      console.log(`🕒 Sinal removido tinha entrada :43 → Próximo horário é :03 (próxima hora) → ${result}`);
+      // Sinal removido tinha entrada :43 (silenciado)
       return result;
     }
     
@@ -206,7 +206,7 @@ const getNextValidTime = (timeStr: string, removedSignalTime?: string): string =
   const currentHour = now.getHours();
   const currentMinute = now.getMinutes();
   
-  console.log(`🕒 Calculando próximo horário válido baseado no horário atual: ${currentHour}:${currentMinute}`);
+  // Calculando próximo horário baseado no atual (silenciado)
   
   // Determinar próximo minuto válido na sequência 03→23→43→03
   let nextMinute;
@@ -224,7 +224,7 @@ const getNextValidTime = (timeStr: string, removedSignalTime?: string): string =
   }
   
   const result = `${nextHour.toString().padStart(2, '0')}:${nextMinute.toString().padStart(2, '0')}`;
-  console.log(`🕒 Próximo horário válido calculado: ${result}`);
+  // Próximo horário calculado (silenciado)
   return result;
 };
 
@@ -1137,7 +1137,7 @@ const saveSignalsToLocalStorage = (signals, timestamp, timeSlot) => {
     // CORREÇÃO: Salvar no localStorage com a mesma chave usada para leitura
     localStorage.setItem('dashboardSignals', JSON.stringify(dataToSave));
     
-    console.log(`✅ Sinais da dashboard salvos no localStorage: Array(${signals.length})`);
+    // Sinais salvos (silenciado)
   } catch (error) {
     console.error('❌ Erro ao salvar sinais no localStorage:', error);
   }
@@ -2055,9 +2055,9 @@ const SignalsCard: React.FC = () => {
   const timeUpdateIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const currentTimeSlotRef = useRef<string>('');
   
-  // Constante para tempo real de processamento (20 minutos)
-  const SIGNAL_PROCESSING_TIME = 20 * 60 * 1000; // 20 minutos em ms
-  const SIGNAL_FIXED_PERIOD = 20 * 60 * 1000; // 20 minutos de período fixo
+  // Constante para tempo real de processamento (15 minutos)
+  const SIGNAL_PROCESSING_TIME = 15 * 60 * 1000; // 15 minutos em ms
+  const SIGNAL_FIXED_PERIOD = 15 * 60 * 1000; // 15 minutos de período fixo
 
   // Estado local para exibir o timer da dashboard (entrada do primeiro sinal)
   const [rotationTimerState, setRotationTimerState] = useState<null | {
@@ -2071,7 +2071,113 @@ const SignalsCard: React.FC = () => {
   // Ref para evitar logs repetitivos em cada segundo
   const lastLoggedMinutesRef = useRef<number | null>(null);
 
-  // Ouvir eventos globais emitidos pelo monitor (atualização do timer)
+  // ✅ NOVO: Calcular e emitir timer de rotação quando sinais mudarem
+  useEffect(() => {
+    if (!displayedSignals || displayedSignals.length === 0) return;
+    
+    const firstSignal = displayedSignals[0];
+    if (!firstSignal || !firstSignal.entry_time) return;
+    
+    // ✅ USAR FUNÇÃO UTILITÁRIA CENTRALIZADA
+    // Importar quando necessário: import { calculateSignalTimestamps } from '@/utils/timeCalculations';
+    const now = Date.now();
+    const [hours, minutes] = firstSignal.entry_time.split(':').map(Number);
+    
+    // ✅ Validar entrada
+    if (isNaN(hours) || isNaN(minutes)) {
+      console.error('❌ [Dashboard] Horário inválido:', firstSignal.entry_time);
+      return;
+    }
+    
+    // ✅ Criar data de entrada considerando se é hoje ou amanhã
+    const entryDate = new Date(now);
+    entryDate.setHours(hours, minutes, 0, 0);
+    
+    // ✅ LÓGICA CORRETA: Verificar se já passou do tempo de rotação (15 min após entrada)
+    const minutesDiff = (entryDate.getTime() - now) / (60 * 1000);
+    
+    // Se o horário está muito no passado (mais de 3 horas), considerar amanhã
+    if (minutesDiff < -180) {
+      entryDate.setDate(entryDate.getDate() + 1);
+    }
+    
+    const entryTimestamp = entryDate.getTime();
+    const nextRotationTime = entryTimestamp + (15 * 60 * 1000); // 15 minutos APÓS entrada
+    const msToRotation = Math.max(0, nextRotationTime - now);
+    const secondsRemaining = Math.floor(msToRotation / 1000);
+    const minutesSinceEntry = Math.floor((now - entryTimestamp) / (60 * 1000));
+    
+    // ✅ VALIDAÇÃO CRÍTICA: Detectar valores absurdos
+    const minutesToRotation = Math.floor(secondsRemaining / 60);
+    
+    if (minutesToRotation > 60) {
+      console.error('❌ [Dashboard] ERRO CRÍTICO: Timer com valor absurdo detectado!');
+      console.error('   ⏱️ Minutos até rotação:', minutesToRotation);
+      console.error('   📅 Entry time:', firstSignal.entry_time);
+      console.error('   📅 Entry timestamp:', new Date(entryTimestamp).toLocaleString('pt-BR'));
+      console.error('   📅 Horário atual:', new Date(now).toLocaleString('pt-BR'));
+      console.error('   📊 Diferença de minutos:', minutesDiff);
+      
+      // ✅ CORREÇÃO EMERGENCIAL: Recriar o timestamp de forma mais segura
+      const safeEntryDate = new Date();
+      safeEntryDate.setHours(hours, minutes, 0, 0);
+      
+      // Se já passou da hora de entrada, deve ser hoje (dentro das 24h)
+      const diffMs = safeEntryDate.getTime() - now;
+      if (diffMs < 0 && Math.abs(diffMs) < 24 * 60 * 60 * 1000) {
+        // Já passou mas foi hoje - manter data
+        console.log('✅ [Dashboard] Corrigido: entrada foi HOJE (no passado recente)');
+      }
+      
+      return; // ✅ Abortar este ciclo e aguardar próximo render
+    }
+    
+    // Emitir evento inicial
+    const timerData = {
+      entryTime: firstSignal.entry_time,
+      entryTimestamp,
+      minutesSinceEntry,
+      secondsRemaining,
+      nextRotationTime
+    };
+    
+    setRotationTimerState(timerData);
+    
+    // Emitir evento para sincronizar com outras abas
+    window.dispatchEvent(new CustomEvent('rotationTimerUpdated', { detail: timerData }));
+    
+    // Timer reinicializado
+    
+    // ✅ VALIDAÇÃO: Timer zerado mas já passou da rotação
+    if (secondsRemaining === 0 && minutesSinceEntry > 15) {
+      console.error('⚠️ [Dashboard] ERRO: Timer zerado mas já passou da rotação!');
+      console.error('   Isso indica que os sinais não foram rotacionados corretamente.');
+    }
+    
+    // Atualizar timer a cada segundo
+    const interval = setInterval(() => {
+      const currentNow = Date.now();
+      const currentMsToRotation = Math.max(0, nextRotationTime - currentNow);
+      const currentSecondsRemaining = Math.floor(currentMsToRotation / 1000);
+      const currentMinutesSinceEntry = Math.floor((currentNow - entryTimestamp) / (60 * 1000));
+      
+      const updatedData = {
+        entryTime: firstSignal.entry_time,
+        entryTimestamp,
+        minutesSinceEntry: currentMinutesSinceEntry,
+        secondsRemaining: currentSecondsRemaining,
+        nextRotationTime
+      };
+      
+      setRotationTimerState(updatedData);
+      window.dispatchEvent(new CustomEvent('rotationTimerUpdated', { detail: updatedData }));
+      window.dispatchEvent(new CustomEvent('dashboardRotationTimerUpdate', { detail: updatedData }));
+    }, 1000);
+    
+    return () => clearInterval(interval);
+  }, [displayedSignals]);
+
+  // Ouvir eventos globais emitidos por outros componentes (atualização do timer)
   useEffect(() => {
     const handler = (ev: Event) => {
       try {
@@ -2080,7 +2186,7 @@ const SignalsCard: React.FC = () => {
           entryTimestamp: number;
           minutesSinceEntry: number;
           secondsRemaining: number;
-          nextRotationTime: number; // Timestamp em ms, não string
+          nextRotationTime: number;
         } | undefined;
         if (!detail) return;
         setRotationTimerState({
@@ -2088,7 +2194,7 @@ const SignalsCard: React.FC = () => {
           entryTimestamp: detail.entryTimestamp,
           minutesSinceEntry: detail.minutesSinceEntry,
           secondsRemaining: detail.secondsRemaining,
-          nextRotationTime: detail.nextRotationTime // Manter como número
+          nextRotationTime: detail.nextRotationTime
         });
 
         // Logar alterações significativas no tempo até a rotação (apenas quando minuto mudar)
@@ -2098,7 +2204,7 @@ const SignalsCard: React.FC = () => {
         if (lastLoggedMinutesRef.current !== minutesToRotation) {
           lastLoggedMinutesRef.current = minutesToRotation;
           const secondsRem = Math.max(0, Math.ceil((msToRotation % (1000 * 60)) / 1000));
-          console.log(`⏱️ Dashboard Timer: ${detail.entryTime} → até rotação ${minutesToRotation}m ${secondsRem}s`);
+          // Dashboard Timer atualizado
         }
       } catch (err) {
         // ignorar
@@ -2119,7 +2225,7 @@ const SignalsCard: React.FC = () => {
   // Função melhorada para sincronizar sinais de forma bidirecional
   const saveDashboardSignalsForSync = useCallback((signals: EnrichedSignal[]) => {
     try {
-      console.log('📡 SINCRONIZAÇÃO BIDIRECIONAL: Salvando sinais para sincronização com todas as abas');
+      // SINCRONIZAÇÃO BIDIRECIONAL (silenciado)
       
       // CORREÇÃO: Garantir que temos exatamente 3 sinais, mesmo que não tenham propriedade position
       // Pegamos os 3 primeiros do array ou limitamos a 3 se tiver mais
@@ -2157,8 +2263,7 @@ const SignalsCard: React.FC = () => {
       // Salvar APENAS no dashboardSignals (não sobrescrever tradesSignals)
       localStorage.setItem('dashboardSignals', JSON.stringify(dataToSave));
       
-      console.log('💾 Sinais do Dashboard salvos: ' + 
-        enrichedSignals.map(s => `${s.symbol} (${s.entry_time})`).join(' | '));
+      // Sinais salvos (silenciado)
       
       // Disparar eventos para sincronizar com outras abas/componentes
       // A aba Trades vai ouvir e atualizar seus 3 primeiros sinais
@@ -2173,6 +2278,14 @@ const SignalsCard: React.FC = () => {
     }
   }, []);
 
+  // Ref para armazenar os sinais atuais sem causar re-render  
+  const displayedSignalsRef = useRef<EnrichedSignal[]>([]);
+  
+  // Atualizar ref quando os sinais mudarem
+  useEffect(() => {
+    displayedSignalsRef.current = displayedSignals;
+  }, [displayedSignals]);
+
   // Efeito: Monitorar o primeiro sinal da dashboard e contar 20 minutos a partir do horário de entrada
   useEffect(() => {
     // Limpar intervalo anterior, se existir
@@ -2185,53 +2298,56 @@ const SignalsCard: React.FC = () => {
       console.warn('Erro ao limpar rotationMonitorInterval anterior:', err);
     }
 
-    if (!displayedSignals || displayedSignals.length === 0) {
-      // Resetar estado global de monitoramento
-      if (window.rotationTimer) {
-        window.rotationTimer.entryTime = '';
-        window.rotationTimer.entryTimestamp = 0;
-        window.rotationTimer.minutesSinceEntry = 0;
-        window.rotationTimer.nextRotationTime = 0;
-        window.rotationTimer.lastUpdateTimestamp = Date.now();
-      }
-      return;
-    }
-
-    const firstSignal = displayedSignals[0];
-    if (!firstSignal || !firstSignal.entry_time) return;
-
-    // Converter entry_time (HH:MM) para Date usando parseTimeString
-    const entryDate = parseTimeString(firstSignal.entry_time);
-    const targetDate = new Date(entryDate.getTime() + SIGNAL_PROCESSING_TIME); // +20 minutos
-
-    // Inicializar objeto global rotationTimer
-    if (!window.rotationTimer) {
-      window.rotationTimer = {
-        entryTime: firstSignal.entry_time,
-        entryTimestamp: entryDate.getTime(),
-        minutesSinceEntry: 0,
-        nextRotationTime: targetDate.getTime(),
-        lastUpdateTimestamp: Date.now()
-      };
-    } else {
-      window.rotationTimer.entryTime = firstSignal.entry_time;
-      window.rotationTimer.entryTimestamp = entryDate.getTime();
-      window.rotationTimer.nextRotationTime = targetDate.getTime();
-      window.rotationTimer.lastUpdateTimestamp = Date.now();
-      window.rotationTimer.minutesSinceEntry = 0;
-    }
-
-    // Atualizar imediatamente e depois a cada segundo
+    // Função de tick para verificar condições de rotação a cada segundo
     const tick = () => {
-      const now = Date.now();
-      const minutesSinceEntry = Math.floor((now - entryDate.getTime()) / (1000 * 60));
-      const secondsRemaining = Math.max(0, Math.ceil((targetDate.getTime() - now) / 1000));
+      try {
+        // Usar ref para evitar dependência que causa re-render
+        const currentSignals = displayedSignalsRef.current;
+        
+        if (!currentSignals || currentSignals.length === 0) {
+          // Resetar estado global de monitoramento
+          if (window.rotationTimer) {
+            window.rotationTimer.entryTime = '';
+            window.rotationTimer.entryTimestamp = 0;
+            window.rotationTimer.minutesSinceEntry = 0;
+            window.rotationTimer.nextRotationTime = 0;
+            window.rotationTimer.lastUpdateTimestamp = Date.now();
+          }
+          return;
+        }
 
-      if (window.rotationTimer) {
-        window.rotationTimer.minutesSinceEntry = minutesSinceEntry;
-        window.rotationTimer.lastUpdateTimestamp = now;
-        window.rotationTimer.nextRotationTime = targetDate.getTime();
-      }
+        const firstSignal = currentSignals[0];
+        if (!firstSignal || !firstSignal.entry_time) return;
+
+        // Converter entry_time (HH:MM) para Date usando parseTimeString
+        const entryDate = parseTimeString(firstSignal.entry_time);
+        const targetDate = new Date(entryDate.getTime() + SIGNAL_PROCESSING_TIME); // +20 minutos
+
+        // Inicializar objeto global rotationTimer
+        if (!window.rotationTimer) {
+          window.rotationTimer = {
+            entryTime: firstSignal.entry_time,
+            entryTimestamp: entryDate.getTime(),
+            minutesSinceEntry: 0,
+            nextRotationTime: targetDate.getTime(),
+            lastUpdateTimestamp: Date.now()
+          };
+        } else {
+          window.rotationTimer.entryTime = firstSignal.entry_time;
+          window.rotationTimer.entryTimestamp = entryDate.getTime();
+          window.rotationTimer.nextRotationTime = targetDate.getTime();
+          window.rotationTimer.lastUpdateTimestamp = Date.now();
+          window.rotationTimer.minutesSinceEntry = 0;
+        }
+      const now = Date.now();
+        const minutesSinceEntry = Math.floor((now - entryDate.getTime()) / (1000 * 60));
+        const secondsRemaining = Math.max(0, Math.ceil((targetDate.getTime() - now) / 1000));
+
+        if (window.rotationTimer) {
+          window.rotationTimer.minutesSinceEntry = minutesSinceEntry;
+          window.rotationTimer.lastUpdateTimestamp = now;
+          window.rotationTimer.nextRotationTime = targetDate.getTime();
+        }
 
       // Disparar evento para listeners externos (ex: UI, logs)
       try {
@@ -2251,7 +2367,7 @@ const SignalsCard: React.FC = () => {
 
       // Quando chegar a 0 segundos restantes, sinalizar evento e garantir execução da rotação
       if (secondsRemaining <= 0) {
-        console.log(`🕒 Monitor: Primeiro sinal ${firstSignal.symbol} atingiu 20 minutos (${firstSignal.entry_time})`);
+        // Monitor: Primeiro sinal atingiu 20 minutos (silenciado)
         try {
           window.dispatchEvent(new CustomEvent('dashboardFirstSignal20MinReached', { detail: { signal: firstSignal } }));
         } catch (err) {
@@ -2271,14 +2387,14 @@ const SignalsCard: React.FC = () => {
             attempts += 1;
             try {
               if (typeof (window as Window & { executeRotationDirect?: () => void }).executeRotationDirect === 'function') {
-                console.log(`🕒 Monitor: Tentativa ${attempts} - chamando window.executeRotationDirect()`);
+                // Monitor: Tentativa (silenciado)
                 try { 
                   (window as Window & { executeRotationDirect?: () => void }).executeRotationDirect?.(); 
                 } catch (e) { 
                   console.error('Erro executeRotationDirect:', e); 
                 }
               } else {
-                console.log(`🕒 Monitor: Tentativa ${attempts} - chamando executeSignalRotation fallback`);
+                // Monitor: Tentativa fallback (silenciado)
                 try { await executeSignalRotation(); } catch (e) { console.error('Erro executeSignalRotation:', e); }
               }
             } catch (e) {
@@ -2291,7 +2407,7 @@ const SignalsCard: React.FC = () => {
             // Verificar se o primeiro sinal mudou
             const currentFirstId = (window.displayedSignalsRef && window.displayedSignalsRef[0] && window.displayedSignalsRef[0].id) || (displayedSignals && displayedSignals[0] && displayedSignals[0].id) || null;
             if (initialFirstId && currentFirstId && initialFirstId !== currentFirstId) {
-              console.log('✅ Rotação detectada (primeiro sinal alterado) após tentativa', attempts);
+              // Rotação detectada (silenciado)
               return true;
             }
 
@@ -2302,7 +2418,7 @@ const SignalsCard: React.FC = () => {
             }
           }
 
-          console.warn('⚠️ Falha ao detectar rotação após tentativas');
+          // Falha ao detectar rotação (silenciado)
           return false;
         };
 
@@ -2314,6 +2430,9 @@ const SignalsCard: React.FC = () => {
           clearInterval(window.rotationMonitorInterval);
           window.rotationMonitorInterval = null;
         }
+      }
+      } catch (error) {
+        console.error('❌ Erro no monitor de rotação:', error);
       }
     };
 
@@ -2329,8 +2448,7 @@ const SignalsCard: React.FC = () => {
         window.rotationMonitorInterval = null;
       }
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [displayedSignals]);
+  }, []); // Dependências vazias - só roda uma vez na montagem
 
   // Quando o evento global 'dashboardFirstSignal20MinReached' for disparado,
   // iniciar a rotação de sinais usando a função executeSignalRotation
@@ -2366,8 +2484,12 @@ const SignalsCard: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [displayedSignals]);
 
-  // 🔄 ROTAÇÃO REAL: Fazer rotação verdadeira em vez de trocar todos os sinais
+  // ❌❌❌ FUNÇÃO OBSOLETA: Rotação é feita no SUPABASE via rotate_signals() ❌❌❌
+  // Esta função foi DESATIVADA - O Supabase gerencia a rotação automaticamente
   const executeSignalRotation = useCallback(async () => {
+    console.log('ℹ️ executeSignalRotation DESATIVADO - Rotação é feita no Supabase');
+    return; // RETURN EARLY - não executar lógica obsoleta
+    
     // Proteção contra múltiplas rotações simultâneas
     if (window.isRotating) {
       console.log('🚫 Rotação já em andamento, cancelando nova tentativa');
@@ -2445,10 +2567,7 @@ const SignalsCard: React.FC = () => {
       saveDashboardSignalsForSync(rotatedSignals);
       // Removido evento duplicado - já é disparado na função saveDashboardSignalsForSync
       
-      console.log(`✅ ROTAÇÃO CONCLUÍDA:`);
-      console.log(`   • Novo 1º: ${rotatedSignals[0].symbol} (${rotatedSignals[0].entry_time})`);
-      console.log(`   • Novo 2º: ${rotatedSignals[1].symbol} (${rotatedSignals[1].entry_time})`);
-      console.log(`   • Novo 3º: ${rotatedSignals[2].symbol} (${rotatedSignals[2].entry_time})`);
+      // ROTAÇÃO CONCLUÍDA (silenciado)
     
     // Limpar flag de rotação
     window.isRotating = false;
@@ -2632,7 +2751,7 @@ const SignalsCard: React.FC = () => {
       return;
     }
     
-    console.log('Montando SignalsCard pela primeira vez ou após período adequado');
+    // Montando SignalsCard
     window.signalsCardMounted = true;
     window.lastMountTimestamp = now;
     mountedRef.current = true;
@@ -2640,42 +2759,71 @@ const SignalsCard: React.FC = () => {
     return () => {
       // Limpar apenas se esta instância estiver realmente montada
       if (mountedRef.current) {
-        console.log('Desmontando SignalsCard (instância ativa)');
+        // Desmontando SignalsCard
         window.signalsCardMounted = false;
         mountedRef.current = false;
       }
     };
   }, []);
   
-  // Efeito para sincronizar estado global
+  // Efeito para sincronizar estado global (SEM dependências para evitar loop)
   useEffect(() => {
     if (!mountedRef.current) return;
 
-    window.displayedSignalsRef = displayedSignals;
-    // Converter Set para Record para compatibilidade
-    window.completedSignalsRef = Object.fromEntries(
-      Array.from(completedSignals).map(id => [id, 'completed'])
-    );
-    // Marcar que estes sinais pertencem a esta instância da dashboard
-    try {
-      if (displayedSignals && displayedSignals.length >= 3) {
-        window.displayedSignalsOwner = 'dashboard';
+    // Usar um intervalo para sincronizar periodicamente em vez de a cada mudança
+    const syncInterval = setInterval(() => {
+      const currentSignals = displayedSignalsRef.current;
+      if (currentSignals && currentSignals.length > 0) {
+        window.displayedSignalsRef = currentSignals;
+        // Converter Set para Record para compatibilidade
+        window.completedSignalsRef = Object.fromEntries(
+          Array.from(completedSignals).map(id => [id, 'completed'])
+        );
+        // Marcar que estes sinais pertencem a esta instância da dashboard
+        try {
+          if (currentSignals.length >= 3) {
+            window.displayedSignalsOwner = 'dashboard';
+          }
+        } catch (e) {
+          // ignore
+        }
       }
-    } catch (e) {
-      // ignore
-    }
-  }, [displayedSignals, completedSignals]);
+    }, 2000); // Sincronizar a cada 2 segundos
+
+    return () => clearInterval(syncInterval);
+  }, []); // SEM dependências - usa ref e intervalo
+  
+  // Estado para sinais de notificação (atualizado periodicamente para evitar loops)
+  const [signalsForNotifications, setSignalsForNotifications] = useState<ServiceTradingSignal[]>([]);
+  
+  // Atualizar sinais para notificação periodicamente em vez de a cada mudança
+  useEffect(() => {
+    const updateNotificationSignals = () => {
+      const currentSignals = displayedSignalsRef.current;
+      if (currentSignals && currentSignals.length > 0) {
+        const converted = currentSignals.map(signal => ({
+          ...signal,
+          timestamp: typeof signal.timestamp === 'string' 
+            ? new Date(signal.timestamp).getTime() 
+            : (typeof signal.timestamp === 'number' ? signal.timestamp : Date.now()),
+          pair: signal.symbol
+        })) as ServiceTradingSignal[];
+        setSignalsForNotifications(converted);
+      }
+    };
+    
+    // Atualizar inicialmente
+    updateNotificationSignals();
+    
+    // Atualizar a cada 5 segundos para evitar mudanças constantes
+    const interval = setInterval(updateNotificationSignals, 5000);
+    
+    return () => clearInterval(interval);
+  }, []); // SEM dependências - usa ref
   
   // Hook para enviar notificações 5 minutos antes do horário de entrada dos sinais
   const { notificationsEnabled } = useSignalNotifications(
-    // Converter para o formato esperado pelo hook (ServiceTradingSignal[])
-    displayedSignals?.map(signal => ({
-      ...signal,
-      timestamp: typeof signal.timestamp === 'string' 
-        ? new Date(signal.timestamp).getTime() 
-        : (typeof signal.timestamp === 'number' ? signal.timestamp : Date.now()),
-      pair: signal.symbol
-    })) as ServiceTradingSignal[],
+    signalsForNotifications,
     {
       notifyMinutesBefore: 5,       // Notificar 5 minutos antes da entrada
       enabled: mountedRef.current,  // Ativar apenas para a instância principal
@@ -2711,13 +2859,13 @@ const SignalsCard: React.FC = () => {
       const newSlot = getCurrentTimeSlot();
       const currentSlotValue = currentTimeSlotRef.current;
       if (newSlot !== currentSlotValue) {
-        console.log(`Slot de tempo mudou: ${currentSlotValue} -> ${newSlot}`);
+        // Slot de tempo mudou
         currentTimeSlotRef.current = newSlot;
         setCurrentTimeSlot(newSlot);
         
         // VERIFICAÇÃO REMOVIDA: Evitar chamada prematura de executeSignalRotation
         // A rotação será gerenciada pelo timer separado declarado após executeSignalRotation
-        console.log('⏰ Slot de tempo atualizado para:', newSlot);
+        // Slot atualizado
       }
     };
     
@@ -2806,13 +2954,8 @@ const SignalsCard: React.FC = () => {
   // Converter sinais do Realtime para EnrichedSignal
   const convertRealtimeToEnriched = useCallback((rtSignals: typeof realtimeSignals): EnrichedSignal[] => {
     if (!rtSignals || rtSignals.length === 0) {
-      console.warn('⚠️ DASHBOARD: Nenhum sinal do Realtime disponível');
       return [];
     }
-
-    console.log(`✅ DASHBOARD: ${rtSignals.length} sinais recebidos do Realtime:`, {
-      'Sinais': rtSignals.map(s => `${s.symbol} ${s.entry_time}`)
-    });
 
     // Converter para EnrichedSignal
     const enrichedSignals: EnrichedSignal[] = rtSignals.map((signal, index) => ({
@@ -2823,6 +2966,7 @@ const SignalsCard: React.FC = () => {
       timestamp: signal.created_at,
       qualityScore: Math.round(signal.success_rate * 100),
       symbol: signal.symbol,
+      display_name: signal.display_name, // 🔥 CRÍTICO: Incluir display_name!
       exchange: signal.category,
       processed: false,
       status: 'active' as const,
@@ -2931,20 +3075,31 @@ const SignalsCard: React.FC = () => {
   // PROBLEMA: Dependia de displayedSignals E currentTimeSlot, causando re-execuções constantes
   // SOLUÇÃO: Processamento feito apenas no useEffect do useQuery abaixo
   
-  // Processar sinais do Realtime para EnrichedSignal
-  const signals = convertRealtimeToEnriched(realtimeSignals);
+  // Processar sinais do Realtime para EnrichedSignal (MEMOIZADO para evitar re-renderizações)
+  const signals = useMemo(() => {
+    return convertRealtimeToEnriched(realtimeSignals);
+  }, [realtimeSignals, convertRealtimeToEnriched]);
+  
   const isLoading = realtimeLoading;
   const error = realtimeError;
   const refetch = refreshRealtime;
 
   // Efeito para processar os sinais quando disponíveis - PRIORIZAR SINAIS DA ABA TRADES
   const hasInitializedSignals = useRef(false);
+  const previousSignalsRef = useRef<typeof signals>([]);
   
   useEffect(() => {
-    // SÓ processar na inicialização quando não houver sinais e não tiver sido inicializado
-    if (signals && displayedSignals.length === 0 && !hasInitializedSignals.current) {
+    // Processar sinais quando: 
+    // 1. Não há sinais exibidos OU 
+    // 2. Chegaram novos sinais do Realtime
+    const shouldProcess = (
+      (signals && signals.length > 0 && displayedSignals.length === 0) || 
+      (signals && signals.length > 0 && !hasInitializedSignals.current)
+    );
+    
+    if (shouldProcess) {
       hasInitializedSignals.current = true;
-      console.log('🚀 INICIALIZAÇÃO PRIORITÁRIA: Verificando melhor fonte de sinais');
+      // PROCESSANDO SINAIS (silenciado)
       
       // PRIORIDADE 1: Verificar se temos sinais da aba Trades no localStorage
       try {
@@ -2953,7 +3108,7 @@ const SignalsCard: React.FC = () => {
           const parsedData = JSON.parse(tradesData);
           if (parsedData && parsedData.signals && Array.isArray(parsedData.signals) && 
               parsedData.signals.length >= 3) {
-            console.log('🗡️ PRIORIDADE 1: Usando sinais da aba Trades');
+            // PRIORIDADE 1 (silenciado)
             
             // Usar sinais da aba Trades
             setDisplayedSignals(parsedData.signals.slice(0, 3));
@@ -2971,7 +3126,6 @@ const SignalsCard: React.FC = () => {
       }
       
       // PRIORIDADE 2: Se não há sinais da aba Trades, usar sinais do useQuery
-      console.log('💭 PRIORIDADE 2: Usando sinais do useQuery (fallback)');
       setDisplayedSignals(signals);
       setCachedSignals(signals);
       
@@ -2979,7 +3133,37 @@ const SignalsCard: React.FC = () => {
       if (signals.length >= 3) {
         // CORREÇÃO DE SINCRONIZAÇÃO: Garantir que os sinais são enviados para a aba Trades
         saveDashboardSignalsForSync(signals);
-        console.log('✅ SINCRONIZAÇÃO INICIAL: Sinais enviados para aba Trades');
+        
+        // ✅ Disparar evento para notificar aba Trades
+        window.dispatchEvent(new CustomEvent('signalsRotated', {
+          detail: {
+            signals: signals,
+            timestamp: Date.now()
+          }
+        }));
+        // Evento disparado (inicial)
+      }
+    }
+    
+    // ✅ DETECTAR MUDANÇAS NOS SINAIS APÓS INICIALIZAÇÃO (para rotações)
+    if (hasInitializedSignals.current && signals && signals.length > 0) {
+      const hasChanged = JSON.stringify(previousSignalsRef.current) !== JSON.stringify(signals);
+      
+      if (hasChanged) {
+        // Sinais mudaram via Realtime
+        previousSignalsRef.current = signals;
+        
+        // Atualizar displayedSignals
+        setDisplayedSignals(signals);
+        
+        // Disparar evento para notificar aba Trades
+        window.dispatchEvent(new CustomEvent('signalsRotated', {
+          detail: {
+            signals: signals,
+            timestamp: Date.now()
+          }
+        }));
+        // Evento disparado (rotação)
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -3002,13 +3186,11 @@ const SignalsCard: React.FC = () => {
       const eventDetail = event?.detail as { source?: string; signals?: EnrichedSignal[]; timestamp?: number } | undefined;
       const src = eventDetail?.source || null;
       if (src === 'dashboard') {
-        console.log('🔇 Ignorando evento tradesSignalsUpdated originado pela própria dashboard');
         return;
       }
 
       // Evitar processamento recursivo
       if (isProcessingEvent) {
-        console.log('🛑 Evitando processamento recursivo de eventos');
         return;
       }
 
@@ -3017,7 +3199,6 @@ const SignalsCard: React.FC = () => {
       const timestamp = eventDetail?.timestamp || now;
 
       if ((now - lastProcessedTimestamp) < 500 && timestamp <= lastProcessedTimestamp) {
-        console.log('🕒 Ignorando evento recente já processado');
         return;
       }
 
@@ -3025,7 +3206,7 @@ const SignalsCard: React.FC = () => {
       isProcessingEvent = true;
       try {
         // Flag para debugging
-        console.log('💡 SINCRONIZAÇÃO PRIORITÁRIA: Evento recebido da aba Trades');
+        // Sincronização prioritária
         
         // Flag para debugging
         window.lastSyncTimestamp = now;
@@ -3063,9 +3244,7 @@ const SignalsCard: React.FC = () => {
           return;
         }
 
-        // Log detalhado
-        console.log('📥 SINAIS DA ABA TRADES:', 
-          eventDetail.signals.slice(0, 3).map(s => `${s.symbol} (${s.entry_time})`).join(' | '));
+        // Sinais da aba Trades
 
         // VALIDAR DADOS: Verificar se os sinais têm as propriedades mínimas necessárias
         const invalidSignals = eventDetail.signals.slice(0, 3).filter(
@@ -3104,9 +3283,7 @@ const SignalsCard: React.FC = () => {
         // Verificar se realmente há mudança de símbolos
         const symbolsChanged = !currentIds.every((id, i) => id === newIds[i]);
         if (symbolsChanged || currentIds.length === 0) {
-          console.log('🔄 ATUALIZAÇÃO NECESSÁRIA: Sinais diferentes detectados');
-          console.log(`   - Atuais: ${currentIds.join(', ')}`);
-          console.log(`   - Novos:  ${newIds.join(', ')}`);
+          // ATUALIZAÇÃO NECESSÁRIA (silenciado)
           
           // Atualizar os sinais da Dashboard
           setDisplayedSignals(enrichedSignals);
@@ -3122,9 +3299,9 @@ const SignalsCard: React.FC = () => {
             version: '2.0-trades-sync'
           }));
 
-          console.log('✅ Dashboard SINCRONIZADA com a aba Trades');
+          // Dashboard sincronizada (silenciado)
         } else {
-          console.log('💯 SINAIS IDÊNTICOS: Mantendo sinais atuais');
+          // Sinais idênticos
         }
       } catch (error) {
         console.error('❌ ERRO GRAVE na sincronização com aba Trades:', error);
@@ -3159,18 +3336,18 @@ const SignalsCard: React.FC = () => {
         let signals = null;
         if (parsedData.signals && Array.isArray(parsedData.signals)) {
           signals = parsedData.signals;
-          console.log(`📣 Encontrados ${signals.length} sinais em '${key}.signals'`);
+          // Sinais encontrados
         } else if (Array.isArray(parsedData)) {
           signals = parsedData;
-          console.log(`📣 Encontrados ${signals.length} sinais em '${key}' (array direto)`);
+          // Array direto
         } else if (parsedData.data && Array.isArray(parsedData.data)) {
           signals = parsedData.data;
-          console.log(`📣 Encontrados ${signals.length} sinais em '${key}.data'`);
+          // Sinais em .data
         }
         
         // Se encontramos sinais válidos, usar
         if (signals && signals.length >= 3) {
-          console.log(`🔄 Carregando ${signals.length} sinais iniciais da chave ${key}`);
+          // Carregando sinais iniciais
           handleTradesSignalsUpdate(new CustomEvent('tradesSignalsUpdated', { 
             detail: { signals, timestamp: Date.now() }
           }));
@@ -3217,7 +3394,7 @@ const SignalsCard: React.FC = () => {
       clearInterval(intervalId);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [displayedSignals, calculateNextTime]);
+  }, [calculateNextTime]); // REMOVIDO displayedSignals das dependências - usa displayedSignalsRef
 
   // Efeito para iniciar o carregamento dos sinais - com ref para evitar loop
   const isRefreshingRef = useRef(false);
@@ -3305,7 +3482,7 @@ const SignalsCard: React.FC = () => {
       // Reduzimos de 10s para 2s para não pular a verificação inicial que ocorre aos 5s
       const MOUNT_SKIP_MS = 2000; // 2 segundos
       if (mountTime > 0 && timeSinceMounting < MOUNT_SKIP_MS) {
-        console.log(`⏱️ Componente montado recentemente (${Math.floor(timeSinceMounting/1000)}s atrás) - ignorando verificação imediata`);
+        // Componente montado recentemente (silenciado)
         window.isRotating = false;
         return;
       }
@@ -3322,7 +3499,7 @@ const SignalsCard: React.FC = () => {
       window.isRotating = true;
       window.lastRotationStarted = now.getTime();
       
-      console.log('🔄 INICIANDO VERIFICAÇÃO DE ROTAÇÃO AUTOMÁTICA');
+      // INICIANDO VERIFICAÇÃO (silenciado)
 
       // CAMADA 2: Verificar se há sinais para processar
       let signalsToRotate = displayedSignals;
@@ -3446,7 +3623,7 @@ const SignalsCard: React.FC = () => {
         return;
       }
       
-      console.log(`ℹ️ Primeiro sinal: ${firstSignal.symbol} com entrada às ${firstSignal.entry_time}`);
+      // Primeiro sinal (silenciado)
       
       // CAMADA 4: Calcular timestamp do horário de entrada usando parseTimeString
       // parseTimeString já aplica heurística para dias (não força para ontem horários futuros próximos)
@@ -3458,15 +3635,14 @@ const SignalsCard: React.FC = () => {
       const minutesSinceEntry = Math.floor(millisSinceEntry / (1000 * 60));
 
       // Log detalhado para diagnóstico
-      console.log(`⏱️ VERIFICAÇÃO DE ROTAÇÃO: Sinal ${firstSignal.symbol} ativo há EXATOS ${minutesSinceEntry} minutos`);
-      console.log(`⏱️ Entrada (interpretada): ${entryDate.toLocaleTimeString()} | Agora: ${now.toLocaleTimeString()}`);
+      // VERIFICAÇÃO DE ROTAÇÃO (silenciado)
 
       // Se a entrada ainda está no futuro, informar quanto falta para a entrada e para a rotação
       if (minutesSinceEntry < 0) {
         const minutesToEntry = Math.ceil(Math.abs(millisSinceEntry) / (1000 * 60));
         const millisToRotation = entryDateTimestamp + SIGNAL_PROCESSING_TIME - now.getTime();
         const minutesToRotation = Math.max(0, Math.ceil(millisToRotation / (1000 * 60)));
-        console.log(`⏱️ Entrada futura: falta ${minutesToEntry} minutos até a entrada; até rotação: ${minutesToRotation} minutos`);
+        // Entrada futura (silenciado)
         window.isRotating = false;
         return;
       }
@@ -3475,13 +3651,13 @@ const SignalsCard: React.FC = () => {
       const shouldRotate = minutesSinceEntry >= Math.floor(SIGNAL_PROCESSING_TIME / (1000 * 60));
 
       if (!shouldRotate) {
-        console.log(`⏱️ Ainda não é hora de rotacionar - faltam ${Math.max(0, Math.floor((SIGNAL_PROCESSING_TIME / (1000 * 60)) - minutesSinceEntry))} minutos`);
+        // Ainda não é hora (silenciado)
         window.isRotating = false;
         return;
       }
       
       // CAMADA 6: Executar rotação real
-      console.log('🔄 EXECUTANDO ROTAÇÃO DE SINAIS (20+ minutos desde entrada do primeiro sinal)');
+      // EXECUTANDO ROTAÇÃO (silenciado)
       
       // Extrair os 3 sinais atuais para realizar a rotação
       const currentSignals = [...signalsToRotate].filter(signal => [1, 2, 3].includes(signal.position));
@@ -3493,9 +3669,9 @@ const SignalsCard: React.FC = () => {
         return;
       }
       
-      console.log('\n--- ANTES DA ROTAÇÃO ---');
+      // ANTES DA ROTAÇÃO (silenciado)
       currentSignals.forEach((signal, index) => {
-        console.log(`${index + 1}. ${signal.symbol} - ${signal.entry_time}`);
+        // Sinal (silenciado)
       });
       
       // Remover o primeiro sinal (que será substituído pelo segundo)
@@ -3503,7 +3679,7 @@ const SignalsCard: React.FC = () => {
       
       // Verificar qual será o próximo horário válido para o novo sinal (posição 3)
       const nextEntryTime = getNextValidTime(now.getHours() + ':' + now.getMinutes(), firstToRemove.entry_time);
-      console.log(`⏱️ Próximo horário válido para novo sinal: ${nextEntryTime}`);
+      // Próximo horário válido (silenciado)
       // Gerar novo terceiro sinal escolhendo símbolo que não esteja nas 2 primeiras posições
       const existingSymbols = [secondToFirst.symbol, thirdToSecond.symbol];
       const chosenSymbol = pickNextSymbol(existingSymbols);
@@ -3524,21 +3700,10 @@ const SignalsCard: React.FC = () => {
       // Adicionar o novo terceiro sinal
       updatedSignals.push(newThirdSignal);
       
-      console.log('\n--- DEPOIS DA ROTAÇÃO ---');
-      updatedSignals
-        .filter(s => [1, 2, 3].includes(s.position))
-        .sort((a, b) => a.position - b.position)
-        .forEach((signal, index) => {
-          console.log(`${index + 1}. ${signal.symbol} - ${signal.entry_time}`);
-        });
+      // DEPOIS DA ROTAÇÃO (silenciado)
       
       // Atualizar estado com a nova lista de sinais
-      console.log('\n✅ Atualizando sinais na dashboard com rotação:');
-      console.log(`   1º removido: ${firstToRemove.symbol}`);
-      console.log(`   2º → 1º: ${secondToFirst.symbol}`);
-      console.log(`   3º → 2º: ${thirdToSecond.symbol}`);
-      console.log(`   Novo 3º: ${newThirdSignal.symbol} (${nextEntryTime})`);
-      console.log('='.repeat(50));
+      // Atualizando sinais (silenciado)
       
       // Garantir que cada sinal tenha a propriedade position correta (1, 2, 3)
       const finalSignals = updatedSignals.map((signal, index) => ({
@@ -3555,12 +3720,18 @@ const SignalsCard: React.FC = () => {
       
       // CORREÇÃO DE SINCRONIZAÇÃO: Garantir que os sinais são enviados para a aba Trades
       saveDashboardSignalsForSync(finalSignals);
-      console.log('✅ SINCRONIZAÇÃO: Sinais enviados para aba Trades');
+      // SINCRONIZAÇÃO (silenciado)
       
-      console.log('🔄 ROTAÇÃO CONCLUÍDA COM SUCESSO:');
-      finalSignals.forEach((signal, idx) => {
-        console.log(`   • Posição ${idx+1}: ${signal.symbol} (${signal.entry_time})`);
-      });
+      // ✅ Disparar evento customizado para notificar aba Trades
+      window.dispatchEvent(new CustomEvent('signalsRotated', {
+        detail: {
+          signals: finalSignals,
+          timestamp: Date.now()
+        }
+      }));
+      // Evento disparado para Trades
+      
+      // ROTAÇÃO CONCLUÍDA (silenciado)
     } catch (error) {
       console.error('❌ ERRO durante rotação:', error);
     } finally {
@@ -3576,8 +3747,13 @@ const SignalsCard: React.FC = () => {
     configurable: true
   });
 
-  // TIMER ÚNICO E DEFINITIVO: Sistema de rotação automática ULTRA-ROBUSTO
+  // ❌❌❌ TIMER OBSOLETO: Rotação é feita no SUPABASE, não no cliente! ❌❌❌
+  // A função rotate_signals() no Supabase faz a rotação automática
+  // Este useEffect foi DESATIVADO para eliminar logs obsoletos
   useEffect(() => {
+    // Timer client-side desativado
+    return; // RETURN EARLY - não executar lógica obsoleta
+    
     // LIMPEZA COMPLETA: Remover TODOS os timers existentes para garantir que não há duplicação
     console.log('🧹 LIMPEZA GLOBAL: Removendo todos os timers existentes');
     
@@ -3776,7 +3952,7 @@ const SignalsCard: React.FC = () => {
         setTimeout(() => setRefreshButtonState('idle'), 3000);
       }, 500);
     }, 500);
-  }, [displayedSignals, isSignalOutdated, generateNewSignals, registerPersistentTimer]);
+  }, [isSignalOutdated, generateNewSignals, registerPersistentTimer]); // REMOVIDO displayedSignals das dependências
 
   // EFEITO DE PRESERVAÇÃO DESABILITADO: Interferia com rotação
   // useEffect(() => {
@@ -3810,15 +3986,7 @@ const SignalsCard: React.FC = () => {
 
 
 
-  // 🔒 EFEITO BLOQUEADOR: Impede mudanças de sinais durante período fixo
-  useEffect(() => {
-    // Interceptar qualquer tentativa de mudança dos sinais
-    const originalSetDisplayedSignals = setDisplayedSignals;
-    
-    // Substituir temporariamente a função para aplicar filtro
-    // Sistema simplificado - usar setDisplayedSignals direto
-    
-  }, []);
+  // 🔒 EFEITO BLOQUEADOR REMOVIDO: Era vazio e não fazia nada útil
 
   // ❌ SINCRONIZAÇÃO COM PÁGINA SIGNALS REMOVIDA: Evitar interferências na rotação
   // A sincronização será feita apenas durante a rotação controlada
@@ -3847,7 +4015,7 @@ const SignalsCard: React.FC = () => {
   // Efeito para inicializar consistentemente o localStorage na montagem
   useEffect(() => {
     try {
-      console.log('🚀 Inicializando SignalsCard - verificando consistência do localStorage');
+      // Inicializando SignalsCard
       
       // Marcar componente como montado
       window.signalsCardMounted = true;
@@ -3874,7 +4042,7 @@ const SignalsCard: React.FC = () => {
             
             // Se os dados são recentes (menos de 2 horas)
             if (dataAge < 2 * 60 * 60 * 1000) {
-              console.log('✅ Dados do localStorage válidos e recentes');
+              // Dados válidos
               setDisplayedSignals(signals);
             } else {
               console.log('⚠️ Dados do localStorage muito antigos - serão renovados');
@@ -3901,7 +4069,7 @@ const SignalsCard: React.FC = () => {
     return () => {
       // Limpar flag de componente montado ao desmontar
       window.signalsCardMounted = false;
-      console.log('🧹 SignalsCard desmontado - flag removida');
+      // SignalsCard desmontado
     };
   }, []);
 
@@ -3912,7 +4080,7 @@ const SignalsCard: React.FC = () => {
     const loadTraderLink = async () => {
       try {
         const link = await traderLinkService.getCurrentTraderLink();
-        console.log('📌 SignalsCard - Link do trader carregado:', link);
+        // Link do trader carregado (silenciado)
         setTraderLink(link);
       } catch (error) {
         console.error('❌ SignalsCard - Erro ao carregar link do trader:', error);
@@ -4096,8 +4264,11 @@ const SignalsCard: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Timer automático ULTRA-ESTÁVEL para rotação de sinais  
+  // ❌❌❌ TIMER OBSOLETO 2: Rotação é feita no SUPABASE, não no cliente! ❌❌❌  
   useEffect(() => {
+    // Timer automático desativado
+    return; // RETURN EARLY - não executar lógica obsoleta
+    
     // Timer único que verifica periodicamente SEM depender de displayedSignals
     console.log('⏰ Timer de rotação ULTRA-ESTÁVEL ativado - verificando a cada 30 segundos');
     
@@ -4299,7 +4470,7 @@ const SignalsCard: React.FC = () => {
                     <div className="flex justify-between items-start">
                       <div className="flex flex-col">
                         <div className="flex items-center">
-                          <span className="font-semibold text-white/90">{signal.symbol}</span>
+                          <span className="font-semibold text-white/90">{signal.display_name || signal.symbol}</span>
                           <Badge className={`ml-2 text-[10px] py-0 h-4 ${getTypeColor(signal.signal)}`}>
                             {signal.signal}
                           </Badge>
@@ -4372,53 +4543,93 @@ const SignalsCard: React.FC = () => {
     );
   }
 
+  // ✅ CORREÇÃO: Tentar carregar sinais do cache antes de mostrar erro
   if (error) {
-    return (
-      <Card className="h-full shadow-md border border-white/5 bg-black/20">
-        <CardHeader className="relative pb-2 border-b border-white/10">
-          <div className="absolute left-4 top-1/2 -translate-y-1/2">
-            <CardTitle className="text-sm font-light tracking-wide text-white/90">
-              {t('nav.signals')}
-            </CardTitle>
-          </div>
-          
-          <div className="absolute right-4 top-1/2 -translate-y-1/2">
-            <div className="flex items-center space-x-2">
-              <TimeZoneSelector variant="compact" />
-            <Button 
-              size="sm" 
-              variant="ghost"
-              className="h-7 px-2 text-xs text-white/80 hover:text-white hover:bg-white/10"
-              onClick={() => navigate('/signals')}
-            >
-              <ChevronRight className="h-3.5 w-3.5 mr-1" />
-              {t('dashboard.signals.view_all')}
-            </Button>
+    // Verificar se há sinais em cache antes de mostrar erro
+    let cachedSignalsToUse: EnrichedSignal[] | null = null;
+    
+    try {
+      // Tentar carregar do cache da aba Trades
+      const tradesData = localStorage.getItem('tradesSignals');
+      if (tradesData) {
+        const parsedData = JSON.parse(tradesData);
+        if (parsedData?.signals && Array.isArray(parsedData.signals) && parsedData.signals.length >= 3) {
+          cachedSignalsToUse = parsedData.signals.slice(0, 3);
+        }
+      }
+      
+      // Se não achou nos Trades, tentar no cache do Dashboard
+      if (!cachedSignalsToUse) {
+        const dashboardCache = localStorage.getItem('dashboard-signals-cache');
+        if (dashboardCache) {
+          const parsedCache = JSON.parse(dashboardCache);
+          if (parsedCache?.signals && Array.isArray(parsedCache.signals) && parsedCache.signals.length >= 3) {
+            cachedSignalsToUse = parsedCache.signals.slice(0, 3);
+          }
+        }
+      }
+    } catch (e) {
+      console.error('⚠️ Erro ao tentar recuperar sinais do cache:', e);
+    }
+    
+    // Se encontrou sinais em cache, usar eles ao invés de mostrar erro
+    if (cachedSignalsToUse && cachedSignalsToUse.length >= 3) {
+      // Atualizar displayedSignals com os sinais do cache
+      if (displayedSignals.length === 0) {
+        setDisplayedSignals(cachedSignalsToUse);
+      }
+      
+      // Não mostrar erro, continuar renderização normal
+      // (o fluxo vai cair no próximo if abaixo)
+    } else {
+      // Realmente não há sinais disponíveis - mostrar erro
+      return (
+        <Card className="h-full shadow-md border border-white/5 bg-black/20">
+          <CardHeader className="relative pb-2 border-b border-white/10">
+            <div className="absolute left-4 top-1/2 -translate-y-1/2">
+              <CardTitle className="text-sm font-light tracking-wide text-white/90">
+                {t('nav.signals')}
+              </CardTitle>
             </div>
-          </div>
-          
-          <div className="h-8"></div>
-        </CardHeader>
-        <CardContent className="p-0 pt-4">
-          <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
-            <div className="w-12 h-12 rounded-full bg-amber-500/10 flex items-center justify-center mb-4">
-              <AlertTriangle className="w-6 h-6 text-amber-400" />
+            
+            <div className="absolute right-4 top-1/2 -translate-y-1/2">
+              <div className="flex items-center space-x-2">
+                <TimeZoneSelector variant="compact" />
+              <Button 
+                size="sm" 
+                variant="ghost"
+                className="h-7 px-2 text-xs text-white/80 hover:text-white hover:bg-white/10"
+                onClick={() => navigate('/signals')}
+              >
+                <ChevronRight className="h-3.5 w-3.5 mr-1" />
+                {t('dashboard.signals.view_all')}
+              </Button>
+              </div>
             </div>
-            <h3 className="text-sm font-medium text-white/90 mb-1">{t('dashboard.signals.loading_error')}</h3>
-            <p className="text-xs text-white/60 mb-4 max-w-[240px]">{t('dashboard.signals.loading_error_desc')}</p>
-            <Button 
-              variant="outline" 
-              size="sm"
-              onClick={() => refetch()}
-              className="text-xs bg-white/5 border-white/10 hover:bg-white/10"
-            >
-              <RefreshCw className="h-3.5 w-3.5 mr-2" />
-              {t('dashboard.refresh.all')}
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-    );
+            
+            <div className="h-8"></div>
+          </CardHeader>
+          <CardContent className="p-0 pt-4">
+            <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
+              <div className="w-12 h-12 rounded-full bg-amber-500/10 flex items-center justify-center mb-4">
+                <AlertTriangle className="w-6 h-6 text-amber-400" />
+              </div>
+              <h3 className="text-sm font-medium text-white/90 mb-1">{t('dashboard.signals.loading_error')}</h3>
+              <p className="text-xs text-white/60 mb-4 max-w-[240px]">{t('dashboard.signals.loading_error_desc')}</p>
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => refetch()}
+                className="text-xs bg-white/5 border-white/10 hover:bg-white/10"
+              >
+                <RefreshCw className="h-3.5 w-3.5 mr-2" />
+                {t('dashboard.refresh.all')}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      );
+    }
   }
 
   if (!displayedSignals || displayedSignals.length === 0) {
@@ -4514,7 +4725,7 @@ const SignalsCard: React.FC = () => {
                     <div className="flex justify-between items-start">
                       <div className="flex flex-col">
                         <div className="flex items-center">
-                          <span className="font-semibold text-white/90">{signal.symbol}</span>
+                          <span className="font-semibold text-white/90">{signal.display_name || signal.symbol}</span>
                           <Badge className={`ml-2 text-[10px] py-0 h-4 ${getTypeColor(signal.signal)}`}>
                             {signal.signal}
                           </Badge>
@@ -4730,7 +4941,7 @@ const SignalsCard: React.FC = () => {
                         </div>
                         
                         <div className="ml-3">
-                          <h3 className="font-medium text-base">{signal.symbol}</h3>
+                          <h3 className="font-medium text-base">{signal.display_name || signal.symbol}</h3>
                           <div className="flex items-center mt-0.5 text-xs text-white/60 signal-time-badge">
                             <Tag className="h-3 w-3 mr-1" />
                             <span>{signal.exchange || inferExchangeCategory(signal.symbol)}</span>

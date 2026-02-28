@@ -1,0 +1,8 @@
+{
+  "supabase": {
+    "url": "https://arkrjextwpwqhrvcijyr.supabase.co",
+    "key": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFya3JqZXh0d3B3cWhydmNpanlyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njg5MDM4OTUsImV4cCI6MjA4NDQ3OTg5NX0.qAmrahULxsyZsmwwSR1FbEclNMwLe-vnUeAvpxDTdkY",
+    "serviceKey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFya3JqZXh0d3B3cWhydmNpanlyIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2ODkwMzg5NSwiZXhwIjoyMDg0NDc5ODk1fQ.2acjkcHYdKAT7jDCJP5b9nAl0J81vgZxwaZaJ-opnKk",
+    "jwtSecret": ""
+  }
+} 

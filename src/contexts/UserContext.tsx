@@ -22,7 +22,7 @@ const REACT_VALIDATION = (() => {
     
     const allValid = checks.every(check => check === true);
     if (import.meta.env.DEV) {
-      console.log('🔍 [UserContext] Verificação React:', allValid ? '✅ PASSOU' : '❌ FALHOU');
+      // Verificação React
     }
     return allValid;
   } catch (error) {
@@ -63,8 +63,7 @@ const SecureUserProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const savedName = getSavedUserName();
       const result = savedName?.trim() || "";
       if (import.meta.env.DEV) {
-        console.log('🏁 [UserContext] Estado inicial userName:', result);
-        console.log('🏁 [UserContext] localStorage user-name:', localStorage.getItem('user-name'));
+        // Estado inicial userName
       }
       return result;
     } catch (error) {
@@ -80,7 +79,7 @@ const SecureUserProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const savedAvatar = getSavedAvatar();
       const result = savedAvatar?.trim() || null;
       if (import.meta.env.DEV) {
-        console.log('🏁 [UserContext] Estado inicial avatarUrl:', result);
+        // Estado inicial avatarUrl
       }
       return result;
     } catch (error) {
@@ -166,7 +165,7 @@ const SecureUserProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const fetchUserData = React.useCallback(async (): Promise<void> => {
     try {
       if (import.meta.env.DEV) {
-        console.log('🔍 [UserContext] === INICIANDO BUSCA DE DADOS ===');
+        // Iniciando busca de dados
       }
       
       let userData: Awaited<ReturnType<typeof typedSupabase.auth.getUser>>['data'] | null = null;
@@ -213,13 +212,13 @@ const SecureUserProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         
         userId = userData.user.id;
         if (import.meta.env.DEV) {
-          console.log(`📍 [UserContext] Processando usuário: ${userId}`);
+          // Processando usuário
         }
         
         // 🏦 ESTRATÉGIA 1: Banco de dados (prioridade máxima)
         try {
           if (import.meta.env.DEV) {
-            console.log('🔍 [UserContext] Consultando banco de dados...');
+            // Consultando banco
           }
           const { data: profileData, error: profileError } = await typedSupabase
             .from('user_profiles')
@@ -233,15 +232,14 @@ const SecureUserProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             }
           } else if (profileData) {
             if (import.meta.env.DEV) {
-              console.log('✅ [UserContext] Dados encontrados no banco:', profileData);
+              // Dados encontrados
             }
             
             if (profileData.display_name?.trim()) {
               newDisplayName = profileData.display_name.trim();
               localStorage.setItem("user-name", newDisplayName);
               if (import.meta.env.DEV) {
-                console.log(`👤 [UserContext] Nome do banco CARREGADO: "${newDisplayName}"`);
-                console.log(`📦 [UserContext] Nome salvo no localStorage: "${newDisplayName}"`);
+                // Nome carregado do banco
               }
             }
             
@@ -249,7 +247,7 @@ const SecureUserProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               newAvatarUrl = profileData.avatar_url.trim();
               localStorage.setItem("user-avatar", newAvatarUrl);
               if (import.meta.env.DEV) {
-                console.log(`🖼️ [UserContext] Avatar do banco: "${newAvatarUrl}"`);
+                // Avatar carregado
               }
             }
           }
@@ -372,10 +370,6 @@ const SecureUserProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         let hasChanges = false;
         
         if (newDisplayName && newDisplayName !== userName) {
-          if (import.meta.env.DEV) {
-            console.log(`🔄 [UserContext] Atualizando userName: "${userName}" → "${newDisplayName}"`);
-            console.log(`🎯 [UserContext] Estado userName será atualizado para: "${newDisplayName}"`);
-          }
           setUserName(newDisplayName);
           
           window.dispatchEvent(new CustomEvent('username-updated', {
@@ -383,16 +377,9 @@ const SecureUserProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           }));
           
           hasChanges = true;
-          
-          if (import.meta.env.DEV) {
-            console.log(`✅ [UserContext] Evento username-updated disparado com: "${newDisplayName}"`);
-          }
         }
         
         if (newAvatarUrl !== avatarUrl) {
-          if (import.meta.env.DEV) {
-            console.log(`🔄 [UserContext] Atualizando avatarUrl: "${avatarUrl}" → "${newAvatarUrl}"`);
-          }
           setAvatarUrl(newAvatarUrl);
           
           if (newAvatarUrl) {
@@ -402,18 +389,6 @@ const SecureUserProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           }
           
           hasChanges = true;
-        }
-        
-        if (import.meta.env.DEV) {
-          if (hasChanges) {
-            console.log('✅ [UserContext] Estados atualizados com sucesso');
-          } else {
-            console.log('ℹ️ [UserContext] Nenhuma mudança necessária nos estados');
-          }
-        }
-        
-        if (import.meta.env.DEV) {
-          console.log('✅ [UserContext] === BUSCA CONCLUÍDA COM SUCESSO ===');
         }
         
       } catch (authCheckError) {
@@ -435,58 +410,33 @@ const SecureUserProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // 🔧 FUNÇÃO DE ATUALIZAÇÃO DE PERFIL - ULTRA SEGURA
   const updateProfile = React.useCallback(async (data: { name?: string; avatar?: string | null; display_name?: string }): Promise<void> => {
     try {
-      if (import.meta.env.DEV) {
-        console.log('🔧 [UserContext] === INICIANDO ATUALIZAÇÃO DE PERFIL ===', data);
-      }
-      
       const { data: userData, error: authError } = await typedSupabase.auth.getUser();
-      if (authError) {
-        if (import.meta.env.DEV) {
-          console.warn('⚠️ [UserContext] Erro de autenticação na atualização:', authError);
-        }
-        return;
-      }
-      
-      if (!userData?.user) {
-        if (import.meta.env.DEV) {
-          console.warn('⚠️ [UserContext] Usuário não autenticado para atualização');
-        }
+      if (authError || !userData?.user) {
         return;
       }
 
       const userId = userData.user.id;
-      if (import.meta.env.DEV) {
-        console.log(`📍 [UserContext] Atualizando perfil do usuário: ${userId}`);
-      }
       
       // 👤 ATUALIZAR NOME SE FORNECIDO
       if (data.name?.trim() || data.display_name?.trim()) {
         const newName = (data.display_name || data.name)!.trim();
-        if (import.meta.env.DEV) {
-          console.log(`👤 [UserContext] Processando novo nome: "${newName}"`);
-        }
         
         setUserName(newName);
         localStorage.setItem("user-name", newName);
         
         try {
           await saveUserName(newName, userId, true);
-          if (import.meta.env.DEV) {
-            console.log('✅ [UserContext] Nome salvo no banco com sucesso');
-          }
         } catch (saveError) {
-          if (import.meta.env.DEV) {
-            console.warn('⚠️ [UserContext] Erro ao salvar nome no banco:', saveError);
-          }
+          console.error('Erro ao salvar nome no banco:', saveError);
         }
+        
+        window.dispatchEvent(new CustomEvent('username-updated', {
+          detail: { userName: newName, fromUpdate: true }
+        }));
       }
       
       // 🖼️ ATUALIZAR AVATAR SE FORNECIDO
       if (data.avatar !== undefined) {
-        if (import.meta.env.DEV) {
-          console.log(`🖼️ [UserContext] Processando novo avatar: "${data.avatar}"`);
-        }
-        
         setAvatarUrl(data.avatar);
         
         if (data.avatar) {
@@ -497,34 +447,23 @@ const SecureUserProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         
         try {
           await updateUserAvatar(data.avatar);
-          if (import.meta.env.DEV) {
-            console.log('✅ [UserContext] Avatar salvo no banco com sucesso');
-          }
         } catch (saveError) {
-          if (import.meta.env.DEV) {
-            console.warn('⚠️ [UserContext] Erro ao salvar avatar no banco:', saveError);
-          }
+          console.error('Erro ao salvar avatar no banco:', saveError);
         }
       }
-      
-      if (import.meta.env.DEV) {
-        console.log('✅ [UserContext] === ATUALIZAÇÃO DE PERFIL CONCLUÍDA ===');
-      }
     } catch (error) {
-      if (import.meta.env.DEV) {
-        console.error('❌ [UserContext] ERRO CRÍTICO na atualização de perfil:', error);
-      }
+      console.error('❌ Erro crítico na atualização de perfil:', error);
     }
   }, []); // setUserName e setAvatarUrl são funções setState estáveis e não precisam estar nas dependências
     
   // 🔄 FUNÇÃO DE REFRESH - ULTRA SEGURA E SILENCIOSA
   const refreshUserData = React.useCallback(async (): Promise<void> => {
     if (import.meta.env.DEV) {
-      console.log('🔄 [UserContext] === INICIANDO REFRESH ===');
+      // Iniciando refresh
     }
     await fetchUserData();
     if (import.meta.env.DEV) {
-      console.log('✅ [UserContext] === REFRESH CONCLUÍDO ===');
+      // Refresh concluído
     }
   }, [fetchUserData]);
 
@@ -557,10 +496,6 @@ const SecureUserProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   React.useEffect(() => {
     const initializeProvider = async (): Promise<void> => {
       try {
-        if (import.meta.env.DEV) {
-          console.log('🚀 [UserContext] === INICIALIZANDO PROVIDER ===');
-        }
-        
         // Verificar sessão primeiro
         const hasSession = await checkSession();
         
@@ -569,35 +504,25 @@ const SecureUserProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           await fetchUserData();
           
           // Carregar configurações persistentes automaticamente
-        try {
-          const userSettings = loadUserSettings();
-            
+          try {
+            const userSettings = loadUserSettings();
+              
             if (userSettings.displayName && userSettings.displayName.trim() !== '') {
               setUserName(userSettings.displayName);
-          if (import.meta.env.DEV) {
-                console.log('✅ [UserContext] Nome carregado automaticamente:', userSettings.displayName);
-              }
-          }
-          
+            }
+            
             if (userSettings.avatarUrl) {
               setAvatarUrl(userSettings.avatarUrl);
-            if (import.meta.env.DEV) {
-                console.log('✅ [UserContext] Avatar carregado automaticamente:', userSettings.avatarUrl);
-              }
             }
           } catch (settingsError) {
             if (import.meta.env.DEV) {
-              console.warn('⚠️ [UserContext] Erro ao carregar configurações persistentes:', settingsError);
+              console.warn('⚠️ Erro ao carregar configurações persistentes:', settingsError);
+            }
           }
-        }
-        }
-        
-        if (import.meta.env.DEV) {
-          console.log('✅ [UserContext] Inicialização do provider concluída');
         }
       } catch (error) {
         if (import.meta.env.DEV) {
-          console.error('❌ [UserContext] Erro na inicialização do provider:', error);
+          console.error('❌ Erro na inicialização do provider:', error);
         }
       }
     };
@@ -607,10 +532,6 @@ const SecureUserProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     
     // Configurar listener para login bem-sucedido
     const handleAuthLoginSuccess = (event: Event) => {
-      if (import.meta.env.DEV) {
-        console.log('🔐 [UserContext] Login bem-sucedido detectado - recarregando dados');
-      }
-      
       setTimeout(async () => {
         try {
           await fetchUserData();
@@ -620,21 +541,15 @@ const SecureUserProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       
           if (userSettings.displayName && userSettings.displayName.trim() !== '') {
             setUserName(userSettings.displayName);
-            if (import.meta.env.DEV) {
-              console.log('✅ [UserContext] Nome carregado após login:', userSettings.displayName);
-            }
           }
           
           if (userSettings.avatarUrl) {
             setAvatarUrl(userSettings.avatarUrl);
-          if (import.meta.env.DEV) {
-              console.log('✅ [UserContext] Avatar carregado após login:', userSettings.avatarUrl);
-            }
           }
         } catch (error) {
           if (import.meta.env.DEV) {
-            console.warn('⚠️ [UserContext] Erro ao recarregar dados após login:', error);
-        }
+            console.warn('⚠️ Erro ao recarregar dados após login:', error);
+          }
         }
       }, 300);
     };
@@ -659,10 +574,7 @@ const SecureUserProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
     
     if (import.meta.env.DEV) {
-      console.log('📝 [UserContext] Contexto atualizado:', {
-        userName: value.userName,
-        avatarUrl: value.avatarUrl ? 'SET' : 'NULL'
-      });
+      // Contexto atualizado (silenciado)
     }
     
     return value;

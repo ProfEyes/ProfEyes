@@ -1,28 +1,69 @@
-// API Keys for various financial data services
+/**
+ * ⚠️ API KEYS - CONFIGURAÇÃO SEGURA
+ * 
+ * Este arquivo agora usa variáveis de ambiente (.env) para maior segurança.
+ * 
+ * ANTES (❌ INSEGURO):
+ * - Chaves hardcoded no código
+ * - Expostas no repositório Git
+ * - Risco de vazamento em commits
+ * 
+ * DEPOIS (✅ SEGURO):
+ * - Chaves em variáveis de ambiente
+ * - .env nunca commitado (no .gitignore)
+ * - Fácil rotação de chaves
+ * 
+ * SETUP:
+ * 1. Copie .env.example para .env
+ * 2. Preencha com suas chaves reais
+ * 3. NUNCA commite o arquivo .env
+ */
 
+// Helper para validar e obter variável de ambiente
+const getEnvVar = (key: string, fallback?: string): string => {
+  const value = import.meta.env[key] || fallback;
+  
+  if (!value) {
+    console.warn(`⚠️ Variável de ambiente ${key} não configurada. Usando fallback vazio.`);
+    return '';
+  }
+  
+  return value;
+};
+
+// API Keys carregadas de variáveis de ambiente
+// ⚠️ MANTEMOS APENAS: Binance (dados de preços) + Finnhub (notícias)
 export const API_KEYS = {
   BINANCE: {
-    API_KEY: 'pB3q3dkR2VvORmNfgvHvnb2mPmHAwRXZYew8ZyucprJITU8ZiHu0H6hHJqoAnc7r',
-    API_SECRET: 'wui3PhUUMKA1F2jKnAkOIdw7vbJnFRrSoxjJmsEj1MYskSQ2YKmgWpf2S7I7EMlp'
-  },
-  ALPHA_VANTAGE: {
-    API_KEY: 'R3BHKD32T0RNX19Q'
+    API_KEY: getEnvVar('VITE_BINANCE_API_KEY', ''),
+    API_SECRET: getEnvVar('VITE_BINANCE_API_SECRET', '')
   },
   FINNHUB: {
-    API_KEY: 'd1eamdpr01qjssriu5q0d1eamdpr01qjssriu5qg',
-    WEBHOOK: 'd1eamdpr01qjssriu5rg'
-  },
-  NEWS_API: {
-    API_KEY: '3f28acaf-96e1-42df-b5c7-57316a076c0c'
-  },
-  MARKET_STACK: {
-    API_KEY: '9fce4a91fe7e0745ebfb95715e05a4ce'
-  },
-  NEWSDATA_IO: {
-    API_KEY: 'pub_3551878a9c0e1b9e5f5a3e8a9c5a3e8a9c5a3e8a9c5a3e8a9c5a3e8a9c5a3e'
+    API_KEY: getEnvVar('VITE_FINNHUB_API_KEY', ''),
+    WEBHOOK: getEnvVar('VITE_FINNHUB_WEBHOOK', '')
   }
-};
+} as const;
 
 // Exportar as chaves individuais para uso pelo Binance API
 export const BINANCE_API_KEY = API_KEYS.BINANCE.API_KEY;
-export const BINANCE_API_SECRET = API_KEYS.BINANCE.API_SECRET; 
+export const BINANCE_API_SECRET = API_KEYS.BINANCE.API_SECRET;
+
+// Validação de chaves ao carregar (apenas em desenvolvimento)
+if (import.meta.env.DEV) {
+  const missingKeys: string[] = [];
+  
+  if (!API_KEYS.BINANCE.API_KEY) missingKeys.push('VITE_BINANCE_API_KEY');
+  if (!API_KEYS.BINANCE.API_SECRET) missingKeys.push('VITE_BINANCE_API_SECRET');
+  if (!API_KEYS.FINNHUB.API_KEY) missingKeys.push('VITE_FINNHUB_API_KEY');
+  
+  if (missingKeys.length > 0) {
+    console.warn(
+      `\n⚠️ ATENÇÃO: As seguintes chaves de API não estão configuradas:\n` +
+      missingKeys.map(key => `   - ${key}`).join('\n') +
+      `\n\n📝 Configure estas chaves no arquivo .env\n` +
+      `   Copie .env.example para .env e preencha os valores\n`
+    );
+  } else {
+    // Todas as chaves de API configuradas
+  }
+} 

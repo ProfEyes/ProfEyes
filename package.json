@@ -4,6 +4,8 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
+    "update-news": "node scripts/update-news-local.mjs",
+    "news-updater": "node scripts/start-news-updater.mjs",
     "dev": "vite",
     "dev:client": "vite",
     "dev:websocket": "node websocket-server.js",
@@ -84,6 +86,7 @@
     "embla-carousel-react": "^8.3.0",
     "framer-motion": "^12.4.10",
     "global": "^4.4.0",
+    "google-translate-api-x": "^10.7.2",
     "howler": "^2.2.4",
     "i18next": "^24.2.2",
     "i18next-browser-languagedetector": "^8.0.4",

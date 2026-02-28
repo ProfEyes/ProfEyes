@@ -1,8 +1,66 @@
 import React, { StrictMode } from "react";
 import { createRoot } from 'react-dom/client'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { PersistQueryClientProvider, persistQueryClientRestore } from '@tanstack/react-query-persist-client'
-import { createSyncStoragePersister } from '@tanstack/query-sync-storage-persister'
+
+// 🔇 Suprimir avisos de bibliotecas externas
+const originalWarn = console.warn;
+console.warn = (...args: any[]) => {
+  const message = args[0]?.toString() || '';
+  
+  // Suprimir avisos específicos de bibliotecas
+  if (
+    message.includes('React Router Future Flag Warning') ||
+    message.includes('Download the React DevTools') ||
+    message.includes('startTransition') ||
+    message.includes('v7_')
+  ) {
+    return; // Silenciar esses avisos
+  }
+  
+  // Manter outros avisos importantes
+  originalWarn.apply(console, args);
+};
+
+// ✅ CRÍTICO: Limpar APENAS caches de SINAIS (NUNCA tocar em auth!)
+// Limpando caches de sinais (silenciado)
+
+// Lista EXCLUSIVA de caches de sinais (NUNCA incluir auth, supabase, device, remember, etc.)
+const signalCacheKeys = [
+  'realtime_signals_cache',           // Dashboard (3 sinais)
+  'realtime_signals_cache_date',      // Data do cache do Dashboard
+  'extended_signals_cache',           // Aba Trades (7 sinais)
+  'extended_signals_cache_date',      // Data do cache da aba Trades
+  'tradesSignals',                    // Cache antigo
+  'dailyTradingSignals',              // Cache antigo
+  'dashboardSignals',                 // Cache antigo
+  'persistent-signals-navigation',    // Cache de navegação entre páginas
+  'trading-signals-cache',            // Cache adicional de trading
+  'daily-signals-cache',              // Cache adicional diário
+  'userNotifications',                // ✅ NOVO: Limpar notificações antigas do localStorage
+  'pre-signal-notification-cache'     // ✅ NOVO: Limpar cache de pré-sinais
+];
+
+// 🔥 VERIFICAÇÃO DE SEGURANÇA: NUNCA remover chaves de autenticação
+const protectedKeys = ['auth', 'supabase', 'device', 'remember', 'sb-'];
+
+signalCacheKeys.forEach(key => {
+  // Garantir que não é uma chave protegida
+  const isProtected = protectedKeys.some(protectedKey => key.toLowerCase().includes(protectedKey));
+  
+  if (isProtected) {
+    console.error(`❌ [SEGURANÇA] Tentativa de remover chave protegida bloqueada: ${key}`);
+    return;
+  }
+  
+  const hadCache = localStorage.getItem(key) !== null;
+  if (hadCache) {
+    // Removendo cache de sinal (silenciado)
+    localStorage.removeItem(key);
+  }
+});
+
+// Caches limpos (silenciado)
+
 import App from './App.tsx'
 import './index.css'
 import './global.css'
@@ -16,7 +74,6 @@ import { LanguageProvider } from './contexts/LanguageContext.tsx';
 import { TimeZoneProvider } from './contexts/TimeZoneContext.tsx';
 import { NotificationProvider } from './contexts/NotificationContext.tsx';
 import { TrendingNotificationProvider } from './contexts/TrendingNotificationContext.tsx';
-import { ThemeProvider } from './contexts/ThemeContext.tsx';
 import { AuthProvider } from './contexts/AuthContext';
 import { UserProvider } from './contexts/UserContext';
 import { Toaster } from 'sonner';
@@ -27,9 +84,22 @@ import { ensureCorrectPort } from './utils/portRedirect';
 import { getSupabase } from './lib/supabase';
 import { userService } from './services/userService';
 import { initVisibilityManager, setBackgroundMode } from './utils/visibilityManager';
+import { removeCachesByPattern } from './utils/cacheValidator';
 
 // ⚡ GARANTIR PORTA CORRETA ANTES DE QUALQUER COISA
 ensureCorrectPort();
+
+// 🗑️ LIMPEZA FORÇADA: Remover notificações antigas do localStorage
+try {
+  const oldNotifications = localStorage.getItem('userNotifications');
+  if (oldNotifications) {
+    localStorage.removeItem('userNotifications');
+    console.log('🗑️ Notificações antigas removidas do localStorage');
+  }
+  localStorage.removeItem('pre-signal-notification-cache');
+} catch (e) {
+  console.warn('Erro ao limpar notificações antigas:', e);
+}
 
 // Inicializar sistema de pré-carregamento de avatar para evitar flickering
 // e garantir persistência entre sessões
@@ -41,7 +111,7 @@ if (storedAvatar) {
   // Criar imagem em background para precarregar
   preloadImage(storedAvatar)
     .then(() => {
-      console.log('Avatar precarregado com sucesso na inicialização');
+      // Avatar precarregado (silenciado)
       // Notificar componentes sobre o avatar carregado
       window.dispatchEvent(new CustomEvent('avatar-loaded', { 
         detail: { avatarUrl: storedAvatar }
@@ -69,35 +139,105 @@ document.addEventListener('visibilitychange', () => {
   }
 });
 
-// Cria uma instância do QueryClient com configuração ajustada
+// ✅ SIMPLIFICAÇÃO: Limpeza única de chaves órfãs na primeira execução
+if (!sessionStorage.getItem('app-initialized')) {
+  // Primeira inicialização - limpando chaves órfãs
+  
+  const orphanKeys = [
+    'trending-react-query',
+    'REACT_QUERY_OFFLINE_CACHE',
+    'needs-sync',
+    'navigation-pending',
+    'form-dirty',
+    'unsaved-changes'
+  ];
+  
+  orphanKeys.forEach(key => {
+    if (localStorage.getItem(key) || sessionStorage.getItem(key)) {
+      // Removendo chave antiga (silenciado)
+      localStorage.removeItem(key);
+      sessionStorage.removeItem(key);
+    }
+  });
+  
+  sessionStorage.setItem('app-initialized', 'true');
+  // Limpeza concluída
+}
+
+// ✅ SIMPLIFICAÇÃO: React Query com configurações balanceadas + BACKGROUND
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 10 * 60 * 1000, // 10 minutos
-      gcTime: 20 * 60 * 1000, // 20 minutos (antigamente era cacheTime)
-      refetchOnWindowFocus: false,
-      retry: 1,
+      staleTime: 3 * 60 * 1000, // 3 minutos
+      gcTime: 10 * 60 * 1000, // 10 minutos
+      refetchOnWindowFocus: true,
+      refetchOnReconnect: true,
+      refetchOnMount: true,
+      refetchIntervalInBackground: true, // ✅ Continuar atualização em background
+      retry: 2,
     },
   },
-})
+});
 
-// Cria um persistidor para manter o estado do cache entre recarregamentos da página
-const persister = createSyncStoragePersister({
-  storage: window.localStorage,
-  key: 'trending-react-query',
-  throttleTime: 1000,
-})
+// React Query gerencia automaticamente refetch com refetchOnWindowFocus/refetchOnReconnect
 
-// Restaura o estado do cache se disponível
-try {
-  persistQueryClientRestore({ queryClient, persister })
-} catch (error) {
-  console.error('Erro ao restaurar o estado do cache:', error)
+// ✅ CORREÇÃO 3: Limpeza automática de localStorage (liberar espaço e evitar dados corrompidos)
+function cleanOldCacheData() {
+  try {
+    const keys = Object.keys(localStorage);
+    const now = Date.now();
+    const MAX_AGE = 7 * 24 * 60 * 60 * 1000; // 7 dias
+    let cleanedCount = 0;
+    
+    // Iniciando limpeza de cache
+    
+    keys.forEach(key => {
+      // Limpar dados com timestamp antigo
+      if (key.includes('_timestamp')) {
+        try {
+          const timestamp = parseInt(localStorage.getItem(key) || '0', 10);
+          if (now - timestamp > MAX_AGE) {
+            const dataKey = key.replace('_timestamp', '');
+            localStorage.removeItem(key);
+            localStorage.removeItem(dataKey);
+            cleanedCount++;
+            // Removido (silenciado)
+          }
+        } catch (e) {
+          console.warn(`⚠️ Erro ao processar ${key}:`, e);
+        }
+      }
+    });
+    
+    // ✅ Limitar cache de traduções (máximo 500 entradas)
+    try {
+      const translationCache = localStorage.getItem('translation_cache_google');
+      if (translationCache) {
+        const parsed = JSON.parse(translationCache);
+        const entries = Object.entries(parsed);
+        if (entries.length > 500) {
+          // Manter apenas as 500 mais recentes
+          const limited = Object.fromEntries(entries.slice(-500));
+          localStorage.setItem('translation_cache_google', JSON.stringify(limited));
+          // Cache reduzido (silenciado)
+          cleanedCount++;
+        }
+      }
+    } catch (e) {
+      console.warn('⚠️ Erro ao limitar cache de traduções:', e);
+    }
+    
+    // Limpeza concluída
+  } catch (error) {
+    console.warn('⚠️ Erro na limpeza de cache (não crítico):', error);
+  }
 }
 
+// Executar limpeza após 5 segundos (não bloqueia inicialização)
+setTimeout(cleanOldCacheData, 5000);
+
 // Log do ambiente
-console.log(`Ambiente de execução: ${import.meta.env.MODE}`);
-console.log(`Versão: ${import.meta.env.VITE_APP_VERSION || '1.0.0'}`);
+// Ambiente e versão (silenciado)
 
 // Obter instância única do Supabase para evitar múltiplas inicializações
 const supabaseInstance = getSupabase();
@@ -106,13 +246,38 @@ const supabaseInstance = getSupabase();
 // e permitir acesso em outros módulos
 (window as any).supabase = supabaseInstance;
 
-// Configurações do toast
+// Configurações do toast - Estilo Dark na parte inferior
 const toastOptions = {
-  position: 'top-center' as const,
-  duration: 3000,
+  position: 'bottom-right' as const,
+  duration: 5000,
   closeButton: true,
   richColors: true,
+  theme: 'dark' as const,
+  style: {
+    background: 'rgb(17, 24, 39)', // bg-gray-900
+    border: '1px solid rgb(55, 65, 81)', // border-gray-700
+    color: 'rgb(243, 244, 246)', // text-gray-100
+  },
 };
+
+// 🔥 Limpeza SEMPRE ao abrir nova aba/navegador (não confiar em timestamp)
+// Limpando todos os caches de sinais (silenciado)
+try {
+  // SEMPRE limpar - timestamp não garante idade dos DADOS dentro do cache
+  localStorage.removeItem('extended_signals_cache');
+  localStorage.removeItem('extended_signals_cache_date');
+  localStorage.removeItem('realtime_signals_cache');
+  localStorage.removeItem('realtime_signals_cache_date');
+  localStorage.removeItem('persistent-signals-navigation');
+  localStorage.removeItem('trading-signals-cache');
+  localStorage.removeItem('daily-signals-cache');
+  localStorage.removeItem('userNotifications'); // ✅ Limpar notificações antigas
+  localStorage.removeItem('pre-signal-notification-cache'); // ✅ Limpar cache de pré-sinais
+  
+  // Todos os caches limpos
+} catch (error) {
+  console.error('❌ [APP INIT] Erro durante limpeza:', error);
+}
 
 // Inicializar o gerenciador de visibilidade
 initVisibilityManager();
@@ -120,59 +285,138 @@ initVisibilityManager();
 // Habilitar o modo background por padrão
 setBackgroundMode(true);
 
+// ✅ SISTEMA APRIMORADO: Força atualização quando a aba volta do background
+let lastActiveTime = Date.now();
+let backgroundStartTime: number | null = null;
+const BACKGROUND_THRESHOLD = 15 * 1000; // 15 segundos (otimizado para responsividade)
+
+// ✅ POLLING ADICIONAL: Verificar periodicamente se deve forçar update (funciona mesmo em background)
+let backgroundCheckTimeout: NodeJS.Timeout | null = null;
+
+const scheduleBackgroundCheck = () => {
+  if (backgroundCheckTimeout) {
+    clearTimeout(backgroundCheckTimeout);
+  }
+  
+  backgroundCheckTimeout = setTimeout(() => {
+    // Se está em background, agendar próxima verificação
+    if (document.visibilityState === 'hidden' && backgroundStartTime) {
+      // Em background (silenciado)
+      
+      // Continuar verificando
+      scheduleBackgroundCheck();
+    }
+  }, 30000); // Verificar a cada 30 segundos
+};
+
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') {
+    const timeInBackground = backgroundStartTime ? Date.now() - backgroundStartTime : 0;
+    
+    // Aba voltou (silenciado)
+    
+    // Cancelar verificações de background
+    if (backgroundCheckTimeout) {
+      clearTimeout(backgroundCheckTimeout);
+      backgroundCheckTimeout = null;
+    }
+    backgroundStartTime = null;
+    
+    // Se ficou mais de 15 segundos em background, forçar atualização
+    if (timeInBackground > BACKGROUND_THRESHOLD) {
+      // Forçando atualização (silenciado)
+      
+      // 1. Invalidar todas as queries do React Query
+      queryClient.invalidateQueries();
+      
+      // 2. Disparar evento customizado para componentes específicos (Extended Signals, etc.)
+      window.dispatchEvent(new CustomEvent('force-update-after-background', {
+        detail: { timeInBackground }
+      }));
+      
+      // 3. Disparar evento adicional para Dashboard
+      window.dispatchEvent(new CustomEvent('force-refresh-signals', {
+        detail: { reason: 'background-return', timeInBackground }
+      }));
+      
+      // Eventos disparados (silenciado)
+    } else {
+      // Tempo curto (silenciado)
+    }
+    
+    lastActiveTime = Date.now();
+  } else {
+    // Quando a aba fica oculta, salvar o timestamp
+    // Aba foi para background (silenciado)
+    backgroundStartTime = Date.now();
+    lastActiveTime = Date.now();
+    
+    // Iniciar verificações periódicas em background
+    scheduleBackgroundCheck();
+  }
+});
+
 // Renderização do aplicativo
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <BrowserRouter>
-      <ThemeProvider>
-        <LanguageProvider>
-          <TimeZoneProvider>
-            <AuthProvider>
-              <UserProvider>
-                <NotificationProvider>
-                  <PersistQueryClientProvider
-                    client={queryClient}
-                    persistOptions={{ persister }}
-                    onSuccess={() => console.log('Cache restaurado com sucesso')}
-                  >
-                    <Toaster {...toastOptions} />
-                    <App />
-                  </PersistQueryClientProvider>
-                </NotificationProvider>
-              </UserProvider>
-            </AuthProvider>
-          </TimeZoneProvider>
-        </LanguageProvider>
-      </ThemeProvider>
+      <LanguageProvider>
+        <TimeZoneProvider>
+          <AuthProvider>
+            <UserProvider>
+              <NotificationProvider>
+                <QueryClientProvider client={queryClient}>
+                  <Toaster {...toastOptions} />
+                  <App />
+                </QueryClientProvider>
+              </NotificationProvider>
+            </UserProvider>
+          </AuthProvider>
+        </TimeZoneProvider>
+      </LanguageProvider>
     </BrowserRouter>
   </StrictMode>
 );
+
+// ✅ Importar serviço de notificações de sinais
+import { signalNotificationService } from './services/signalNotifications';
 
 // Verificar se a API do Supabase está acessível
 supabaseInstance.auth.getSession().then(({ data, error }) => {
   if (error) {
     console.warn('Erro ao verificar sessão do Supabase:', error.message);
   } else {
-    console.log('Conexão com Supabase estabelecida');
+    // Conexão estabelecida
     
     // Só inicializar o serviço de usuários se houver uma sessão ativa
     if (data?.session?.user) {
-      console.log('Sessão ativa detectada, inicializando serviços de usuário...');
+      // Sessão ativa (silenciado)
+      
+      // ✅ Inicializar serviço de notificações de sinais
+      signalNotificationService.initialize().then((success) => {
+        if (success) {
+          // Serviço inicializado (silenciado)
+        } else {
+          console.warn('⚠️ Serviço de notificações de sinais não pôde ser inicializado');
+        }
+      }).catch((err) => {
+        console.error('❌ Erro ao inicializar notificações de sinais:', err);
+      });
       
       // Inicializar o serviço de usuários para garantir persistência de perfis
       userService.init().then(() => {
-        console.log('Serviço de usuários inicializado com sucesso');
+        // Serviço inicializado (silenciado)
         
         // Tentar inicializar tabelas necessárias para persistência de dados
         // incluindo persistência de avatares e nomes em user_profiles
         try {
-          console.log('Inicializando serviços de migração de dados...');
+          // Migrações iniciadas (silenciado)
           
           // Importação dinâmica para não bloquear o carregamento inicial
           import('./scripts/migrateAvatarsToDb').then((module) => {
             const initAvatarMigration = module.default;
             initAvatarMigration();
-            console.log('Migração de avatares iniciada');
+            // Migração de avatares (silenciado)
           }).catch(err => {
             console.warn('Aviso: migração de avatares falhou:', err);
           });
@@ -181,7 +425,7 @@ supabaseInstance.auth.getSession().then(({ data, error }) => {
           import('./scripts/migrateUserNamesToDb').then((module) => {
             const initUserNameMigration = module.default;
             initUserNameMigration();
-            console.log('Migração de nomes de usuário iniciada');
+            // Migração de nomes (silenciado)
           }).catch(err => {
             console.warn('Aviso: migração de nomes falhou:', err);
           });
@@ -192,7 +436,7 @@ supabaseInstance.auth.getSession().then(({ data, error }) => {
         console.warn('Aviso: inicialização do serviço de usuários falhou:', err);
       });
     } else {
-      console.log('Nenhuma sessão ativa - serviços de usuário serão inicializados após login');
+      // Nenhuma sessão ativa
     }
   }
 });
@@ -205,9 +449,5 @@ checkPendingSyncOnLoad().catch(error => {
 // Iniciar serviço de persistência global
 const stopUserSettingsSync = startUserSettingsSyncService();
 
-// Registrar limpeza para quando a aplicação for fechada
-window.addEventListener('beforeunload', () => {
-  if (stopUserSettingsSync) {
-    stopUserSettingsSync();
-  }
-});
+// ✅ CORREÇÃO: Não usar beforeunload (causa aviso do navegador)
+// A limpeza será feita automaticamente pelo navegador

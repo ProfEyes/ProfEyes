@@ -131,6 +131,8 @@ class NotificationService {
     const directionEmoji = signal.signal === 'BUY' ? '📈' : '📉';
     const symbolName = signal.pair || signal.symbol || "Ativo";
     
+    // Preparando notificação
+    
     // Calcular horários de reentrada se disponíveis
     let reentryInfo = '';
     if (signal.entry_time) {
@@ -161,7 +163,6 @@ class NotificationService {
 📊 Ativo: ${symbolName}
 ${directionEmoji} Direção: ${directionText}
 ⏰ Entrada: ${signal.entry_time || 'A definir'}
-💰 Preço: ${signal.entry_price || signal.price || 'Preço atual'}
 📈 Expectativa: ${signal.success_rate ? (signal.success_rate * 100).toFixed(1) + '%' : 'Alta'}
 ⏱️ Expiração: ${signal.expiry || '5 minutos'}${reentryInfo}
 
@@ -210,17 +211,6 @@ ${directionEmoji} Direção: ${directionText}
         }
       };
       
-      // Reproduzir som de notificação se disponível
-      try {
-        const audio = new Audio('/sounds/signal.mp3');
-        audio.volume = 0.5;
-        audio.play().catch(() => {
-          // Ignorar erro se não conseguir reproduzir o som
-        });
-      } catch (error) {
-        // Ignorar erro de áudio
-      }
-      
     } catch (error) {
       console.error("Erro ao enviar notificação de sinal próximo:", error);
       
@@ -246,8 +236,8 @@ ${directionEmoji} Direção: ${directionText}
     
 📊 ${symbolName} - ${directionText}
 ⏰ Entrada: ${signal.entry_time || 'AGORA'}
-💰 Preço: ${signal.entry_price || signal.price || 'Preço atual'}
 ${directionEmoji} Direção: ${directionText}
+📈 Expectativa: ${signal.success_rate ? (signal.success_rate * 100).toFixed(1) + '%' : 'Alta'}
 
 🔥 ÚLTIMOS SEGUNDOS PARA ENTRAR!
 ⚡ Não perca esta oportunidade!`;
@@ -286,20 +276,6 @@ ${directionEmoji} Direção: ${directionText}
           }
         }
       };
-      
-      // Som mais urgente para o lembrete final
-      try {
-        const audio = new Audio('/sounds/alert.mp3');
-        audio.volume = 0.8;
-        audio.play().catch(() => {
-          // Fallback para som padrão
-          const fallbackAudio = new Audio('/sounds/signal.mp3');
-          fallbackAudio.volume = 0.8;
-          fallbackAudio.play().catch(() => {});
-        });
-      } catch (error) {
-        // Ignorar erro de áudio
-      }
       
     } catch (error) {
       console.error("Erro ao enviar lembrete final:", error);

@@ -43,7 +43,7 @@ const Instructions = () => {
     const loadTraderLink = async () => {
       try {
         const link = await traderLinkService.getCurrentTraderLink();
-        console.log('📌 Instructions - Link do trader carregado:', link);
+        // Link do trader (silenciado)
         setTraderLink(link);
       } catch (error) {
         console.error('❌ Instructions - Erro ao carregar link do trader:', error);

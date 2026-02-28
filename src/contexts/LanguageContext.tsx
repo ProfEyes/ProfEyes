@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import { userService } from '@/services/userService';
 import { geoLocationService } from '@/services/geoLocationService';
+import { supabase } from '@/lib/supabase';
 
 export type Language = 'pt' | 'en' | 'es';
 
@@ -502,7 +503,7 @@ const translations: TranslationsType = {
     'instructions.dominate.operations.desc': 'Siga o passo a passo para começar a operar com segurança',
     'instructions.first.steps': 'Primeiros passos',
     'instructions.register.broker': {
-      text: 'Faça seu cadastro na corretora através do link',
+      text: 'Faça seu cadastro na corretora através do botão',
       link: 'https://trade.avalonbroker.io/register?aff=385853&aff_model=revenue&afftrack=mesnagensfree'
     },
     'instructions.demo.account': 'Após cadastro, você receberá uma conta demo com R$10.000 para testes',
@@ -1099,7 +1100,7 @@ const translations: TranslationsType = {
     'instructions.dominate.operations.desc': 'Follow the step-by-step guide to start trading with confidence',
     'instructions.first.steps': 'First steps',
     'instructions.register.broker': {
-      text: 'Register with the broker through the link available in the App',
+      text: 'Register with the broker through the button',
       link: 'https://trade.avalonbroker.io/register?aff=385853&aff_model=revenue&afftrack=mesnagensfree'
     },
     'instructions.demo.account': 'After registration, you will receive a demo account with $10,000 for testing',
@@ -1694,7 +1695,7 @@ const translations: TranslationsType = {
     'instructions.dominate.operations.desc': 'Siga el paso a paso para comenzar a operar con confianza',
     'instructions.first.steps': 'Primeros pasos',
     'instructions.register.broker': {
-      text: 'Regístrese en el bróker a través del enlace disponible en la App',
+      text: 'Regístrese en el bróker a través del botón',
       link: 'https://trade.avalonbroker.io/register?aff=385853&aff_model=revenue&afftrack=mesnagensfree'
     },
     'instructions.demo.account': 'Después del registro, recibirá una cuenta demo con $10.000 para pruebas',
@@ -2017,29 +2018,25 @@ export const LanguageProvider = ({ children }: LanguageProviderProps) => {
         // Verificar se já detectamos o idioma anteriormente
         const detectionSource = localStorage.getItem('language-detection-source');
         if (detectionSource && !isLanguageDetected) {
-          console.log('🌍 [LanguageContext] Idioma já foi detectado anteriormente');
-          setIsLanguageDetected(true);
+                    setIsLanguageDetected(true);
           return;
         }
 
         // Verificar se o usuário já selecionou um idioma manualmente
         const userSelectedLanguage = localStorage.getItem('user-selected-language');
         if (userSelectedLanguage) {
-          console.log('🌍 [LanguageContext] Usuário já selecionou idioma manualmente');
-          setIsLanguageDetected(true);
+                    setIsLanguageDetected(true);
           return;
         }
 
         // Só detectar se não há idioma salvo ou se é a primeira visita
         const savedLanguage = localStorage.getItem('app-language');
         if (!savedLanguage || !isLanguageDetected) {
-          console.log('🌍 [LanguageContext] Iniciando detecção automática de idioma...');
-          
+                    
           const detectedLanguage = await geoLocationService.detectLanguageFromIP();
           
           if (detectedLanguage && detectedLanguage !== language) {
-            console.log(`🌍 [LanguageContext] Idioma detectado: ${detectedLanguage}`);
-            setLanguageState(detectedLanguage);
+                        setLanguageState(detectedLanguage);
             
             // Disparar evento para outros componentes
             window.dispatchEvent(new CustomEvent('language-auto-detected', {
@@ -2060,6 +2057,46 @@ export const LanguageProvider = ({ children }: LanguageProviderProps) => {
       detectLanguageFromIP();
     }
   }, [language, isLanguageDetected]);
+  
+  // ✅ NOVO: Efeito para carregar idioma do banco quando usuário logar
+  useEffect(() => {
+    const loadUserLanguageOnLogin = async () => {
+      try {
+        // Verificar se há usuário logado
+        const { data: { user } } = await supabase.auth.getUser();
+        
+        if (user && user.id) {
+          // Carregar idioma do banco
+          const { language: userLanguage } = await userService.getUserLanguage(user.id);
+          
+          // Se encontrou idioma no banco e é diferente do atual
+          if (userLanguage && userLanguage !== language) {
+            setLanguageState(userLanguage);
+            localStorage.setItem('app-language', userLanguage);
+            localStorage.setItem(`user-language-${user.id}`, userLanguage);
+          }
+        }
+      } catch (error) {
+        console.error('❌ [LanguageContext] Erro ao carregar idioma do usuário:', error);
+      }
+    };
+    
+    // Executar ao montar e quando o estado de autenticação mudar
+    loadUserLanguageOnLogin();
+    
+    // Listener para mudanças no estado de autenticação
+    const { data } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_IN' && session?.user) {
+        loadUserLanguageOnLogin();
+      }
+    });
+    
+    return () => {
+      if (data?.subscription) {
+        data.subscription.unsubscribe();
+      }
+    };
+  }, []); // Executar apenas uma vez ao montar
 
   // Efeito para verificar se existe um idioma associado a um usuário quando ele existir
   useEffect(() => {
@@ -2219,8 +2256,7 @@ export const LanguageProvider = ({ children }: LanguageProviderProps) => {
   // Função para forçar nova detecção de idioma baseada no IP
   const forceLanguageDetection = async (): Promise<Language> => {
     try {
-      console.log('🌍 [LanguageContext] Forçando nova detecção de idioma...');
-      
+            
       // Limpar cache de detecção
       geoLocationService.clearCache();
       localStorage.removeItem('language-detection-source');
@@ -2231,8 +2267,7 @@ export const LanguageProvider = ({ children }: LanguageProviderProps) => {
       
       if (detectedLanguage) {
         setLanguageState(detectedLanguage);
-        console.log(`🌍 [LanguageContext] Novo idioma detectado: ${detectedLanguage}`);
-        
+                
         // Disparar evento
         window.dispatchEvent(new CustomEvent('language-auto-detected', {
           detail: { language: detectedLanguage, source: 'forced-geolocation' }

@@ -1,11 +1,8 @@
 import { supabase } from "@/lib/supabase";
 import { MarketData as MarketDataType, TradingSignal as TradingSignalType } from "./types";
-import { getHistoricalKlines, getLatestPrices, getCurrentPrice, get24hStats, get24hPriceChange } from "./getSimulatedPrices";
+import { getHistoricalKlines, getCurrentPrice, get24hStats, get24hPriceChange, getLatestPrices } from "./binanceApi";
 import { determineDayTradeTrend, generateDayTradePattern, generateOrderBookAnalysis } from "./utils/tradingUtils";
 import { fetchCandles, fetchAnalystRecommendations, fetchPriceTarget } from "./finnhubApi";
-import { getBitstampPrice } from './bitstampApi';
-import { getBtcMarketCap } from './coinGeckoApi';
-import { Portfolio } from "./portfolioService";
 
 // Definindo interfaces locais para uso interno
 export interface MarketStatistic {
@@ -396,11 +393,7 @@ function determineMomentum(closes: number[], volumes: number[]): 'increasing' | 
 
 // Exportações para manter a compatibilidade com os componentes existentes
 export { fetchMarketNews } from './newsService';
-export { 
-  fetchPortfolio, 
-  type Portfolio,
-  type PortfolioAsset
-} from './portfolioService';
+// portfolioService foi removido na limpeza
 
 // Agora apenas exportando o que precisamos sem usar aliases
 // As duplicações serão evitadas no arquivo index.ts
@@ -415,7 +408,7 @@ export {
 //   comprehensiveAnalyzeAsset
 // } from './tradingSignals_fixed';
 
-export { analyzeSentiment } from './sentimentAnalysis';
+// sentimentAnalysis foi removido na limpeza
 
 export { getBinancePrice as getBinancePriceMarket };
 
@@ -508,21 +501,13 @@ export async function getMarketOrderBook(symbol: string, limit: number = 20): Pr
  * Busca o market cap para um símbolo
  * @param symbol Símbolo
  * @returns Market cap formatado ou undefined
+ * 
+ * ⚠️ NOTA: Valores aproximados baseados em dados históricos
+ * Em produção, considere integrar uma API de market cap atualizada
  */
 async function getMarketCap(symbol: string): Promise<number | undefined> {
-  if (symbol.includes('BTC') || symbol === 'BTCUSDT') {
-    try {
-      const marketCap = await getBtcMarketCap();
-      if (marketCap) {
-        return parseFloat(marketCap);
-      }
-    } catch (error) {
-      console.error('Erro ao obter market cap do Bitcoin:', error);
-    }
-  }
-  
-  // Valores simulados para outros ativos
-  const mockMarketCaps: Record<string, number> = {
+  // Valores aproximados de market cap
+  const marketCaps: Record<string, number> = {
     'ETHUSDT': 2.1e11, // 210 bilhões
     'BNBUSDT': 3.5e10, // 35 bilhões
     'XRPUSDT': 2.5e10, // 25 bilhões
@@ -536,7 +521,7 @@ async function getMarketCap(symbol: string): Promise<number | undefined> {
     'LINKUSDT': 6.2e9, // 6.2 bilhões
   };
   
-  return mockMarketCaps[symbol] || undefined;
+  return marketCaps[symbol] || undefined;
 }
 
 /**

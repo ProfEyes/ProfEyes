@@ -8,7 +8,6 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "@/contexts/AuthContext";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
-
 import { useNavigate } from "react-router-dom";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -141,8 +140,6 @@ const cn = (...classes: (string | boolean | undefined | null)[]) => {
   return classes.filter(Boolean).join(' ');
 };
 
-
-
 export default function Auth() {
   const { t, language, changeLanguage } = useLanguage();
   
@@ -160,18 +157,15 @@ export default function Auth() {
     // Verificar se acabou de se cadastrar ao inicializar o estado
     const justRegistered = sessionStorage.getItem('just-registered') === 'true';
     if (justRegistered) {
-      console.log('🎯 Inicializando Auth.tsx com signupSuccess=true devido à flag just-registered');
-    }
+          }
     return justRegistered;
   });
 
   // Função para carregar termos específicos do país e idioma
   const loadTermsForCountry = useCallback(async (targetLanguage?: string) => {
     try {
-      console.log('🏛️ [Auth] Carregando termos para idioma:', targetLanguage);
-      const terms = await termsAndConditionsService.getTermsForUserCountry(targetLanguage as 'pt' | 'en' | 'es');
-      console.log('🏛️ [Auth] Termos carregados:', terms.language, terms.country);
-      setTermsAndConditions(terms);
+            const terms = await termsAndConditionsService.getTermsForUserCountry(targetLanguage as 'pt' | 'en' | 'es');
+            setTermsAndConditions(terms);
     } catch (error) {
       console.error('🏛️ [Auth] Erro ao carregar termos:', error);
     }
@@ -179,8 +173,7 @@ export default function Auth() {
 
   // Carregar termos e condições específicos do país e idioma atual
   useEffect(() => {
-    console.log('🏛️ [Auth] useEffect carregando termos com idioma atual:', language);
-    loadTermsForCountry(language);
+        loadTermsForCountry(language);
   }, [loadTermsForCountry, language]);
     
   // Monitorar flag just-registered para garantir que tela de sucesso seja mantida
@@ -196,8 +189,7 @@ export default function Auth() {
       if (preventDashboardRedirect) {
         const expirationTime = localStorage.getItem('prevent_dashboard_redirect_expiration');
         if (expirationTime && parseInt(expirationTime) < Date.now()) {
-          console.log('🕒 Flag prevent_dashboard_redirect expirada, removendo...');
-          localStorage.removeItem('prevent_dashboard_redirect');
+                    localStorage.removeItem('prevent_dashboard_redirect');
           localStorage.removeItem('prevent_dashboard_redirect_expiration');
           preventDashboardRedirectValid = false;
         }
@@ -206,13 +198,7 @@ export default function Auth() {
       const cadastroConcluido = justRegistered || preventAuthRedirect || preventDashboardRedirectValid;
       
       if (cadastroConcluido && !signupSuccess) {
-        console.log('🔄 Flags de proteção encontradas: ativando tela de sucesso');
-        console.log('🔒 Proteções ativas:', { 
-          justRegistered, 
-          preventAuthRedirect, 
-          preventDashboardRedirect: preventDashboardRedirectValid 
-        });
-        
+                        
         setSignupSuccess(true);
         
         // Se temos o email armazenado, usar ele
@@ -236,8 +222,7 @@ export default function Auth() {
   useEffect(() => {
     const handleLanguageChange = (event: CustomEvent) => {
       const { language: newLanguage } = event.detail;
-      console.log('🌐 [Auth] Evento de mudança de idioma recebido:', newLanguage);
-      
+            
       // Recarregar termos para o novo idioma
       loadTermsForCountry(newLanguage);
     };
@@ -407,12 +392,11 @@ export default function Auth() {
     const forgot = url.searchParams.get('forgot');
     const urlPath = window.location.pathname;
     
-    console.log("Verificando URL para redefinição de senha:", window.location.href);
-    console.log("Pathname:", urlPath);
+    // Verificando URL
     
     // Se o parâmetro forgot=true, ativar o estado de esqueci a senha
     if (forgot === 'true') {
-      console.log("Ativando tela de recuperação de senha via parâmetro forgot");
+      // Ativando tela de recuperação (silenciado)
       setForgotPasswordState(true);
       // Limpar a URL dos parâmetros
       const cleanUrl = `${window.location.origin}/auth`;
@@ -427,7 +411,7 @@ export default function Auth() {
     // Se tivermos um código em qualquer lugar (parâmetro ou caminho), processar a redefinição
     const resetCode = code || pathCode;
     
-    console.log("Código de redefinição detectado:", resetCode);
+    // Código de redefinição
     
     // Se tiver o código de recuperação na URL, mostrar o formulário de redefinição
     if (resetCode) {
@@ -437,7 +421,7 @@ export default function Auth() {
       // Capturar o email da URL, se estiver presente
       const recoveryEmail = url.searchParams.get('email');
       if (recoveryEmail) {
-        console.log("Email de recuperação encontrado:", recoveryEmail);
+        // Email de recuperação encontrado (silenciado)
         setForgotPasswordEmail(recoveryEmail);
         setEmail(recoveryEmail);
       }
@@ -445,17 +429,17 @@ export default function Auth() {
       // Armazenar o código para uso posterior
       localStorage.setItem('passwordResetCode', resetCode);
       
-      console.log("Código de redefinição de senha armazenado:", resetCode);
+      // Código de redefinição (silenciado)
     }
     // Se for redefinição de senha pelo tipo recovery, mostrar o formulário apropriado
     else if (type === 'recovery') {
-      console.log("Tipo de redefinição 'recovery' detectado");
+      // Tipo recovery detectado (silenciado)
       setForgotPasswordState(true);
       
       // Capturar o email da URL, se estiver presente
       const recoveryEmail = url.searchParams.get('email');
       if (recoveryEmail) {
-        console.log("Email de recuperação encontrado:", recoveryEmail);
+        // Email de recuperação encontrado (silenciado)
         setForgotPasswordEmail(recoveryEmail);
         setEmail(recoveryEmail);
       }
@@ -470,16 +454,11 @@ export default function Auth() {
     const refreshToken = url.searchParams.get('refresh_token');
     const urlPath = window.location.pathname;
     
-    console.log("Verificando callback de confirmação:", {
-      pathname: urlPath,
-      type,
-      hasAccessToken: !!accessToken,
-      hasRefreshToken: !!refreshToken
-    });
+    // Verificando callback
     
     // Se for um callback de confirmação de email (rota /auth/callback ou parâmetros específicos)
     if ((urlPath.includes('/auth/callback') || type === 'signup') && accessToken && refreshToken) {
-      console.log("Callback de confirmação de email detectado");
+      // Callback de confirmação (silenciado)
       
       // Processar o callback automaticamente
       (supabase as SupabaseClient<Database>).auth.getSession().then(({ data: sessionData, error: sessionError }) => {
@@ -490,7 +469,7 @@ export default function Auth() {
         }
         
         if (sessionData?.session?.user) {
-          console.log("Sessão obtida com sucesso após callback");
+          // Sessão obtida (silenciado)
           
           // Mostrar mensagem de sucesso
           setEmailVerified(true);
@@ -500,7 +479,7 @@ export default function Auth() {
           window.history.replaceState({}, document.title, cleanUrl);
           
           // Email confirmado com sucesso
-          console.log('Email confirmado com sucesso! Sua conta foi ativada.');
+          // Email confirmado (silenciado)
           
           // Redirecionar para a aba de login após 3 segundos
           setTimeout(() => {
@@ -512,7 +491,7 @@ export default function Auth() {
             }
           }, 3000);
         } else {
-          console.log("Nenhuma sessão encontrada após callback");
+          // Nenhuma sessão (silenciado)
           // Mesmo sem sessão, mostrar sucesso pois o email foi confirmado
           setEmailVerified(true);
           
@@ -520,7 +499,7 @@ export default function Auth() {
           const cleanUrl = `${window.location.origin}/auth`;
           window.history.replaceState({}, document.title, cleanUrl);
           
-          console.log('Email confirmado com sucesso! Sua conta foi ativada.');
+          // Email confirmado (silenciado)
           
           setTimeout(() => {
             setEmailVerified(false);
@@ -928,19 +907,27 @@ export default function Auth() {
   // Função de login
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // handleLogin iniciado (silenciado)
 
     // Validar campos
     if (!validateLoginFields()) {
+      console.warn('⚠️ [AUTH] Validação de campos falhou');
       return;
     }
 
+    // Campos validados (silenciado)
     setLoadingAction('login');
     
     try {
+      // Chamando signInWithEmail (silenciado)
       const { error } = await signInWithEmail(email, password, true);
       
+      console.log('📬 [AUTH] Resposta do signInWithEmail recebida');
+      console.log('   ❌ Erro?', error ? 'SIM' : 'NÃO');
+      
       if (error) {
-        console.error('Erro no login:', error);
+        console.error('❌ [AUTH] Erro no login:', error);
         
         // Verificar se é uma chave de tradução
         if ('isTranslationKey' in error && (error as Record<string, unknown>).isTranslationKey) {
@@ -1124,8 +1111,7 @@ export default function Auth() {
       setTimeout(() => {
         sessionStorage.removeItem('just-registered');
         sessionStorage.removeItem('registered-email');
-        console.log('🧹 Flags limpas automaticamente após 5 minutos');
-      }, 5 * 60 * 1000);
+              }, 5 * 60 * 1000);
       
       // Limpa os campos
       setEmail("");
@@ -1526,8 +1512,7 @@ export default function Auth() {
               sessionStorage.removeItem('registered-email');
               sessionStorage.removeItem('prevent_auth_redirect');
               localStorage.removeItem('prevent_dashboard_redirect');
-              console.log('🧹 TODAS as flags de proteção limpas após clicar em Conferir Email');
-            }, 3000);
+                          }, 3000);
           }}
         >
           <CheckCheck className="h-4 w-4 mr-2 opacity-70 group-hover:opacity-90 transition-opacity" />
@@ -1543,8 +1528,7 @@ export default function Auth() {
             sessionStorage.removeItem('registered-email');
             sessionStorage.removeItem('prevent_auth_redirect');
             localStorage.removeItem('prevent_dashboard_redirect');
-            console.log('🧹 TODAS as flags de proteção limpas após clicar em Voltar para Login');
-            
+                        
             // Configurar o componente para mostrar formulário de login
             setSignupSuccess(false);
             setEmail("");
@@ -1552,8 +1536,7 @@ export default function Auth() {
             setConfirmPassword("");
             
             // Forçar a seleção da aba de login diretamente no estado
-            console.log('🔄 Forçando seleção da aba de login via estado React');
-            setActiveTab("login");
+                        setActiveTab("login");
           }}
         >
           <span className="text-xs">Voltar para Login</span>

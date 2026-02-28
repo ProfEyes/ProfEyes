@@ -3,21 +3,18 @@ import type { Database } from '@/types/supabase';
 import { PostgrestError, PostgrestFilterBuilder } from '@supabase/postgrest-js';
 
 // Variáveis para armazenar as instâncias singleton com verificação mais robusta
-const _supabaseInstance: SupabaseClient<Database> | null = null;
-const _supabaseNoPKCEInstance: SupabaseClient<Database> | null = null;
-const _supabaseAdminInstance: SupabaseClient<Database> | null = null;
+// 🔥 Mudado de const para let para permitir atualização
+let _supabaseInstance: SupabaseClient<Database> | null = null;
+let _supabaseNoPKCEInstance: SupabaseClient<Database> | null = null;
+let _supabaseAdminInstance: SupabaseClient<Database> | null = null;
 
 // Flag para garantir que as instâncias sejam criadas apenas uma vez
-const _instancesInitialized = false;
+let _instancesInitialized = false;
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://arkrjextwpwqhrvcijyr.supabase.co';
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFya3JqZXh0d3B3cWhydmNpanlyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njg5MDM4OTUsImV4cCI6MjA4NDQ3OTg5NX0.qAmrahULxsyZsmwwSR1FbEclNMwLe-vnUeAvpxDTdkY';
 
-// Log detalhado para debug
-console.log('🔍 DEBUG - Configuração Supabase:');
-console.log('   URL:', supabaseUrl);
-console.log('   Anon Key (primeiros 50 chars):', supabaseAnonKey.substring(0, 50) + '...');
-console.log('   VITE_SUPABASE_URL do env:', import.meta.env.VITE_SUPABASE_URL);
+// DEBUG - Configuração Supabase (silenciado)
 
 if (!supabaseUrl || !supabaseAnonKey) {
   throw new Error('Supabase URL and Anon Key são obrigatórios');
@@ -143,14 +140,25 @@ function createLazySupabaseClient(type: 'regular' | 'admin' | 'noPKCE') {
     get(target: Record<string, unknown>, prop: string) {
       // Inicializar instância sob demanda
       if (!instance) {
-        console.log(`📦 Criando cliente Supabase (${type}) sob demanda`);
-        console.log(`   URL para conexão: ${supabaseUrl}`);
+        // 🔥 VERIFICAR se já existe instância global antes de criar nova
+        if (typeof window !== 'undefined') {
+          const globalKey = type === 'regular' ? '__supabase_client' : type === 'admin' ? '__supabase_admin' : '__supabase_noPKCE';
+          const existingInstance = (window as unknown as Record<string, unknown>)[globalKey] as SupabaseClient<Database> | null;
+          
+          if (existingInstance) {
+            // Reutilizando instância
+            instance = existingInstance;
+            return instance[prop as keyof SupabaseClient];
+          }
+        }
+        
+        // Criando cliente Supabase
         try {
           switch (type) {
             case 'regular':
               // Extrair o project ref da URL para usar no storageKey
               const projectRef = supabaseUrl.split('//')[1].split('.')[0];
-              console.log(`📦 Usando storageKey: sb-${projectRef}-auth-token`);
+              // Usando storageKey
               
               instance = createClient(supabaseUrl, supabaseAnonKey, {
                 auth: {
@@ -169,6 +177,7 @@ function createLazySupabaseClient(type: 'regular' | 'admin' | 'noPKCE') {
               // Salvar referência global para evitar múltiplas instâncias
               if (typeof window !== 'undefined') {
                 (window as unknown as Record<string, unknown>).__supabase_client = instance;
+                _supabaseInstance = instance;
               }
               break;
               
@@ -191,6 +200,7 @@ function createLazySupabaseClient(type: 'regular' | 'admin' | 'noPKCE') {
               // Salvar referência global para evitar múltiplas instâncias
               if (typeof window !== 'undefined') {
                 (window as unknown as Record<string, unknown>).__supabase_admin = instance;
+                _supabaseAdminInstance = instance;
               }
               break;
             }
@@ -214,6 +224,7 @@ function createLazySupabaseClient(type: 'regular' | 'admin' | 'noPKCE') {
               // Salvar referência global para evitar múltiplas instâncias
               if (typeof window !== 'undefined') {
                 (window as unknown as Record<string, unknown>).__supabase_nopkce = instance;
+                _supabaseNoPKCEInstance = instance;
               }
               break;
           }
@@ -242,10 +253,9 @@ function createLazySupabaseClient(type: 'regular' | 'admin' | 'noPKCE') {
                   
                   while (attempts < maxAttempts) {
                     try {
-                      console.log(`🔄 Tentativa ${attempts + 1} de ${maxAttempts} para auth.${String(authMethod)}`);
-                      console.log(`   URL Supabase em uso: ${supabaseUrl}`);
+                      // Tentando auth
                       const result = await original.apply(authTarget, args);
-                      console.log(`✅ auth.${String(authMethod)} bem-sucedido`);
+                      // Auth bem-sucedido
                       return result;
                     // eslint-disable-next-line @typescript-eslint/no-explicit-any
                     } catch (error: any) {
@@ -480,19 +490,10 @@ export const saveUserAvatar = async (userId: string, avatarUrl: string): Promise
     
     console.log(`Salvando avatar para usuário ${userId}`);
     
-    // 1. Atualizar os metadados do usuário na tabela auth.users
-    const { data: authData, error: authError } = await (getSupabase() as SupabaseClient<Database>).auth.updateUser({
-      data: {
-        avatar_url: avatarUrl,
-        updated_at: new Date().toISOString()
-      }
-    });
+    // ✅ OTIMIZAÇÃO: NÃO atualizar auth.updateUser() aqui para evitar rate limit
+    // A atualização dos metadados será feita UMA ÚNICA VEZ no userPersistence.ts
     
-    if (authError) {
-      console.error("Erro ao atualizar avatar nos metadados:", authError);
-    }
-    
-    // 2. Atualizar a tabela user_profiles para persistência completa com fallback para admin
+    // 1. Atualizar APENAS a tabela user_profiles
     let profileError = null;
     try {
       const { error } = await (getSupabase() as SupabaseClient<Database>).from('user_profiles')
@@ -566,8 +567,7 @@ export const saveUserDisplayName = async (userId: string, displayName: string): 
     const displayNameToSave = displayName.trim();
 
     if (import.meta.env.DEV) {
-      console.log(`Salvando nome original: "${displayName}" | Após trim: "${displayNameToSave}" | Comprimento: ${displayNameToSave.length}`);
-      console.log(`Hex: ${Array.from(displayNameToSave).map(c => c.charCodeAt(0).toString(16)).join(' ')}`);
+      // Salvando nome (silenciado)
     }
     
     // 1. Atualizar metadados do usuário
@@ -849,4 +849,4 @@ export const supabaseNoPKCEProxy = new Proxy({}, {
 }) as SupabaseClient<Database>; 
 
 // Log para debug
-console.log('📦 Módulo supabase.ts carregado com proxy pattern'); 
+// Módulo carregado com proxy pattern 

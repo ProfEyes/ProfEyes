@@ -7,9 +7,7 @@ import DashboardCard from "@/components/dashboard/DashboardCard";
 import { default as SignalsCard } from "@/components/dashboard/SignalsCard";
 import { NewsCard } from "@/components/dashboard/NewsCard";
 import { fetchMarketData } from "@/services";
-// import { monitorSignals } from "@/services/tradingSignals"; // Removido - arquivo não existe mais
 import { toast } from "sonner";
-import { getLatestPrices } from "@/services/getSimulatedPrices";
 import { NotificationButton } from "@/components/ui/notification-button";
 import { notificationService } from "@/services/notificationService";
 import { useNavigate } from "react-router-dom";
@@ -38,6 +36,8 @@ const STAT_NAMES: Record<string, string> = {
 };
 
 const Index = () => {
+  // Componente montado
+  
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const { t } = useLanguage();
@@ -68,7 +68,7 @@ const Index = () => {
     const loadTraderLink = async () => {
       try {
         const link = await traderLinkService.getCurrentTraderLink();
-        console.log('📌 Index - Link do trader carregado:', link);
+        // Link do trader (silenciado)
         setTraderLink(link);
       } catch (error) {
         console.error('❌ Index - Erro ao carregar link do trader:', error);
@@ -80,19 +80,25 @@ const Index = () => {
     loadTraderLink();
   }, []);
   
-  // Consulta para obter dados iniciais e atualizações periódicas de outros dados
+  // ✅ CORREÇÃO: Não buscar estatísticas da Binance (são métricas internas, não criptomoedas!)
+  // Usar apenas dados estáticos/mockados
   const { data: marketData, isLoading, error, refetch } = useQuery({
     queryKey: ['marketData'],
     queryFn: async () => {
-      // Obter dados para cada símbolo e retornar como array
-      const promises = DASHBOARD_STATS.map(symbol => fetchMarketData(symbol));
-      return Promise.all(promises);
+      // Retornar dados mockados para estatísticas do trader
+      // Usando dados estáticos
+      return DASHBOARD_STATS.map(symbol => ({
+        symbol,
+        price: '0', // Será sobrescrito no fetchRealTimePrices
+        change: '0',
+        changePercent: '0'
+      }));
     },
-    refetchInterval: 30000, // Atualiza a cada 30 segundos para outros dados (como variação)
-    staleTime: 15000, // Considera dados obsoletos após 15 segundos
+    refetchInterval: 30000,
+    staleTime: 15000,
     meta: {
       onError: (error: Error) => {
-        toast.error("Erro ao carregar dados do mercado");
+        console.error('❌ Erro ao carregar dados do mercado:', error);
       }
     }
   });
@@ -105,7 +111,7 @@ const Index = () => {
     try {
       // const result = await monitorSignals();
       // Funcionalidade desativada - arquivo tradingSignals.ts foi removido
-      console.log('Monitoramento de sinais desativado');
+      // Monitoramento desativado
     } catch (error) {
       console.error('Erro ao monitorar sinais:', error);
     }
@@ -158,10 +164,7 @@ const Index = () => {
         }
       }
       
-      // Buscar preços atuais (estatísticas)
-      const prices = await getLatestPrices(DASHBOARD_STATS);
-      
-      // Preparar dados simulados para as estatísticas do trader
+      // Preparar dados das estatísticas do trader
       const statsMap: Record<string, { 
         priceChange: string; 
         priceChangePercent: string; 
@@ -207,16 +210,11 @@ const Index = () => {
         };
       });
       
-      // Criar um novo objeto diretamente em vez de copiar o anterior
+      // Criar um novo objeto com os dados das estatísticas
       const updated: Record<string, { price: string; change: string; changePercent: string }> = {};
       
-      // Processar todos os dados de uma vez
-      prices.forEach(item => {
-        if (!item || typeof item !== 'object') return;
-        
-        const symbol = item.symbol || '';
-        if (!symbol) return; // Pular itens sem símbolo
-        
+      // Processar estatísticas do trader
+      DASHBOARD_STATS.forEach(symbol => {
         let price = "";
         
         // Formatar valores para cada tipo de estatística
@@ -384,16 +382,6 @@ const Index = () => {
           duration: 15000, // 15 segundos
         });
         
-        // Segundo toast para o botão "Ver Sinais"
-        toast.info("⏰ Ver detalhes do sinal", {
-          description: `Clique para ver todos os detalhes do sinal para ${signal.pair || signal.symbol}`,
-          action: {
-            label: "Ver Sinais",
-            onClick: () => navigate('/signals')
-          },
-          duration: 15000, // 15 segundos
-        });
-        
         // Habilitar notificações para este sinal
         notificationService.setEnabled(true);
       },
@@ -516,26 +504,6 @@ const Index = () => {
             </p>
           </div>
           <div className="flex gap-2">
-            <Button 
-              variant="outline" 
-              onClick={handleRefresh}
-              disabled={isLoading}
-              className={`border-white/10 bg-black/40 backdrop-blur-md hover:bg-white/10 flex items-center gap-2 
-                        transition-all duration-500 
-                        ${isRefreshing ? 'refresh-animation shadow-[0_0_15px_rgba(255,255,255,0.15)] bg-white/10' : 
-                                         'shadow-[0_0_10px_rgba(255,255,255,0.05)]'}`}
-            >
-              {isLoading || isRefreshing ? (
-                <>
-                  <RefreshCw className="h-3.5 w-3.5 opacity-80 animate-spin" />
-                  <span className="animate-pulse">{t('dashboard.signals.loading')}</span>
-                </>
-              ) : (
-                <>
-                  <RefreshCw className="h-3.5 w-3.5 opacity-80" /> {t('dashboard.refresh.all')}
-                </>
-              )}
-            </Button>
             <NotificationButton className="border-white/10 bg-black/40 backdrop-blur-md hover:bg-white/10 
                                         transition-all duration-300 shadow-[0_0_10px_rgba(255,255,255,0.05)]" />
           </div>

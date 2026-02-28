@@ -30,14 +30,14 @@ export function useSupabaseRealtime<T = unknown>(config: RealtimeConfig<T>) {
 
   useEffect(() => {
     if (!enabled) {
-      console.log(`[Realtime] Subscription desabilitada para ${table}`);
+      // Subscription desabilitada (silenciado)
       return;
     }
 
     const supabase = getSupabase();
     const channelName = `${table}_${event}_${Date.now()}`;
 
-    console.log(`[Realtime] Conectando ao canal: ${channelName}`);
+    // Conectando ao canal (silenciado)
     setStatus('connecting');
 
     try {
@@ -59,7 +59,7 @@ export function useSupabaseRealtime<T = unknown>(config: RealtimeConfig<T>) {
         'postgres_changes' as never,
         subscriptionConfig as never,
         (payload: RealtimePostgresChangesPayload<T>) => {
-          console.log(`[Realtime] Evento recebido em ${table}:`, payload.eventType);
+          // Evento recebido (silenciado)
           callback(payload);
         }
       );
@@ -67,7 +67,7 @@ export function useSupabaseRealtime<T = unknown>(config: RealtimeConfig<T>) {
       // Monitorar status da conexão
       channel.on('system', {}, (payload: Record<string, unknown>) => {
         if (payload.status === 'ok') {
-          console.log(`[Realtime] Conectado ao canal: ${channelName}`);
+          // Conectado ao canal (silenciado)
           setStatus('connected');
           setError(null);
         } else if (payload.status === 'error') {
@@ -80,7 +80,7 @@ export function useSupabaseRealtime<T = unknown>(config: RealtimeConfig<T>) {
       // Subscribe ao canal
       channel.subscribe((status, err) => {
         if (status === 'SUBSCRIBED') {
-          console.log(`[Realtime] Subscrito com sucesso ao canal: ${channelName}`);
+          // Subscrito com sucesso (silenciado)
           setStatus('connected');
         } else if (status === 'CHANNEL_ERROR') {
           console.error(`[Realtime] Erro ao se inscrever no canal ${channelName}:`, err);
@@ -97,7 +97,7 @@ export function useSupabaseRealtime<T = unknown>(config: RealtimeConfig<T>) {
 
       // Cleanup
       return () => {
-        console.log(`[Realtime] Desconectando do canal: ${channelName}`);
+        // Desconectando do canal
         if (channelRef.current) {
           supabase.removeChannel(channelRef.current);
           channelRef.current = null;
@@ -123,19 +123,19 @@ export function useTradingSignalsRealtime(
 ) {
   const handleChange = useCallback(
     (payload: RealtimePostgresChangesPayload<unknown>) => {
-      console.log('[Trading Signals] Mudança detectada:', payload.eventType);
+      // Mudança detectada (silenciado)
       
       switch (payload.eventType) {
         case 'INSERT':
-          console.log('[Trading Signals] Novo sinal:', payload.new);
+          // Novo sinal (silenciado)
           onSignalChange(payload.new);
           break;
         case 'UPDATE':
-          console.log('[Trading Signals] Sinal atualizado:', payload.new);
+          // Sinal atualizado (silenciado)
           onSignalChange(payload.new);
           break;
         case 'DELETE':
-          console.log('[Trading Signals] Sinal removido:', payload.old);
+          // Sinal removido (silenciado)
           onSignalChange(payload.old);
           break;
       }
@@ -160,10 +160,10 @@ export function useMarketNewsRealtime(
 ) {
   const handleChange = useCallback(
     (payload: RealtimePostgresChangesPayload<unknown>) => {
-      console.log('[Market News] Mudança detectada:', payload.eventType);
+      // Market News mudança (silenciado)
       
       if (payload.eventType === 'INSERT') {
-        console.log('[Market News] Nova notícia:', payload.new);
+        // Nova notícia (silenciado)
         onNewsChange(payload.new);
       }
     },
@@ -187,7 +187,7 @@ export function useLiveStreamsRealtime(
 ) {
   const handleChange = useCallback(
     (payload: RealtimePostgresChangesPayload<unknown>) => {
-      console.log('[Live Streams] Mudança detectada:', payload.eventType);
+      // Live Streams mudança (silenciado)
       onStreamChange(payload);
     },
     [onStreamChange]
@@ -211,7 +211,7 @@ export function useStreamCommentsRealtime(
 ) {
   const handleChange = useCallback(
     (payload: RealtimePostgresChangesPayload<unknown>) => {
-      console.log('[Stream Comments] Novo comentário:', payload.new);
+      // Novo comentário (silenciado)
       if (payload.eventType === 'INSERT') {
         onCommentChange(payload.new);
       }
@@ -252,15 +252,15 @@ export function usePresence(roomName: string, userId: string, metadata?: Record<
       .on('presence', { event: 'sync' }, () => {
         const state = channel.presenceState();
         const users = Object.values(state).flat();
-        console.log(`[Presence] Usuários online em ${roomName}:`, users.length);
+        // Usuários online (silenciado)
         setOnlineUsers(users);
       })
       .on('presence', { event: 'join' }, ({ key, newPresences }) => {
-        console.log(`[Presence] Usuário entrou em ${roomName}:`, key);
+        // Usuário entrou (silenciado)
         setOnlineUsers((current) => [...current, ...newPresences]);
       })
       .on('presence', { event: 'leave' }, ({ key, leftPresences }) => {
-        console.log(`[Presence] Usuário saiu de ${roomName}:`, key);
+        // Usuário saiu (silenciado)
         setOnlineUsers((current) =>
           current.filter((user) => !(leftPresences as unknown[]).includes(user))
         );
@@ -304,7 +304,7 @@ export function useBroadcast(channelName: string) {
 
     channel
       .on('broadcast', { event: 'message' }, ({ payload }) => {
-        console.log(`[Broadcast] Mensagem recebida em ${channelName}:`, payload);
+        // Mensagem recebida (silenciado)
         setMessages((current) => [...current, payload]);
       })
       .subscribe();
@@ -326,7 +326,7 @@ export function useBroadcast(channelName: string) {
           event: 'message',
           payload: message,
         });
-        console.log(`[Broadcast] Mensagem enviada em ${channelName}:`, message);
+        // Mensagem enviada (silenciado)
       }
     },
     [channelName]

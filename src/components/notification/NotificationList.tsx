@@ -70,31 +70,37 @@ function formatFullDate(date: Date): string {
   });
 }
 
-// Configurações de cores por tipo de notificação
+// Configurações de cores por tipo de notificação - Estilo dark unificado
 const notificationStyles: Record<string, { icon: React.ReactNode; color: string; bgColor: string; borderColor: string }> = {
   signals: { 
     icon: <Tag size={16} />, 
-    color: 'text-cyan-400', 
-    bgColor: 'bg-gradient-to-br from-cyan-500/10 via-blue-500/5 to-cyan-500/10',
-    borderColor: 'border-cyan-500/20'
+    color: 'text-gray-300', 
+    bgColor: 'bg-gradient-to-br from-gray-900/90 via-gray-800/80 to-gray-900/90',
+    borderColor: 'border-gray-700/50'
   },
   completed: { 
     icon: <Check size={16} />, 
-    color: 'text-green-400', 
-    bgColor: 'bg-gradient-to-br from-green-500/10 via-emerald-500/5 to-green-500/10',
-    borderColor: 'border-green-500/20'
+    color: 'text-gray-300', 
+    bgColor: 'bg-gradient-to-br from-gray-900/90 via-gray-800/80 to-gray-900/90',
+    borderColor: 'border-gray-700/50'
   },
   stopped: { 
     icon: <X size={16} />, 
-    color: 'text-red-400', 
-    bgColor: 'bg-gradient-to-br from-red-500/10 via-rose-500/5 to-red-500/10',
-    borderColor: 'border-red-500/20'
+    color: 'text-gray-300', 
+    bgColor: 'bg-gradient-to-br from-gray-900/90 via-gray-800/80 to-gray-900/90',
+    borderColor: 'border-gray-700/50'
   },
   system: { 
     icon: <Bell size={16} />, 
-    color: 'text-purple-400', 
-    bgColor: 'bg-gradient-to-br from-purple-500/10 via-indigo-500/5 to-purple-500/10',
-    borderColor: 'border-purple-500/20'
+    color: 'text-gray-300', 
+    bgColor: 'bg-gradient-to-br from-gray-900/90 via-gray-800/80 to-gray-900/90',
+    borderColor: 'border-gray-700/50'
+  },
+  info: { 
+    icon: <Bell size={16} />, 
+    color: 'text-gray-300', 
+    bgColor: 'bg-gradient-to-br from-gray-900/90 via-gray-800/80 to-gray-900/90',
+    borderColor: 'border-gray-700/50'
   }
 };
 
@@ -127,13 +133,18 @@ const NotificationItem = ({ notification, onMarkAsRead, onRemove, onClick, compa
         <Button
           variant="default"
           size="sm"
-          className="mt-3 bg-gradient-to-r from-blue-600 via-cyan-500 to-blue-600 hover:from-blue-700 hover:via-cyan-600 hover:to-blue-700 text-white shadow-lg shadow-blue-500/20 transition-all duration-300 hover:shadow-blue-500/30 hover:scale-[1.02]"
+          className="mt-3 w-full bg-gradient-to-r from-gray-900 via-gray-800 to-gray-900 hover:from-gray-800 hover:via-gray-700 hover:to-gray-800 text-gray-100 border border-gray-700 shadow-lg shadow-black/40 transition-all duration-300 hover:shadow-gray-900/60 hover:scale-[1.01] hover:border-gray-600"
           onClick={(e) => {
             e.stopPropagation();
             window.open(notification.actionLink, '_blank');
           }}
         >
-          Abrir Corretora
+          <span className="flex items-center justify-center gap-2">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+            </svg>
+            Abrir Corretora
+          </span>
         </Button>
       );
     }
@@ -147,50 +158,40 @@ const NotificationItem = ({ notification, onMarkAsRead, onRemove, onClick, compa
       exit={{ opacity: 0, x: -10 }}
       transition={{ duration: 0.2 }}
       className={cn(
-        "relative border p-4 mb-3 rounded-xl transition-all duration-300 cursor-pointer group",
+        "relative border p-4 mb-3 rounded-xl transition-all duration-300 cursor-pointer group backdrop-blur-sm",
+        "bg-gradient-to-br from-gray-900/95 via-gray-800/90 to-gray-900/95",
         notification.read 
-          ? "bg-black/40 border-zinc-800/50" 
-          : "bg-black/60 border-zinc-800 shadow-lg shadow-black/20",
+          ? "border-gray-700/30 opacity-75" 
+          : "border-gray-700/60 shadow-lg shadow-black/40",
         compact ? "p-3" : "p-4",
-        notification.type === 'signals' && "bg-gradient-to-br from-black/80 via-black/70 to-black/60 backdrop-blur-sm",
-        style.borderColor,
-        "hover:shadow-xl hover:shadow-black/30 hover:scale-[1.01]"
+        "hover:shadow-xl hover:shadow-black/50 hover:scale-[1.01] hover:border-gray-600/60"
       )}
       onClick={handleAction}
     >
       <div className="flex items-start gap-3">
         <div className={cn(
-          "p-2.5 rounded-xl transition-all duration-300",
-          style.bgColor,
+          "p-2.5 rounded-xl transition-all duration-300 bg-gray-800/60 border border-gray-700/40",
           style.color,
-          "group-hover:scale-110 group-hover:shadow-lg group-hover:shadow-current/20"
+          "group-hover:scale-110 group-hover:bg-gray-700/70 group-hover:border-gray-600/60"
         )}>
           {style.icon}
         </div>
         
         <div className="flex-1 min-w-0">
-          <h4 className={cn(
-            "font-medium text-sm tracking-wide",
-            notification.type === 'signals' ? "text-white" : "text-zinc-200",
-            "group-hover:text-white transition-colors duration-300"
-          )}>
+          <h4 className="font-semibold text-sm tracking-wide text-gray-100 group-hover:text-white transition-colors duration-300">
             {notification.title}
           </h4>
           
-          <p className={cn(
-            "text-sm mt-1.5",
-            notification.type === 'signals' ? "text-zinc-300" : "text-zinc-400",
-            "group-hover:text-zinc-200 transition-colors duration-300"
-          )}>
+          <p className="text-sm mt-1.5 text-gray-300 group-hover:text-gray-200 transition-colors duration-300">
             {notification.message}
           </p>
 
           {renderActionButton()}
           
-          <div className="flex items-center gap-2 mt-2 text-xs text-zinc-500 group-hover:text-zinc-400 transition-colors duration-300">
+          <div className="flex items-center gap-2 mt-2 text-xs text-gray-500 group-hover:text-gray-400 transition-colors duration-300">
             <Clock size={12} className="opacity-70" />
             <span>
-              {new Date(notification.timestamp).toLocaleTimeString()}
+              {formatRelativeTime(new Date(notification.timestamp))}
             </span>
           </div>
         </div>
@@ -227,7 +228,7 @@ const NotificationItem = ({ notification, onMarkAsRead, onRemove, onClick, compa
       </div>
 
       {!notification.read && (
-        <div className="absolute top-3 right-3 w-2 h-2 rounded-full bg-gradient-to-r from-cyan-500 to-blue-500 animate-pulse" />
+        <div className="absolute top-3 right-3 w-2 h-2 rounded-full bg-gradient-to-r from-gray-400 to-gray-300 animate-pulse shadow-lg shadow-gray-400/50" />
       )}
     </motion.div>
   );

@@ -117,19 +117,19 @@ export function ProfileSettings() {
         if (userSettings.displayName && userSettings.displayName.trim() !== '') {
           setUserName(userSettings.displayName);
           if (import.meta.env.DEV) {
-            console.log("Nome carregado das configurações persistentes:", userSettings.displayName);
+            // Nome carregado (silenciado)
           }
         } else if (user?.user_metadata?.display_name) {
           setUserName(user.user_metadata.display_name);
           saveUserSettings({ displayName: user.user_metadata.display_name });
           if (import.meta.env.DEV) {
-            console.log("Nome carregado do display_name e salvo:", user.user_metadata.display_name);
+            // Nome carregado (silenciado)
           }
         } else if (user?.user_metadata?.name) {
           setUserName(user.user_metadata.name);
           saveUserSettings({ displayName: user.user_metadata.name });
           if (import.meta.env.DEV) {
-            console.log("Nome carregado do user_metadata e salvo:", user.user_metadata.name);
+            // Nome carregado (silenciado)
           }
         } else if (user?.email) {
           const emailName = user.email.split('@')[0];
@@ -153,7 +153,7 @@ export function ProfileSettings() {
               
               saveUserSettings({ displayName: profileData.display_name });
               if (import.meta.env.DEV) {
-                console.log("Nome carregado do banco de dados e salvo:", profileData.display_name);
+                // Nome carregado (silenciado)
               }
             }
           } catch (profileError) {
@@ -249,8 +249,7 @@ export function ProfileSettings() {
       const { userName: newUserName, fromLoad } = (event as CustomEvent).detail;
       
       if (import.meta.env.DEV) {
-        console.log("handleNameUpdated: Valor exato recebido:", newUserName);
-        console.log("handleNameUpdated: fromLoad:", fromLoad);
+        // handleNameUpdated (silenciado)
       }
       
       // APENAS atualizar se for um carregamento inicial, NÃO durante digitação
@@ -510,16 +509,14 @@ export function ProfileSettings() {
   }, []);
 
   useEffect(() => {
-    console.log("Valor atual da senha:", actualPassword);
-    console.log("showPassword:", showPassword);
+  // Debug senha (silenciado)
   }, [actualPassword, showPassword]);
 
 
 
   useEffect(() => {
     if (showPassword) {
-      console.log("Campo de senha visível:", showPassword);
-      console.log("Valor atual no campo:", actualPassword);
+      // Campo visível (silenciado)
     }
   }, [showPassword, actualPassword]);
 
@@ -605,7 +602,7 @@ export function ProfileSettings() {
       setShowPassword(true);
       
       setTimeout(() => {
-        console.log(`Estado showPassword: ${showPassword}, tempPassword: ${tempPassword ? 'definido' : 'não definido'}`);
+        // Estado showPassword (silenciado)
       }, 100);
     });
   };
@@ -790,12 +787,7 @@ export function ProfileSettings() {
         // ❌ NÃO FECHAR O MODAL se a verificação falhou
         // ❌ MANTER O MODAL ABERTO com a mensagem de erro
         console.log("❌ Mantendo modal aberto - senha incorreta");
-        console.log("❌ Estados após erro:");
-        console.log("  - showPassword:", showPassword);
-        console.log("  - isVerifyPasswordOpen:", isVerifyPasswordOpen);
-        console.log("  - verificationError:", verificationError);
-        console.log("  - localStorage demo_password:", localStorage.getItem('demo_password'));
-        console.log("  - localStorage password_visible:", localStorage.getItem('password_visible'));
+        // Estados após erro (silenciado)
         
         // ❌ Garantir que não mostra senha em caso de erro
         setShowPassword(false);
@@ -1268,37 +1260,52 @@ export function ProfileSettings() {
       <div className="flex flex-col items-center">
         <div className="relative">
           <div className="relative w-24 h-24 flex items-center justify-center">
-            <Avatar className="h-24 w-24 border-[0.5px] border-white/[0.05] relative overflow-hidden bg-black/20">
-              <AvatarImage
-                src={avatarUrl || undefined}
-                alt={userName || "Usuário"}
-                className="object-cover"
-                onLoad={() => {
-                  setUploading(false);
-                }}
-                style={{
-                  opacity: 1,
-                  transition: 'opacity 0.2s ease-in-out'
-                }}
-              />
-              <AvatarFallback className="bg-black/30 text-white/80 text-lg font-light">
-                {userName ? userName.charAt(0).toUpperCase() : "U"}
-              </AvatarFallback>
-            </Avatar>
-            
-            <Button
-              type="button"
+            {/* ✅ Avatar clicável - todo o círculo abre o seletor */}
+            <div 
               onClick={triggerFileInput}
-              disabled={uploading}
-              className="absolute bottom-0 right-0 rounded-full w-8 h-8 p-0 bg-black/40 hover:bg-black/60 border-[0.5px] border-white/[0.05] flex items-center justify-center"
+              className="cursor-pointer group relative"
+              role="button"
+              tabIndex={0}
               aria-label="Alterar foto de perfil"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  triggerFileInput();
+                }
+              }}
             >
-              {uploading ? (
-                <div className="h-4 w-4 border-2 border-white/30 border-t-white/80 rounded-full animate-spin" />
-              ) : (
-                <Camera className="h-4 w-4 text-white/80" />
-              )}
-            </Button>
+              <Avatar className="h-24 w-24 border-[0.5px] border-white/[0.05] relative overflow-hidden bg-black/20 transition-all duration-200 group-hover:border-white/20 group-hover:shadow-lg group-hover:shadow-white/10">
+                <AvatarImage
+                  src={avatarUrl || undefined}
+                  alt={userName || "Usuário"}
+                  className="object-cover transition-all duration-200 group-hover:brightness-75"
+                  onLoad={() => {
+                    setUploading(false);
+                  }}
+                  style={{
+                    opacity: 1,
+                    transition: 'opacity 0.2s ease-in-out'
+                  }}
+                />
+                <AvatarFallback className="bg-black/30 text-white/80 text-lg font-light transition-all duration-200 group-hover:bg-black/40">
+                  {userName ? userName.charAt(0).toUpperCase() : "U"}
+                </AvatarFallback>
+              </Avatar>
+              
+              {/* ✅ Ícone de câmera - mantido para indicação visual */}
+              <div className="absolute bottom-0 right-0 rounded-full w-8 h-8 p-0 bg-black/60 group-hover:bg-black/80 border-[0.5px] border-white/10 group-hover:border-white/30 flex items-center justify-center transition-all duration-200 pointer-events-none">
+                {uploading ? (
+                  <div className="h-4 w-4 border-2 border-white/30 border-t-white/80 rounded-full animate-spin" />
+                ) : (
+                  <Camera className="h-4 w-4 text-white/80 group-hover:text-white transition-colors duration-200" />
+                )}
+              </div>
+              
+              {/* ✅ Overlay hover para indicar que é clicável */}
+              <div className="absolute inset-0 rounded-full bg-white/0 group-hover:bg-white/5 transition-all duration-200 flex items-center justify-center opacity-0 group-hover:opacity-100">
+                <Camera className="h-8 w-8 text-white/60" />
+              </div>
+            </div>
           </div>
           
           <input

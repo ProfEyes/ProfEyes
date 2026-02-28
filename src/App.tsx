@@ -1,4 +1,4 @@
-import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { Toaster } from '@/components/ui/toaster';
 import { useEffect, useState, useRef, useMemo } from 'react';
 import { toast } from 'sonner';
@@ -31,16 +31,15 @@ import ShortsPlayer from '@/pages/ShortsPlayer';
 import UploadPage from '@/pages/UploadPage';
 import { VideoProvider } from '@/contexts/VideoContext';
 
-import { initSoundSystem } from '@/utils/sounds';
-import { SoundProvider } from '@/contexts/SoundContext';
 import { useLanguage, Language } from '@/contexts/LanguageContext';
 import Support from '@/pages/Support';
-import LivePage from '@/pages/LivePage';
+import Live from '@/pages/Live';
 import { LiveStreamProvider } from '@/contexts/LiveStreamContext';
 import { LiveStreamPermissionProvider } from '@/components/LiveStreamPermissionProvider';
 import MeetingRoom from '@/pages/MeetingRoom';
 import StreamerDashboard from '@/pages/StreamerDashboard';
 import StreamViewer from '@/pages/StreamViewer';
+import StreamDebug from '@/pages/StreamDebug';
 import { AvatarPersistence } from '@/components/AvatarPersistence';
 import { loadUserSettings, checkPendingSyncOnLoad } from '@/utils/userPersistence';
 
@@ -64,7 +63,7 @@ const UserProfilePersistence = () => {
     // Verificar se há dados pendentes para sincronizar
     if (user) {
       checkPendingSyncOnLoad().catch(error => {
-        console.warn("Erro ao verificar sincronização de perfil:", error);
+        // Erro ao verificar sincronização (silenciado)
       });
     }
   }, [user]);
@@ -77,22 +76,26 @@ const AppRouter = () => {
   const { user, loading } = useAuth();
   const { updateUserLanguage } = useLanguage();
   const location = useLocation();
+  const navigate = useNavigate();
   const isPublicRoute = location.pathname === '/splash' || location.pathname === '/auth';
+  
+  // 🔍 DEBUG: Detectar mudanças no estado de auth (silencioso)
+  useEffect(() => {
+    // Monitoramento silencioso
+  }, [user, loading, location.pathname]);
+  
+  // ✅ SIMPLIFICAÇÃO: Estados simples sem lógica de F5
   const [loadingProgress, setLoadingProgress] = useState(0);
-  const [showLoadingScreen, setShowLoadingScreen] = useState(true);
+  const [showLoadingScreen, setShowLoadingScreen] = useState(false);
   const [rememberUser] = useState(() => localStorage.getItem('remember-user') === 'true');
   const [redirectingFromLanguage, setRedirectingFromLanguage] = useState(false);
-  const [isPageRefresh] = useState(() => {
-    return window.performance && performance.getEntriesByType('navigation').length > 0 && 
-           (performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming).type === 'reload';
-  });
 
   const [hasSelectedLanguage, setHasSelectedLanguage] = useState(() => {
     if (!user) return false;
     
     const sessionLanguage = sessionStorage.getItem('user-selected-language');
     if (sessionLanguage) {
-      console.log('Idioma encontrado no sessionStorage:', sessionLanguage);
+        // Idioma encontrado (silenciado)
       return true;
     }
     
@@ -132,7 +135,7 @@ const AppRouter = () => {
         localStorage.setItem(`user-language-${user.id}`, sessionLanguage);
         localStorage.setItem('app-language', sessionLanguage);
         
-        console.log('Idioma atualizado após redirecionamento:', sessionLanguage);
+        // Idioma atualizado (silenciado)
       }
     }
   }, [location.pathname, user, updateUserLanguage]);
@@ -141,11 +144,15 @@ const AppRouter = () => {
   const hasHandledLanguageCheck = useRef(false);
 
   useEffect(() => {
+    // useEffect Language Check executando (silenciado)
+    
     if (user?.id === userIdRef.current && hasHandledLanguageCheck.current) {
+      // Já processado (silenciado)
       return;
     }
     
     if (redirectingFromLanguage) {
+      // Pulando - redirecionando (silenciado)
       return;
     }
     
@@ -156,6 +163,7 @@ const AppRouter = () => {
       
       const sessionLanguage = sessionStorage.getItem('user-selected-language');
       if (sessionLanguage) {
+        // setHasSelectedLanguage(true) - sessionLanguage (silenciado)
         setHasSelectedLanguage(true);
         const existingLanguage = localStorage.getItem(`user-language-${user.id}`);
         if (existingLanguage !== sessionLanguage) {
@@ -167,6 +175,7 @@ const AppRouter = () => {
       const userLanguage = localStorage.getItem(`user-language-${user.id}`);
       
       if (userLanguage) {
+        // setHasSelectedLanguage(true) - userLanguage (silenciado)
         setHasSelectedLanguage(true);
       } else {
         const appLanguage = localStorage.getItem('app-language');
@@ -175,36 +184,27 @@ const AppRouter = () => {
           if (existingLanguage !== appLanguage) {
           updateUserLanguage(user.id, appLanguage as Language);
           }
+          // setHasSelectedLanguage(true) - appLanguage (silenciado)
           setHasSelectedLanguage(true);
         } else {
+          // setHasSelectedLanguage(false) - sem idioma (silenciado)
           setHasSelectedLanguage(false);
         }
       }
     } else {
+      // setHasSelectedLanguage(false) - sem user (silenciado)
       setHasSelectedLanguage(false);
       hasHandledLanguageCheck.current = false;
     }
   }, [user, user?.id, updateUserLanguage, redirectingFromLanguage]);
 
+  // ✅ SIMPLIFICAÇÃO: Gerenciar loading screen apenas baseado no estado de loading
   useEffect(() => {
-    if (isPageRefresh) {
-      setShowLoadingScreen(false);
-      setLoadingProgress(100);
-      return;
-    }
-
     if (!loading) {
       setLoadingProgress(100);
-      
-      const timer = setTimeout(() => {
-        setShowLoadingScreen(false);
-      }, 300);
-      
-      return () => clearTimeout(timer);
-    } else if (!isPublicRoute && user) {
-      setShowLoadingScreen(true);
+      setShowLoadingScreen(false);
     }
-  }, [loading, isPublicRoute, user, isPageRefresh]);
+  }, [loading]);
   
   useEffect(() => {
     const isFromLanguageSelect = 
@@ -212,7 +212,7 @@ const AppRouter = () => {
       sessionStorage.getItem('language-selection-completed') === 'true';
     
     if (isFromLanguageSelect) {
-      console.log('Detectado redirecionamento da página de idioma, forçando fim do carregamento');
+      // Redirecionamento da página de idioma (silenciado)
       setLoadingProgress(100);
       setShowLoadingScreen(false);
       
@@ -223,39 +223,23 @@ const AppRouter = () => {
     }
   }, [location.pathname]);
   
-  useEffect(() => {
-    if (redirectingFromLanguage) {
-      setLoadingProgress(100);
-      setShowLoadingScreen(false);
-      return;
-    }
-    
-    if (loading && !isPublicRoute) {
-      setLoadingProgress(20);
-      
-      const interval = setInterval(() => {
-        setLoadingProgress(prev => {
-          const increment = prev < 30 ? 10 : prev < 60 ? 5 : prev < 80 ? 2 : 1;
-          return Math.min(prev + increment, 90);
-        });
-      }, 300);
-      
-      const safetyTimeout = setTimeout(() => {
-        console.warn('Timeout de segurança ativado: forçando fim do carregamento');
-        setLoadingProgress(100);
-        setShowLoadingScreen(false);
-      }, 10000);
-      
-      return () => {
-        clearInterval(interval);
-        clearTimeout(safetyTimeout);
-      };
-    }
-  }, [loading, isPublicRoute, redirectingFromLanguage]);
+  // ✅ SIMPLIFICAÇÃO: Removido progresso animado de loading
   
   const homePathElement = useMemo(() => {
-    if (!user) {
+    // useMemo executado (silenciado)
+    
+    // ✅ CORREÇÃO CRÍTICA: Durante o loading, mostrar a página normalmente sem redirecionar
+    if (!loading && !user) {
+      // Sem usuário, redirecionando (silenciado)
       return <Navigate to="/splash" replace />;
+    }
+
+    if (!loading && user) {
+      // Usuário autenticado (silenciado)
+    }
+    
+    if (loading) {
+      // Loading=true (silenciado)
     }
 
     // Definir português como idioma padrão se não houver nenhum
@@ -268,16 +252,29 @@ const AppRouter = () => {
 
     // Ir direto para a página inicial
     return <AuthGuard checkOnly={true}><IndexPage /></AuthGuard>;
-  }, [user]);
+  }, [user, loading]);
 
   const splashPathElement = useMemo(() => {
-    if (user || rememberUser) {
+    // useMemo executado (silenciado)
+    
+    // ✅ CORREÇÃO CRÍTICA: Durante o loading, não redirecionar
+    // ✅ CORREÇÃO DE LOOP: Só redirecionar se REALMENTE tiver user, não apenas rememberUser
+    if (!loading && user) {
+      // Usuário autenticado, redirecionando (silenciado)
       return <Navigate to="/" replace />;
     }
+    
+    if (loading) {
+      // Loading=true (silenciado)
+    }
+    
+    // Mostrando SplashScreen (silenciado)
     return <SplashScreen />;
-  }, [user, rememberUser]);
+  }, [user, loading]);
 
   const authPathElement = useMemo(() => {
+    // useMemo executado (silenciado)
+    
     const languageSelectionCompleted = sessionStorage.getItem('language-selection-completed') === 'true';
     
     // ULTRA-CRÍTICO: VERIFICAÇÕES MÁXIMAS para garantir tela de cadastro concluído
@@ -290,7 +287,7 @@ const AppRouter = () => {
     if (preventDashboardRedirect) {
       const expirationTime = localStorage.getItem('prevent_dashboard_redirect_expiration');
       if (expirationTime && parseInt(expirationTime) < Date.now()) {
-        console.log('🕒 Flag prevent_dashboard_redirect expirada, removendo...');
+        // Flag expirada (silenciado)
         localStorage.removeItem('prevent_dashboard_redirect');
         localStorage.removeItem('prevent_dashboard_redirect_expiration');
         preventDashboardRedirectValid = false;
@@ -299,35 +296,23 @@ const AppRouter = () => {
     
     const cadastroConcluido = justRegistered || preventAuthRedirect || preventDashboardRedirectValid;
     
-    // Log detalhado para debug
-    console.log('🔍 [App.tsx authPathElement] Estado:', {
-      user: !!user,
-      rememberUser,
-      justRegistered,
-      preventAuthRedirect,
-      preventDashboardRedirect: preventDashboardRedirectValid,
-      cadastroConcluido,
-      hasSelectedLanguage,
-      languageSelectionCompleted
-    });
     
     // ULTRA-CRÍTICO: Se acabou de se cadastrar, SEMPRE mostrar Auth (tela de sucesso)
     // Esta verificação tem PRIORIDADE ABSOLUTA MÁXIMA sobre todas as outras
     if (cadastroConcluido) {
-      console.log('🔒 PROTEÇÃO MÁXIMA: Proteções anti-redirecionamento ativadas, mantendo tela de cadastro');
-      console.log('🔒 Proteções ativas:', { justRegistered, preventAuthRedirect, preventDashboardRedirect: preventDashboardRedirectValid });
+      // Proteções anti-redirecionamento ativadas (silenciado)
       
       // Forçar logout para garantir que não haverá redirecionamento automático
       if (user) {
-        console.log('🔒 Usuário autenticado detectado durante cadastro concluído, forçando logout...');
+        // Forçando logout (silenciado)
         setTimeout(() => {
           try {
             import('@/lib/supabase').then(({ getSupabase }) => {
               (getSupabase() as SupabaseClient<Database>).auth.signOut();
-              console.log('🔒 Logout forçado realizado com sucesso');
+              // Logout realizado (silenciado)
             });
           } catch (e) {
-            console.warn('Erro ao forçar logout:', e);
+            // Erro ao forçar logout (silenciado)
           }
         }, 100);
       }
@@ -336,34 +321,35 @@ const AppRouter = () => {
     }
     
     // Só processar outros redirecionamentos se NÃO acabou de se cadastrar
-    if (!cadastroConcluido) {
+    if (!cadastroConcluido && !loading) {
       // CORREÇÃO: Só redirecionar se rememberUser E tiver usuário
       if (rememberUser && user) {
-        console.log('🔄 RememberUser ativo com usuário: redirecionando para dashboard');
+        // RememberUser ativo (silenciado)
         return <Navigate to="/" replace />;
       }
       
       if (user) {
         if (hasSelectedLanguage || languageSelectionCompleted) {
-          console.log('🔄 Usuário logado com idioma selecionado: redirecionando para dashboard');
+          // Redirecionando para dashboard (silenciado)
           return <Navigate to="/" replace />;
         }
-        console.log('🔄 Usuário logado sem idioma: redirecionando para seleção de idioma');
+        // Redirecionando para seleção de idioma (silenciado)
         return <Navigate to="/language-select" replace />;
       }
     }
     
     // Se não tem usuário ou outros casos, mostrar Auth
-    console.log('📱 Mostrando tela Auth (login/cadastro)');
+    // Mostrando tela Auth (silenciado)
     return <Auth />;
-  }, [user, rememberUser, hasSelectedLanguage]);
+  }, [user, rememberUser, hasSelectedLanguage, loading]);
 
   const languageSelectPathElement = useMemo(() => {
-    if (!user) {
+    // ✅ CORREÇÃO CRÍTICA: Durante o loading, não redirecionar
+    if (!loading && !user) {
       return <Navigate to="/auth" replace />;
     }
     return <LanguageSelectPage />;
-  }, [user]);
+  }, [user, loading]);
 
   const memoizedRoutes = useMemo(() => (
     <Routes>
@@ -390,10 +376,11 @@ const AppRouter = () => {
       <Route path="/upload" element={<AuthGuard checkOnly={true}><UploadPage /></AuthGuard>} />
       
       {/* Rotas existentes de streaming */}
-      <Route path="/live" element={<AuthGuard checkOnly={true}><LivePage /></AuthGuard>} />
+      <Route path="/live" element={<AuthGuard checkOnly={true}><Live /></AuthGuard>} />
       <Route path="/live/:streamId" element={<AuthGuard checkOnly={true}><MeetingRoom /></AuthGuard>} />
       <Route path="/streamer/:streamId" element={<AuthGuard checkOnly={true}><StreamerDashboard /></AuthGuard>} />
       <Route path="/watch/:streamId" element={<AuthGuard checkOnly={true}><StreamViewer /></AuthGuard>} />
+      <Route path="/stream-debug" element={<AuthGuard checkOnly={true}><StreamDebug /></AuthGuard>} />
       <Route path="/streaming" element={<AuthGuard checkOnly={true}><FreeStreaming /></AuthGuard>} />
       <Route path="/livekit-streaming" element={<AuthGuard checkOnly={true}><LiveKitStreaming /></AuthGuard>} />
       <Route path="/livekit-streaming/:roomId" element={<AuthGuard checkOnly={true}><LiveKitStreaming /></AuthGuard>} />
@@ -402,25 +389,9 @@ const AppRouter = () => {
     </Routes>
   ), [homePathElement, splashPathElement, authPathElement, languageSelectPathElement]);
   
-  if (showLoadingScreen) {
-    return (
-      <div className="fixed inset-0 w-full h-full flex flex-col items-center justify-center bg-black z-50">
-        <div className="flex flex-col items-center max-w-xs w-full">
-          <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mb-4"></div>
-          <div className="w-full bg-gray-900 rounded-full h-2.5 mb-2">
-            <div 
-              className="bg-blue-600 h-2.5 rounded-full transition-all duration-200 ease-out"
-              style={{ width: `${loadingProgress}%` }}
-            ></div>
-          </div>
-          <p className="text-white/70 text-sm">
-            {loadingProgress < 30 ? 'Iniciando aplicação...' : 
-             loadingProgress < 60 ? 'Carregando dados...' : 
-             loadingProgress < 90 ? 'Quase pronto...' : 'Finalizando...'}
-          </p>
-        </div>
-      </div>
-    );
+  // ✅ SIMPLIFICAÇÃO: Mostrar loading screen se loading=true
+  if (loading) {
+    return <LoadingScreen />;
   }
 
   return memoizedRoutes;
@@ -432,17 +403,11 @@ const App = () => {
   const [didPreload, setDidPreload] = useState(false);
   const queryClient = useQueryClient();
   
-  // Inicialização de sistemas críticos
-  useEffect(() => {
-    initSoundSystem();
-    console.log('Sistema de sons inicializado');
-  }, []);
-  
   useEffect(() => {
     const preloadId = Math.random().toString(36).substring(2, 9);
     
     const preloadData = async () => {
-      console.log(`Iniciando pré-carregamento de dados [${preloadId}]...`);
+      // Iniciando pré-carregamento (silenciado)
       
       try {
         await Promise.allSettled([
@@ -461,7 +426,7 @@ const App = () => {
             await Promise.allSettled(
               criticalImages.map(src => preloadImage(src))
             );
-            console.log(`Imagens críticas pré-carregadas [${preloadId}]`);
+            // Imagens pré-carregadas (silenciado)
           })(),
           
           (async () => {
@@ -470,15 +435,15 @@ const App = () => {
                 method: 'HEAD',
                 cache: 'force-cache'
               });
-              console.log(`Vídeo tutorial está disponível [${preloadId}]:`, response.ok);
+              // Vídeo disponível (silenciado)
             } catch (e) {
-              console.warn(`Erro ao verificar vídeo tutorial [${preloadId}]:`, e);
+              // Erro ao verificar vídeo (silenciado)
             }
           })(),
         ]);
         
         setDidPreload(true);
-        console.log(`Pré-carregamento concluído com sucesso [${preloadId}]`);
+        // Pré-carregamento concluído (silenciado)
       } catch (error) {
         console.error(`Erro no pré-carregamento [${preloadId}]:`, error);
         setDidPreload(true);
@@ -487,8 +452,6 @@ const App = () => {
     
     preloadData();
   }, [queryClient]);
-  
-  // Removido useEffect duplicado que chamava initSoundSystem()
 
   useEffect(() => {
     const savedAvatar = localStorage.getItem('user-avatar');
@@ -508,26 +471,26 @@ const App = () => {
       const cachedImages = JSON.parse(imageCache);
       
       if (cachedImages[src] === true) {
-        console.log(`Imagem ${src} já foi carregada anteriormente, pulando...`);
+        // Imagem já carregada (silenciado)
         return resolve(src);
       }
       
       if (src.includes('favicon.ico')) {
-        console.log('Pulando pré-carregamento de favicon.ico pois está disponível por padrão');
+        // Pulando favicon (silenciado)
         
         fetch(src, { method: 'HEAD', cache: 'force-cache' })
           .then(response => {
             if (response.ok) {
               cachedImages[src] = true;
               localStorage.setItem('image-cache', JSON.stringify(cachedImages));
-              console.log(`Favicon verificado com sucesso: ${src}`);
+              // Favicon verificado (silenciado)
             } else {
-              console.warn(`Favicon não encontrado: ${src}. Tentando caminho alternativo...`);
+              // Favicon não encontrado (silenciado)
             }
             resolve(src);
           })
           .catch(error => {
-            console.warn(`Erro ao verificar favicon: ${error}`);
+            // Erro ao verificar favicon (silenciado)
             resolve(null);
           });
         return;
@@ -540,11 +503,11 @@ const App = () => {
         resolve(src);
       };
       img.onerror = () => {
-        console.warn(`Falha ao pré-carregar: ${src}. Tentando caminho alternativo...`);
+        // Falha ao pré-carregar (silenciado)
         
         if (src.startsWith('/')) {
           const alternativePath = src.substring(1);
-          console.log(`Tentando caminho alternativo: ${alternativePath}`);
+          // Tentando caminho alternativo (silenciado)
           
           const altImg = new Image();
           altImg.onload = () => {
@@ -553,7 +516,7 @@ const App = () => {
             resolve(alternativePath);
           };
           altImg.onerror = () => {
-            console.warn(`Também falhou com caminho alternativo: ${alternativePath}`);
+            // Também falhou (silenciado)
             resolve(null);
           };
           altImg.src = alternativePath;
@@ -565,23 +528,12 @@ const App = () => {
     });
   };
 
-  const [loadingProgress, setLoadingProgress] = useState(0);
-  const [showLoadingScreen, setShowLoadingScreen] = useState(false);
+  // Estados removidos - já declarados no AppRouter
+  // const [loadingProgress, setLoadingProgress] = useState(0);
+  // const [showLoadingScreen, setShowLoadingScreen] = useState(false);
 
-  useEffect(() => {
-    // Handler para quando o app volta do background
-    const handleBackgroundResume = () => {
-      // Não mostrar nenhum indicador visual de carregamento
-      setShowLoadingScreen(false);
-      setLoadingProgress(100);
-    };
-
-    window.addEventListener('background-resume', handleBackgroundResume);
-    
-    return () => {
-      window.removeEventListener('background-resume', handleBackgroundResume);
-    };
-  }, []);
+  // useEffect removido - estados não existem mais no App component
+  // A lógica de loading está no AppRouter
 
   // Forçar que o usuário sempre tenha um idioma selecionado para evitar redirecionamento
   useEffect(() => {
@@ -602,25 +554,23 @@ const App = () => {
 
   return (
     <TrendingNotificationProvider>
-      <SoundProvider>
-        <VideoProvider>
-          <LiveStreamProvider>
-            <FreeWebRTCProvider>
-              <LiveKitProvider>
-                <LiveStreamPermissionProvider>
-                  <AvatarPersistence />
-                  <UserProfilePersistence />
-                  <div className="bg-black min-h-screen">
-                    <HotToaster position="bottom-center" />
-                    <AppRouter />
-                    <Toaster />
-                  </div>
-                </LiveStreamPermissionProvider>
-              </LiveKitProvider>
-            </FreeWebRTCProvider>
-          </LiveStreamProvider>
-        </VideoProvider>
-      </SoundProvider>
+      <VideoProvider>
+        <LiveStreamProvider>
+          <FreeWebRTCProvider>
+            <LiveKitProvider>
+              <LiveStreamPermissionProvider>
+                <AvatarPersistence />
+                <UserProfilePersistence />
+                <div className="min-h-screen" style={{ backgroundColor: 'transparent' }}>
+                  <HotToaster position="bottom-center" />
+                  <AppRouter />
+                  <Toaster />
+                </div>
+              </LiveStreamPermissionProvider>
+            </LiveKitProvider>
+          </FreeWebRTCProvider>
+        </LiveStreamProvider>
+      </VideoProvider>
     </TrendingNotificationProvider>
   );
 };

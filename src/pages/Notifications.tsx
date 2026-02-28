@@ -155,12 +155,25 @@ const NotificationsPage: React.FC = () => {
   
   // Função para enviar uma notificação de teste
   const handleTestNotification = () => {
+    // ✅ Proteção contra múltiplos cliques (máximo 1x a cada 3 segundos)
+    const lastTestTime = sessionStorage.getItem('last-test-notification');
+    const now = Date.now();
+    
+    if (lastTestTime && (now - parseInt(lastTestTime)) < 3000) {
+      toast.warning('⏳ Aguarde alguns segundos', {
+        description: 'Evite clicar múltiplas vezes no botão de teste.'
+      });
+      return;
+    }
+    
+    sessionStorage.setItem('last-test-notification', now.toString());
+
     const notification = {
       title: "Novo Sinal de Trading",
       body: "Um novo sinal foi gerado! Clique para ver os detalhes.",
       icon: "/logo.png",
       badge: "/logo.png",
-      tag: "signal",
+      tag: "signal-test",
       data: {
         url: "https://trade.avalonbroker.io/register?aff=385853&aff_model=revenue&afftrack=mesnagensfree"
       },
@@ -186,12 +199,13 @@ const NotificationsPage: React.FC = () => {
     }
 
     testNotification();
-    // Toast removido conforme solicitado
+    toast.success('✅ Notificação de teste enviada!', {
+      description: 'Verifique a aba de notificações'
+    });
   };
   
   return (
     <Layout>
-      <Toaster position="top-right" richColors theme="dark" />
       <motion.div 
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}

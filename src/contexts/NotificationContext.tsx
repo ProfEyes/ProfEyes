@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useRef } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { sendNotification, NotificationPriority, requestNotificationPermission, isNotificationPermissionGranted } from '@/utils/notifications';
 import { toast } from 'sonner';
@@ -6,6 +6,8 @@ import { TradingSignal, SignalType } from '@/services/types';
 import { shouldShowToast } from '@/services/notificationSettings';
 import preSignalNotificationService from '@/services/signals/PreSignalNotificationService';
 import { useLanguage } from './LanguageContext';
+import { userNotificationDB } from '@/services/userNotificationDatabase';
+import { supabase } from '@/lib/supabase';
 
 // Tipos para as notificações
 export type NotificationType = 'success' | 'error' | 'warning' | 'info' | 'system' | 'live' | 'signals';
@@ -129,17 +131,14 @@ export function useNotifications() {
 // Provedor do contexto
 export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const { t } = useLanguage();
-  const [notifications, setNotifications] = useState<Notification[]>(() => {
-    const savedNotifications = localStorage.getItem('notifications');
-    return savedNotifications 
-      ? (JSON.parse(savedNotifications) as Array<Omit<Notification, 'createdAt'> & { createdAt: string }>).map((n) => ({
-          ...n,
-          createdAt: new Date(n.createdAt)
-        }))
-      : [];
-  });
+  const [notifications, setNotifications] = useState<Notification[]>([]);
   const [settings, setSettings] = useState<NotificationSettings>(() => getDefaultSettings(t));
   const [hasPermission, setHasPermission] = useState<boolean>(false);
+  const [isLoadingNotifications, setIsLoadingNotifications] = useState(true);
+  const [hasSyncedLocalStorage, setHasSyncedLocalStorage] = useState(false);
+  
+  // ✅ Set para rastrear notificações recentes e evitar duplicatas
+  const recentNotificationsRef = React.useRef<Set<string>>(new Set());
   
   // Verificar permissão inicial
   useEffect(() => {
@@ -161,27 +160,149 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
     }));
   }, [t]);
   
-  // Carregar notificações e configurações salvas ao iniciar
+  // ✅ Carregar notificações e configurar Realtime Subscription
+  useEffect(() => {
+    let realtimeChannel: ReturnType<typeof supabase.channel> | null = null;
+    
+    const loadNotificationsFromDatabase = async () => {
+      try {
+        // ✅ LIMPAR NOTIFICAÇÕES ANTIGAS DO LOCALSTORAGE (com "Preço atual")
+        try {
+          const oldNotifs = localStorage.getItem('userNotifications');
+          if (oldNotifs) {
+            const parsed = JSON.parse(oldNotifs);
+            if (Array.isArray(parsed) && parsed.some(n => n.message?.includes('Preço atual'))) {
+              localStorage.removeItem('userNotifications');
+              console.log('🗑️ Notificações antigas removidas do localStorage');
+            }
+          }
+        } catch (e) {
+          // Ignorar erro
+        }
+        
+        // Verificar se há usuário autenticado
+        const { data: { user } } = await supabase.auth.getUser();
+        
+        if (!user) {
+          // ✅ NÃO carregar do localStorage (já foi limpo)
+          setIsLoadingNotifications(false);
+          return;
+        }
+        
+        // Carregar notificações do banco de dados
+        const { notifications: dbNotifications, error } = await userNotificationDB.loadNotifications(100, 0, false);
+        
+        if (error) {
+          console.error('❌ Erro ao carregar notificações do banco:', error);
+          // ✅ NÃO usar localStorage como fallback (dados podem estar desatualizados)
+          setNotifications([]);
+        } else {
+          setNotifications(dbNotifications);
+          
+          // Sincronizar localStorage com banco de dados (apenas uma vez)
+          if (!hasSyncedLocalStorage) {
+            await userNotificationDB.syncLocalStorageToDatabase();
+            setHasSyncedLocalStorage(true);
+          }
+        }
+        
+        // ✅ CONFIGURAR REALTIME SUBSCRIPTION para sincronizar entre navegadores/abas
+        realtimeChannel = supabase
+          .channel(`user-notifications-${user.id}`)
+          .on(
+            'postgres_changes',
+            {
+              event: '*',
+              schema: 'public',
+              table: 'user_notifications',
+              filter: `user_id=eq.${user.id}`
+            },
+            async (payload) => {
+              if (payload.eventType === 'INSERT') {
+                // Nova notificação adicionada em outro navegador/aba
+                const newNotif = payload.new as Record<string, unknown>;
+                const notification: Notification = {
+                  id: String(newNotif.id),
+                  type: newNotif.type as NotificationType,
+                  title: String(newNotif.title),
+                  message: String(newNotif.message),
+                  read: Boolean(newNotif.read),
+                  linkTo: newNotif.link_to ? String(newNotif.link_to) : undefined,
+                  actionLink: newNotif.action_link ? String(newNotif.action_link) : undefined,
+                  image: newNotif.image ? String(newNotif.image) : undefined,
+                  data: (newNotif.data as Record<string, unknown>) || {},
+                  timestamp: new Date(String(newNotif.created_at)),
+                  createdAt: new Date(String(newNotif.created_at)),
+                };
+                
+                setNotifications(prev => {
+                  // Evitar duplicatas
+                  if (prev.some(n => n.id === notification.id)) {
+                    return prev;
+                  }
+                  return [notification, ...prev];
+                });
+              } else if (payload.eventType === 'DELETE') {
+                // Notificação deletada em outro navegador/aba
+                const deletedId = String(payload.old.id);
+                setNotifications(prev => prev.filter(n => n.id !== deletedId));
+              } else if (payload.eventType === 'UPDATE') {
+                // Notificação atualizada (ex: marcada como lida)
+                const updatedNotif = payload.new as Record<string, unknown>;
+                setNotifications(prev =>
+                  prev.map(n =>
+                    n.id === String(updatedNotif.id)
+                      ? { ...n, read: Boolean(updatedNotif.read) }
+                      : n
+                  )
+                );
+              }
+            }
+          )
+          .subscribe();
+        
+      } catch (error) {
+        console.error('❌ Erro ao carregar notificações:', error);
+      } finally {
+        setIsLoadingNotifications(false);
+      }
+    };
+
+    loadNotificationsFromDatabase();
+    
+    // Configurar listener para mudanças de autenticação
+    const { data } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_IN' && session?.user) {
+        loadNotificationsFromDatabase();
+      } else if (event === 'SIGNED_OUT') {
+        setNotifications([]);
+        setHasSyncedLocalStorage(false);
+        // Limpar canal de realtime
+        if (realtimeChannel) {
+          realtimeChannel.unsubscribe();
+          realtimeChannel = null;
+        }
+      }
+    });
+
+    return () => {
+      if (data?.subscription) {
+        data.subscription.unsubscribe();
+      }
+      if (realtimeChannel) {
+        realtimeChannel.unsubscribe();
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  
+  // Carregar configurações do localStorage
   useEffect(() => {
     try {
-      // Carregar notificações
-      const savedNotifications = localStorage.getItem('userNotifications');
-      if (savedNotifications) {
-        const parsedNotifications = JSON.parse(savedNotifications) as Array<Omit<Notification, 'timestamp'> & { timestamp: string }>;
-        // Converte strings de timestamp para objetos Date
-        const notificationsWithDates = parsedNotifications.map((notif) => ({
-          ...notif,
-          timestamp: new Date(notif.timestamp)
-        }));
-        setNotifications(notificationsWithDates);
-      }
-      
-      // Carregar configurações
       const savedSettings = localStorage.getItem('notificationSettings');
       const defaultSettings = getDefaultSettings(t);
       if (savedSettings) {
         const parsedSettings = JSON.parse(savedSettings) as Partial<NotificationSettings>;
-        // Atualizar nomes e descrições dos tipos com traduções atuais
         const updatedTypes = defaultSettings.types.map(defaultType => {
           const savedType = parsedSettings.types?.find((type) => type.id === defaultType.id);
           return savedType ? {
@@ -192,24 +313,17 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
         });
         setSettings({...defaultSettings, ...parsedSettings, types: updatedTypes});
       } else {
-        // Se não existir, salva as configurações padrão
         setSettings(defaultSettings);
         localStorage.setItem('notificationSettings', JSON.stringify(defaultSettings));
       }
     } catch (error) {
-      console.error('Erro ao carregar dados de notificações:', error);
+      console.error('Erro ao carregar configurações de notificações:', error);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // t não está sendo usado dentro do useEffect, apenas no estado inicial
+  }, []);
   
-  // Salvar notificações quando mudam
-  useEffect(() => {
-    try {
-      localStorage.setItem('userNotifications', JSON.stringify(notifications));
-    } catch (error) {
-      console.error('Erro ao salvar notificações:', error);
-    }
-  }, [notifications]);
+  // ✅ NÃO salvar notificações no localStorage (usar apenas banco de dados)
+  // Evita dessincronia e dados obsoletos
   
   // Salvar configurações quando mudam
   useEffect(() => {
@@ -219,17 +333,6 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
       console.error('Erro ao salvar configurações de notificações:', error);
     }
   }, [settings]);
-  
-  // Inicializar o serviço de notificação prévia de sinais
-  useEffect(() => {
-    // Iniciar o serviço de notificações prévias de sinais
-    preSignalNotificationService.start();
-    
-    // Cleanup function - parar o serviço quando o componente for desmontado
-    return () => {
-      preSignalNotificationService.stop();
-    };
-  }, []);
   
   // Número de notificações não lidas
   const unreadCount = notifications.filter(notif => !notif.read).length;
@@ -261,21 +364,109 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
     return settings.sound && typeConfig?.sound === true;
   };
   
-  // Função para adicionar uma notificação
-  const addNotification = (notification: Omit<Notification, 'id' | 'read'>, showToast = true) => {
-    // Gerar um ID único para a notificação
-    const id = `notification-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+  // ✅ Função para adicionar uma notificação COM DEDUPLICAÇÃO ROBUSTA
+  const addNotification = async (notification: Omit<Notification, 'id' | 'read'>, showToast = true) => {
+    // ✅ Criar chave única para deduplicação (mais específica)
+    const dedupeKey = `${notification.type}-${notification.title}-${notification.message}`;
     
-    // Adicionar a notificação ao estado
-    setNotifications((prev) => [
-      ...prev,
-      {
-        ...notification,
-        id,
-        read: false,
-        createdAt: notification.createdAt || new Date(),
-      },
-    ]);
+    // ✅ Verificar se já adicionamos esta notificação recentemente (últimos 5 minutos)
+    if (recentNotificationsRef.current.has(dedupeKey)) {
+      return; // Ignorar duplicata silenciosamente
+    }
+    
+    // ✅ Debounce: Se já há um salvamento pendente, cancelar e reagendar
+    const existingTimeout = pendingNotificationsRef.current.get(dedupeKey);
+    if (existingTimeout) {
+      clearTimeout(existingTimeout);
+    }
+    
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (user) {
+        // ✅ VERIFICAR NO BANCO SE JÁ EXISTE (últimos 10 minutos)
+        const { data: existingNotifications } = await supabase
+          .from('user_notifications')
+          .select('id')
+          .eq('user_id', user.id)
+          .eq('title', notification.title)
+          .eq('message', notification.message)
+          .gte('created_at', new Date(Date.now() - 10 * 60 * 1000).toISOString())
+          .limit(1);
+        
+        if (existingNotifications && existingNotifications.length > 0) {
+          console.warn('⚠️ Notificação já existe no banco, ignorando duplicata');
+          // Adicionar ao cache para evitar verificações repetidas
+          recentNotificationsRef.current.add(dedupeKey);
+          setTimeout(() => recentNotificationsRef.current.delete(dedupeKey), 5 * 60 * 1000);
+          return; // Já existe no banco
+        }
+        
+        // ✅ DEBOUNCE: Aguardar 500ms antes de salvar (consolidar múltiplas tentativas)
+        const saveTimeout = setTimeout(async () => {
+          pendingNotificationsRef.current.delete(dedupeKey);
+          
+          // Verificar novamente antes de salvar (dupla verificação)
+          const { data: recheck } = await supabase
+            .from('user_notifications')
+            .select('id')
+            .eq('user_id', user.id)
+            .eq('title', notification.title)
+            .eq('message', notification.message)
+            .gte('created_at', new Date(Date.now() - 10 * 60 * 1000).toISOString())
+            .limit(1);
+          
+          if (recheck && recheck.length > 0) {
+            console.log('✅ Duplicata detectada na dupla verificação');
+            return;
+          }
+          
+          // ✅ Salvar no banco e obter ID real
+          const tempId = `notification-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+          const newNotification: Notification = {
+            ...notification,
+            id: tempId,
+            read: false,
+            createdAt: notification.createdAt || new Date(),
+          };
+          
+          const result = await userNotificationDB.saveNotificationWithId(newNotification);
+          
+          if (result.success && result.id) {
+            // ✅ Adicionar ao cache para evitar duplicatas locais
+            recentNotificationsRef.current.add(dedupeKey);
+            setTimeout(() => recentNotificationsRef.current.delete(dedupeKey), 5 * 60 * 1000);
+            
+            // ⚠️ NÃO adicionar ao estado local - deixar o Realtime sincronizar
+            // Isso evita duplicatas causadas por race conditions
+            console.log('✅ Notificação salva, aguardando Realtime sincronizar');
+          } else if (result.error) {
+            // Se erro de constraint unique, é uma duplicata válida - ignorar
+            if (result.error.message?.includes('unique') || result.error.message?.includes('duplicate')) {
+              console.log('✅ Duplicata prevenida pelo banco');
+              return;
+            }
+            console.error('❌ Erro ao salvar notificação:', result.error);
+          }
+        }, 500); // 500ms de debounce
+        
+        pendingNotificationsRef.current.set(dedupeKey, saveTimeout);
+      } else {
+        // Usuário não autenticado - salvar apenas localmente
+        const tempId = `notification-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+        const newNotification: Notification = {
+          ...notification,
+          id: tempId,
+          read: false,
+          createdAt: notification.createdAt || new Date(),
+        };
+        
+        setNotifications((prev) => [newNotification, ...prev]);
+      }
+    } catch (error) {
+      console.error('❌ Erro ao salvar notificação:', error);
+      return;
+    }
     
     // Adicionar notificação toast apenas se showToast for true
     if (showToast && notification.type) {
@@ -381,17 +572,12 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
         icon: '/favicon.ico',
         tag: `signal-${signal.id || signal.timestamp}`
       });
-      
-      // Tocar som de notificação se estiver habilitado
-      if (settings.sound) {
-        const audio = new Audio('/sounds/notification-high.mp3');
-        audio.play().catch(err => console.error('Erro ao reproduzir som:', err));
-      }
     }
   };
 
   // Função para adicionar notificação prévia de sinal (5 minutos antes)
-  const addPreSignalNotification = (signal: TradingSignal) => {
+  // ✅ Usar useCallback para estabilizar a função e evitar reconfigurações desnecessárias
+  const addPreSignalNotification = useCallback((signal: TradingSignal) => {
     const actionText = signal.signal === 'BUY' ? 'COMPRA' : 'VENDA';
     const directionEmoji = signal.signal === 'BUY' ? '📈' : '📉';
     const signalTime = signal.entry_time || new Date(signal.timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
@@ -399,12 +585,11 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
     
     // Calcular informações adicionais do sinal
     const successRate = signal.success_rate ? (signal.success_rate * 100).toFixed(1) + '%' : 'Alta';
-    const price = signal.entry_price || signal.price || 'Preço atual';
     
     addNotification({
       type: 'signals',
       title: `${directionEmoji} Sinal de ${actionText} em 5 minutos!`,
-      message: `${symbolName} às ${signalTime} - Expectativa: ${successRate} - Preço: ${price}`,
+      message: `${symbolName} às ${signalTime} - Expectativa: ${successRate}`,
       createdAt: new Date(),
       timestamp: new Date(),
       actionLink: 'https://trade.avalonbroker.io/register?aff=385853&aff_model=revenue&afftrack=mesnagensfree',
@@ -413,45 +598,100 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
         pair: symbolName,
         direction: signal.signal,
         entry_time: signalTime,
-        success_rate: successRate,
-        price: price
+        success_rate: successRate
       }
     }, false); // false para não mostrar toast (já mostrado pelo serviço)
+  }, [addNotification]);
+
+  // ✅ Inicializar o serviço de notificação prévia de sinais (APÓS definir addPreSignalNotification)
+  useEffect(() => {
+    // ✅ Configurar callback ANTES de iniciar o serviço
+    preSignalNotificationService.setNotificationCallback(addPreSignalNotification);
     
-    // Toast removido conforme solicitado
-  };
-
-
+    // Iniciar o serviço de notificações prévias de sinais
+    preSignalNotificationService.start();
+    
+    // Cleanup function - parar o serviço quando o componente for desmontado
+    return () => {
+      preSignalNotificationService.stop();
+      preSignalNotificationService.setNotificationCallback(() => {});
+    };
+  }, [addPreSignalNotification]);
   
   // Marcar uma notificação como lida
-  const markAsRead = (id: string) => {
+  const markAsRead = async (id: string) => {
+    // Atualizar estado local imediatamente (UI responsiva)
     setNotifications(prev =>
       prev.map(notif =>
         notif.id === id ? { ...notif, read: true } : notif
       )
     );
+    
+    // Atualizar no banco de dados em background
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (user) {
+        await userNotificationDB.markAsRead(id);
+      }
+    } catch (error) {
+      console.error('❌ Erro ao marcar notificação como lida no banco:', error);
+    }
   };
   
   // Marcar todas as notificações como lidas
-  const markAllAsRead = () => {
+  const markAllAsRead = async () => {
+    // Atualizar estado local imediatamente
     setNotifications(prev =>
       prev.map(notif => ({ ...notif, read: true }))
     );
     
-    // Toast removido conforme solicitado
+    // Atualizar no banco de dados em background
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (user) {
+        await userNotificationDB.markAllAsRead();
+      }
+    } catch (error) {
+      console.error('❌ Erro ao marcar todas como lidas no banco:', error);
+    }
   };
   
   // Limpar todas as notificações
-  const clearNotifications = () => {
+  const clearNotifications = async () => {
+    // Limpar estado local imediatamente
     setNotifications([]);
-    // Toast removido conforme solicitado
+    
+    // Limpar no banco de dados em background
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (user) {
+        await userNotificationDB.deleteAllNotifications();
+      }
+    } catch (error) {
+      console.error('❌ Erro ao deletar notificações do banco:', error);
+    }
   };
   
   // Remover uma notificação específica
-  const removeNotification = (id: string) => {
+  const removeNotification = async (id: string) => {
+    // Remover do estado local imediatamente
     setNotifications(prev =>
       prev.filter(notif => notif.id !== id)
     );
+    
+    // Remover do banco de dados em background
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (user) {
+        await userNotificationDB.deleteNotification(id);
+      }
+    } catch (error) {
+      console.error('❌ Erro ao remover notificação do banco:', error);
+    }
   };
   
   // Função para enviar uma notificação de teste

@@ -70,7 +70,6 @@ export default function Layout({ children }: LayoutProps) {
   
   // Estado para verificar se o componente carregou corretamente
   const [layoutLoaded, setLayoutLoaded] = useState(false);
-  
   // Referência para controlar se veio da página de seleção de idioma
   const fromLanguageSelectRef = useRef(
     sessionStorage.getItem('redirecting-from-language-select') === 'true' ||
@@ -84,7 +83,7 @@ export default function Layout({ children }: LayoutProps) {
       const languageSelectionCompleted = sessionStorage.getItem('language-selection-completed') === 'true';
       
       if (redirectingFromLanguage || languageSelectionCompleted) {
-        console.log('Layout detectou redirecionamento da página de idioma, limpando flags');
+        // Limpando flags de redirecionamento
         
         // Limpar flags de redirecionamento
         sessionStorage.removeItem('redirecting-from-language-select');
@@ -227,14 +226,14 @@ export default function Layout({ children }: LayoutProps) {
   return (
     <SidebarProvider>
       <div className="min-h-screen flex w-full bg-background">
-        <Sidebar className="border-r border-white/5">
+        <Sidebar className="border-r border-white/5 overflow-visible" collapsible="icon">
           <SidebarHeader className="flex items-center justify-between p-4">
             <div className="flex items-center gap-2">
               <Logo />
             </div>
             <ProfileMenu />
           </SidebarHeader>
-          <SidebarContent className="p-4 flex flex-col h-[calc(100vh-65px)]">
+          <SidebarContent className="p-4 flex flex-col h-[calc(100vh-65px)] overflow-visible">
             {/* Seção principal de navegação */}
             <nav className="space-y-0.5">
               <Button 
@@ -329,7 +328,7 @@ export default function Layout({ children }: LayoutProps) {
             {/* Divisor que separa as seções */}
             <div className="my-4 flex items-center gap-2 px-2">
               <div className="h-px flex-1 bg-white/5"></div>
-                                            <span className="text-[10px] uppercase text-white/30 font-medium">{t('nav.settings.notifications') || 'Área do Usuário'}</span>
+              <span className="text-[10px] uppercase text-white/30 font-medium">{t('nav.settings.notifications') || 'Área do Usuário'}</span>
               <div className="h-px flex-1 bg-white/5"></div>
             </div>
             
@@ -406,11 +405,6 @@ export default function Layout({ children }: LayoutProps) {
           <div className="md:hidden flex items-center mb-4">
             <SidebarTrigger className="h-9 w-9 border-white/10 bg-black/20" />
             <span className="ml-3 text-sm font-medium">{location.pathname === '/' ? 'Dashboard' : location.pathname.substring(1).charAt(0).toUpperCase() + location.pathname.substring(2)}</span>
-          </div>
-          
-          {/* Botão flutuante para ocultar/mostrar a barra lateral */}
-          <div className="fixed top-6 right-6 z-50 hidden md:block">
-            <SidebarTrigger className="h-10 w-10 border border-white/10 bg-black/70 shadow-lg hover:bg-black/90 transition-all duration-200 rounded-full" />
           </div>
           
           {children}

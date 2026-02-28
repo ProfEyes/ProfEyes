@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { fetchMarketNews } from "@/services/news";
 import Layout from "@/components/Layout";
 import { Card, CardContent } from "@/components/ui/card";
@@ -6,7 +6,7 @@ import { format, formatDistance } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { useEffect, useState, useMemo, useRef, useCallback } from "react";
 import { Button } from "@/components/ui/button";
-import { Newspaper, RefreshCw, AlertTriangle, Check, Clock, Filter } from "lucide-react";
+import { Newspaper, AlertTriangle, Clock, Filter } from "lucide-react";
 import { MarketNews as BaseMarketNews } from "@/services/types";
 import { cn } from "@/lib/utils";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -44,6 +44,13 @@ const getNewsCategories = (t: (key: string) => string) => [
     keywords: ['war', 'conflict', 'military', 'sanctions', 'trade war', 'geopolitical', 'geopolitics', 'geopolítica', 'ukraine', 'russia', 'china', 'taiwan', 'supply chain', 'guerra', 'conflito', 'sanções', 'export', 'import', 'trade', 'tariff', 'currency', 'dollar', 'euro', 'yen', 'pound', 'exportação', 'importação', 'comércio', 'moeda', 'healthcare', 'health', 'biotech', 'biotecnologia', 'pharma', 'pharmaceutical', 'e-commerce', 'commerce', 'consumption', 'consumo', 'militar', 'guerra comercial', 'cadeia de suprimentos', 'tarifa', 'dólar', 'saúde', 'farmacêutico', 'comércio eletrônico', 'geopolítica', 'conflicto', 'sanciones', 'guerra comercial', 'cadena de suministro']
   }
 ];
+
+// Declaração global para logs
+declare global {
+  interface Window {
+    __lastNewsTimerLog?: number;
+  }
+}
 
 // Definir uma interface para o formato dos dados retornados pela API Finnhub
 interface FinnhubNewsItem {
@@ -148,14 +155,14 @@ const getRelativeTime = (datetime: number | string): string => {
       timestamp = datetime < 10000000000 ? datetime * 1000 : datetime;
     } else {
       // Se não for string nem número, usar data atual (fallback)
-      console.warn('Formato de data inválido:', datetime);
+      // Formato inválido (silenciado)
       return '';
     }
     
     // Verificar se o timestamp é válido e não é no futuro
     const now = new Date().getTime();
     if (isNaN(timestamp) || timestamp > now) {
-      console.warn('Timestamp inválido ou no futuro:', timestamp);
+      // Timestamp inválido (silenciado)
       return '';
     }
     
@@ -163,7 +170,7 @@ const getRelativeTime = (datetime: number | string): string => {
     // (algumas APIs têm bugs que retornam datas muito antigas)
     const oneYearAgo = now - (365 * 24 * 60 * 60 * 1000);
     if (timestamp < oneYearAgo) {
-      console.warn('Timestamp muito antigo (possível erro):', timestamp);
+      // Timestamp muito antigo (silenciado)
       // Usar um valor mais recente como fallback
       return 'recentemente';
     }
@@ -182,11 +189,100 @@ const getRelativeTime = (datetime: number | string): string => {
 const News = () => {
   const [newsWithImages, setNewsWithImages] = useState<MarketNews[]>([]);
   const [isLoadingImages, setIsLoadingImages] = useState(false);
-  // Estado para controlar a animação do botão de atualizar (similar ao NewsCard)
-  const [refreshButtonState, setRefreshButtonState] = useState<'default' | 'success' | 'error'>('default');
+  
+  // ✅ CORREÇÃO: Carregar timestamp do localStorage ou usar atual
+  const getLastUpdateTimestamp = (): number => {
+    try {
+      const stored = localStorage.getItem('news_last_update_timestamp');
+      if (stored) {
+        const timestamp = parseInt(stored, 10);
+        // Timestamp carregado (silenciado)
+        return timestamp;
+      }
+    } catch (e) {
+      // Erro ao carregar timestamp (silenciado)
+    }
+    // Primeira vez (silenciado)
+    return Date.now();
+  };
+  
   // Referência para armazenar o timestamp da última atualização bem-sucedida
-  const lastSuccessfulUpdate = useRef<number>(Date.now());
+  const lastSuccessfulUpdate = useRef<number>(getLastUpdateTimestamp());
   const { language, t } = useLanguage();
+  const queryClient = useQueryClient();
+  
+  // ✅ CACHE DE TRADUÇÃO para melhorar performance
+  const translationCache = useRef<Record<string, string>>({});
+  
+  // Função para gerar chave de cache
+  const getCacheKey = (text: string, targetLang: string): string => {
+    return `translation_${targetLang}_${text.substring(0, 100)}`;
+  };
+  
+  // Carregar cache do localStorage ao montar
+  useEffect(() => {
+    try {
+      const cached = localStorage.getItem('translation_cache_google');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        translationCache.current = parsed;
+        // Cache carregado (silenciado)
+      }
+    } catch (e) {
+      // Erro ao carregar cache (silenciado)
+    }
+  }, []);
+  
+  // Função para salvar cache no localStorage
+  const saveTranslationCache = () => {
+    try {
+      localStorage.setItem('translation_cache_google', JSON.stringify(translationCache.current));
+    } catch (e) {
+      // Erro ao salvar cache (silenciado)
+    }
+  };
+  
+  // ✅ Função para traduzir texto usando Google Translate (GRATUITA E ILIMITADA)
+  const translateTextLocal = async (text: string, targetLang: string): Promise<string> => {
+    if (!text || text.trim() === '') {
+      return text;
+    }
+    
+    // ✅ Verificar cache primeiro
+    const cacheKey = getCacheKey(text, targetLang);
+    if (translationCache.current[cacheKey]) {
+      return translationCache.current[cacheKey];
+    }
+    
+    try {
+      // ✅ Usar Google Translate público (gratuito, ilimitado e sem API key)
+      // Usar endpoint público do Google Translate
+      const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=${targetLang}&dt=t&q=${encodeURIComponent(text.slice(0, 5000))}`;
+      
+      const response = await fetch(url);
+      
+      if (!response.ok) {
+        // Erro na API (silenciado)
+        return text;
+      }
+      
+      const data = await response.json();
+      
+      // Google Translate retorna array com estrutura: [[[texto_traduzido, texto_original, ...]]]
+      const translated = data[0]?.map((item: any) => item[0]).join('') || text;
+      
+      // ✅ Salvar no cache
+      translationCache.current[cacheKey] = translated;
+      saveTranslationCache();
+      
+      return translated;
+      
+    } catch (error) {
+      // Erro ao traduzir (silenciado)
+      // ✅ Fallback: retornar texto original
+      return text;
+    }
+  };
   
   // Estado para filtro de categoria
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
@@ -257,15 +353,7 @@ const News = () => {
       return true;
     }
     
-    // Log para debug (apenas em desenvolvimento)
-    if (import.meta.env.DEV && matches) {
-      console.log(`[CATEGORY FILTER] Categoria: ${categoryId}, Notícia: "${title}"`, {
-        source: newsItem.source,
-        matches,
-        searchText: searchText.substring(0, 100) + '...',
-        foundKeywords: category.keywords.filter(k => searchText.includes(k.toLowerCase()))
-      });
-    }
+    // Log para debug (silenciado)
     
     return matches && !containsExcludeKeyword;
   };
@@ -275,29 +363,119 @@ const News = () => {
     if (!newsWithImages || newsWithImages.length === 0) return [];
     const filtered = newsWithImages.filter(newsItem => newsMatchesCategory(newsItem, selectedCategory));
     
-    // Log para debug da filtragem
-    if (import.meta.env.DEV) {
-      console.log(`[FILTER DEBUG] Categoria: ${selectedCategory}`, {
-        totalNews: newsWithImages.length,
-        filteredNews: filtered.length,
-        categoryLabel: NEWS_CATEGORIES.find(cat => cat.id === selectedCategory)?.label
-      });
-    }
+    // Log para debug (silenciado)
     
     return filtered;
   }, [newsWithImages, selectedCategory, NEWS_CATEGORIES, newsMatchesCategory]);
   
-  // Buscar notícias com React Query - Aumentando limite para mais notícias
-  const { data: news, isLoading, error, refetch, isFetching } = useQuery({
+  // Buscar notícias com React Query - Configuração idêntica à Dashboard
+  const { data: news, isLoading, error, isFetching } = useQuery({
     queryKey: ['allMarketNews', language],
-    queryFn: () => fetchMarketNews({ language, limit: 100 }), // Aumentar limite para 100 notícias
-    refetchInterval: 1800000, // Atualiza a cada 30 minutos (1800000 ms)
-    staleTime: 1800000, // Considera os dados obsoletos após 30 minutos
-    // Usar cache já existente imediatamente
-    gcTime: 1800000, // Substituindo cacheTime que está obsoleto
-    refetchOnMount: false,
-    refetchOnWindowFocus: false,
+    queryFn: async () => {
+      try {
+        const result = await fetchMarketNews({ language, limit: 100 });
+        
+        // ✅ PRIORIZAR CNBC: Ordenar notícias com CNBC primeiro
+        const sortedResult = result.sort((a, b) => {
+          const aIsCNBC = a.source?.toUpperCase().includes('CNBC') ? 1 : 0;
+          const bIsCNBC = b.source?.toUpperCase().includes('CNBC') ? 1 : 0;
+          
+          if (aIsCNBC !== bIsCNBC) {
+            return bIsCNBC - aIsCNBC;
+          }
+          
+          const dateA = new Date(a.publishedAt || a.datetime || 0).getTime();
+          const dateB = new Date(b.publishedAt || b.datetime || 0).getTime();
+          return dateB - dateA;
+        });
+        
+        // ✅ TRADUZIR DE ACORDO COM IDIOMA SELECIONADO ANTES DE RETORNAR
+        const targetLang = language === 'pt' ? 'pt' : 
+                          language === 'es' ? 'es' : 
+                          language === 'en' ? 'en' : 'pt';
+        
+        // ✅ ATUALIZAR TIMESTAMP DE ÚLTIMA ATUALIZAÇÃO
+        const updateTimestamp = Date.now();
+        lastSuccessfulUpdate.current = updateTimestamp;
+        localStorage.setItem('news_last_update_timestamp', updateTimestamp.toString());
+        
+        // Se idioma for inglês, não traduzir (já está em inglês)
+        if (targetLang === 'en') {
+          return sortedResult;
+        }
+        
+        // ✅ TRADUZIR IMEDIATAMENTE (bloquear até terminar)
+        const translatedNews = await Promise.all(
+          sortedResult.map(async (item) => {
+            try {
+              const translatedTitle = await translateTextLocal(item.headline || item.title || '', targetLang);
+              const translatedSummary = await translateTextLocal(item.summary || item.content || '', targetLang);
+              
+              return {
+                ...item,
+                title: translatedTitle || item.title,
+                headline: translatedTitle || item.headline,
+                summary: translatedSummary || item.summary,
+                content: translatedSummary || item.content,
+              };
+            } catch (err) {
+              console.warn('⚠️ Erro ao traduzir notícia:', err);
+              return item;
+            }
+          })
+        );
+        
+        return translatedNews;
+      } catch (e) {
+        console.error('❌ [News Page] Erro ao buscar notícias:', e);
+        return [];
+      }
+    },
+    // ✅ SEMPRE buscar notícias ao carregar
+    enabled: true,
+    // Reduzir cache para 30 minutos para garantir tradução atualizada
+    staleTime: 30 * 60 * 1000,
+    // ✅ Atualizar automaticamente a cada hora
+    refetchInterval: 60 * 60 * 1000,
+    // Continuar refetch mesmo quando a aba estiver em background
+    refetchIntervalInBackground: true,
+    // Em caso de erro, tentar novamente 2 vezes
+    retry: 2,
+    retryDelay: 3000,
+    // ✅ IMPORTANTE: Refetch ao focar na janela para garantir tradução correta
+    refetchOnWindowFocus: true,
+    // ✅ SEMPRE buscar ao abrir a página para garantir idioma correto
+    refetchOnMount: 'always',
   });
+  
+  // ✅ LISTENER: Forçar atualização quando voltar do background
+  useEffect(() => {
+    const handleForceUpdate = (event: Event) => {
+      const customEvent = event as CustomEvent;
+      const timeInBackground = customEvent.detail?.timeInBackground || 0;
+      
+      // Invalidar e forçar refetch da query de notícias
+      queryClient.invalidateQueries({ queryKey: ['allMarketNews'] });
+    };
+
+    const handleForceRefresh = () => {
+      // Invalidar e forçar refetch
+      queryClient.invalidateQueries({ queryKey: ['allMarketNews'] });
+    };
+
+    window.addEventListener('force-update-after-background', handleForceUpdate);
+    window.addEventListener('force-refresh-signals', handleForceRefresh);
+
+    return () => {
+      window.removeEventListener('force-update-after-background', handleForceUpdate);
+      window.removeEventListener('force-refresh-signals', handleForceRefresh);
+    };
+  }, [queryClient]);
+  
+  // ✅ LISTENER: Invalidar cache quando o idioma mudar
+  useEffect(() => {
+    queryClient.invalidateQueries({ queryKey: ['allMarketNews'] });
+  }, [language, queryClient]);
   
   // Adicionar o estilo de animação ao documento
   useEffect(() => {
@@ -364,18 +542,24 @@ const News = () => {
   // Efeito para processar as notícias recebidas da API Finnhub
   useEffect(() => {
     if (news && Array.isArray(news) && news.length > 0) {
-      // As notícias já vêm processadas do serviço news.ts
+      // As notícias já vêm processadas e TRADUZIDAS da query
       const processedNews = news.map((item: Record<string, unknown>) => {
         // Garantir que o timestamp está em formato correto
         const publishedAt = item.published_at || item.publishedAt;
         const processedDatetime = Number(item.datetime) || (publishedAt ? new Date(String(publishedAt)).getTime() : Date.now());
         
-        // Garantir que temos um objeto completo de notícia
+        // ✅ IMPORTANTE: Manter os dados traduzidos (summary, content, title, headline)
+        // NÃO sobrescrever com dados originais
         const newsItem: MarketNews = {
           id: item.id ? String(item.id) : String(Date.now()),
+          // ✅ Manter título traduzido (item.title já está traduzido)
           title: item.title ? String(item.title) : '',
+          // ✅ Manter headline traduzido (se existir)
+          headline: item.headline ? String(item.headline) : (item.title ? String(item.title) : ''),
           published_at: publishedAt ? String(publishedAt) : new Date(processedDatetime).toISOString(),
+          // ✅ Manter content traduzido (item.content já está traduzido)
           content: item.content ? String(item.content) : (item.summary ? String(item.summary) : ''),
+          // ✅ Manter summary traduzido (item.summary já está traduzido)
           summary: item.summary ? String(item.summary) : '',
           source: item.source ? String(item.source) : '',
           url: item.url ? String(item.url) : '',
@@ -413,7 +597,7 @@ const News = () => {
           acc[item.category || 'undefined'] = (acc[item.category || 'undefined'] || 0) + 1;
           return acc;
         }, {} as Record<string, number>);
-        console.log('[AUTO CLASSIFICATION] Distribuição por categoria:', categoryCount);
+        // AUTO CLASSIFICATION (silenciado)
       }
       
       setNewsWithImages(newsWithImagesOnly);
@@ -425,47 +609,69 @@ const News = () => {
 
   useEffect(() => {
     if (error) {
-      console.error("News Page - Erro ao buscar notícias:", error);
+      console.error("❌ [News Page] Erro ao buscar notícias:", error);
     }
     
-    // Configurar um intervalo para atualizar as notícias a cada 30 minutos
-    const intervalId = setInterval(() => {
-      console.log("Atualizando notícias automaticamente...");
-      refetch();
-    }, 1800000); // 30 minutos em milissegundos
-    
-    // Limpar o intervalo quando o componente for desmontado
-    return () => clearInterval(intervalId);
-  }, [error, refetch]);
+    // O React Query já gerencia a atualização automática via refetchInterval
+    // Não é necessário criar intervalos manuais
+  }, [error]);
 
-  // Função de refetch simplificada
-  const handleRefetch = async () => {
-    const now = Date.now();
-    const timeSinceLastUpdate = now - lastSuccessfulUpdate.current;
-    const isRecentlyUpdated = timeSinceLastUpdate < 30000; // 30 segundos
+  // Estado para próxima atualização
+  const [nextUpdateTime, setNextUpdateTime] = useState<string>('');
+  const [timeUntilUpdate, setTimeUntilUpdate] = useState<string>('');
+  
+  // Calcular próxima atualização (5 horas após a última)
+  useEffect(() => {
+    const updateInterval = 5 * 60 * 60 * 1000; // 5 horas em ms
     
-    if (isRecentlyUpdated && newsWithImages.length > 0) {
-      // Se já estiver atualizado recentemente, mostrar animação de sucesso
-      setRefreshButtonState('success');
-      setTimeout(() => setRefreshButtonState('default'), 2000);
-      return;
-    }
+    const updateCountdown = () => {
+      const now = Date.now();
+      const nextUpdate = lastSuccessfulUpdate.current + updateInterval;
+      const timeRemaining = nextUpdate - now;
+      
+      // Log detalhado para debug (apenas na primeira execução ou a cada minuto)
+      const shouldLog = !window.__lastNewsTimerLog || (now - window.__lastNewsTimerLog > 60000);
+      if (shouldLog) {
+        window.__lastNewsTimerLog = now;
+        // News Timer (silenciado)
+      }
+      
+      if (timeRemaining > 0) {
+        // Calcular horas, minutos e segundos restantes
+        const hours = Math.floor(timeRemaining / (60 * 60 * 1000));
+        const minutes = Math.floor((timeRemaining % (60 * 60 * 1000)) / (60 * 1000));
+        const seconds = Math.floor((timeRemaining % (60 * 1000)) / 1000);
+        
+        // Formato: "às HH:MM" no timezone de Brasília
+        const nextUpdateDate = new Date(nextUpdate);
+        const timeStr = nextUpdateDate.toLocaleTimeString('pt-BR', { 
+          hour: '2-digit', 
+          minute: '2-digit',
+          timeZone: 'America/Sao_Paulo' // ✅ Forçar timezone Brasília
+        });
+        
+        setNextUpdateTime(timeStr);
+        
+        // Formato de contagem regressiva com segundos
+        if (hours > 0) {
+          setTimeUntilUpdate(`${hours}h ${minutes}min ${seconds}s`);
+        } else if (minutes > 0) {
+          setTimeUntilUpdate(`${minutes}min ${seconds}s`);
+        } else {
+          setTimeUntilUpdate(`${seconds}s`);
+        }
+      } else {
+        setNextUpdateTime('em breve');
+        setTimeUntilUpdate('em breve');
+      }
+    };
     
-    try {
-      setRefreshButtonState('default');
-      // Usar a função de refetch do React Query
-      await refetch();
-      
-      lastSuccessfulUpdate.current = now;
-      setRefreshButtonState('success');
-      setTimeout(() => setRefreshButtonState('default'), 2000);
-      
-    } catch (err) {
-      console.error("Erro ao atualizar notícias:", err);
-      setRefreshButtonState('error');
-      setTimeout(() => setRefreshButtonState('default'), 2000);
-    }
-  };
+    // Atualizar a cada segundo para mostrar contagem regressiva em tempo real
+    updateCountdown();
+    const interval = setInterval(updateCountdown, 1000);
+    
+    return () => clearInterval(interval);
+  }, [news]); // ✅ Reagir quando news mudar (nova atualização)
 
   return (
     <Layout>
@@ -476,51 +682,15 @@ const News = () => {
             <p className="text-muted-foreground">
               {t('news.subtitle')}
             </p>
-          </div>
-          <div className="relative min-w-[120px] h-9 flex items-center justify-end">
-            {/* Botão de sucesso com fade-in/fade-out suave */}
-            <div 
-              className={cn(
-                "absolute inset-0 flex items-center justify-center transition-all duration-300",
-                refreshButtonState === 'success' 
-                  ? "opacity-100 translate-y-0" 
-                  : "opacity-0 translate-y-1 pointer-events-none"
-              )}
-            >
-              <Button 
-                variant="outline"
-                size="sm"
-                className={cn(
-                  "bg-black/30 border-white/10 shadow-sm transition-all duration-300 ease-out",
-                  refreshButtonState === 'success' && "news-refresh-success"
-                )}
-                tabIndex={refreshButtonState === 'success' ? 0 : -1}
-              >
-                <Check className="h-4 w-4 text-green-400 mr-1.5" />
-                <span className="text-green-400 text-xs font-normal">{t('news.updated')}</span>
-              </Button>
-            </div>
-            
-            {/* Botão de atualização padrão */}
-            <div 
-              className={cn(
-                "absolute inset-0 flex items-center justify-center transition-all duration-300",
-                refreshButtonState !== 'success'
-                  ? "opacity-100 translate-y-0" 
-                  : "opacity-0 translate-y-1 pointer-events-none"
-              )}
-            >
-              <Button 
-                variant="outline"
-                onClick={handleRefetch}
-                disabled={isFetching || isLoading}
-                tabIndex={refreshButtonState !== 'success' ? 0 : -1}
-                className="flex items-center gap-2"
-              >
-                <RefreshCw className={cn("h-4 w-4", (isFetching || isLoading) && "animate-spin")} />
-                {t('news.refresh')}
-              </Button>
-            </div>
+            {/* Indicador de próxima atualização */}
+            {nextUpdateTime && (
+              <div className="flex items-center gap-2 mt-2 text-sm text-white/60">
+                <Clock className="h-3.5 w-3.5" />
+                <span>
+                  Próxima atualização às <span className="font-semibold text-white/80">{nextUpdateTime}</span>
+                </span>
+              </div>
+            )}
           </div>
         </div>
 
@@ -596,13 +766,6 @@ const News = () => {
                   <p className="text-lg font-medium">{t('news.error.loading')}</p>
                   <p className="text-muted-foreground mb-4">{t('news.error.tryAgain')}</p>
                   <p className="text-sm text-red-500 mt-2 max-w-full overflow-hidden text-ellipsis">{String(error)}</p>
-                  <Button 
-                    variant="outline" 
-                    onClick={handleRefetch}
-                    className="mt-4"
-                  >
-                    {t('news.tryAgain')}
-                  </Button>
                 </div>
               </CardContent>
             </Card>

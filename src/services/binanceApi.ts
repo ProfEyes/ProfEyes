@@ -25,12 +25,7 @@ const BINANCE_BASE_URL = 'https://api.binance.com';
 const BINANCE_US_BASE_URL = 'https://api.binance.us';
 const BINANCE_TESTNET_BASE_URL = 'https://testnet.binance.vision';
 
-// URLs alternativas para contornar CORS
-const CORS_PROXY_URLS = [
-  'https://corsproxy.io/?',
-  'https://api.allorigins.win/raw?url=',
-  'https://cors-anywhere.herokuapp.com/'
-];
+// ✅ Não precisa mais de proxies CORS externos - usamos serverless agora
 
 // Cache para cada símbolo
 const PRICE_CACHE: Record<string, { 
@@ -686,7 +681,7 @@ export async function binanceAuthenticatedCall<T>(
 }
 
 /**
- * Faz uma chamada pública à API da Binance com mecanismos para contornar CORS
+ * Faz uma chamada pública à API da Binance via proxy serverless
  * @param endpoint Endpoint da API
  * @param params Parâmetros da requisição
  * @returns Resposta da API
@@ -695,47 +690,44 @@ export async function binancePublicCall<T>(
   endpoint: string, 
   params: Record<string, string> = {}
 ): Promise<T> {
-  // Montar query string
-  const queryString = new URLSearchParams(params).toString();
-  const urlPath = `${endpoint}${queryString ? '?' + queryString : ''}`;
-  
-  // Lista de URLs para tentar (incluindo proxies CORS)
-  const urlsToTry = [
-    `${BINANCE_BASE_URL}${urlPath}`, // URL original
-    ...CORS_PROXY_URLS.map(proxy => `${proxy}${encodeURIComponent(`${BINANCE_BASE_URL}${urlPath}`)}`), // Proxies CORS
-    `${BINANCE_US_BASE_URL}${urlPath}` // Binance US como fallback
-  ];
-  
-  let lastError: Error | null = null;
-  
-  // Tentar cada URL em sequência
-  for (const url of urlsToTry) {
-    try {
-      const response = await fetch(url, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          'Origin': window.location.origin
-        }
-      });
-      
-      if (!response.ok) {
-        const error = await response.json().catch(() => ({ code: response.status, msg: response.statusText }));
-        throw new Error(`Binance API Error: ${error.code} ${error.msg || ''}`);
+  try {
+    // ✅ Usar proxy serverless para evitar CORS
+    const queryParams = new URLSearchParams({
+      endpoint,
+      ...params
+    }).toString();
+    
+    const proxyUrl = `/api/binance-proxy?${queryParams}`;
+    
+    console.log(`📊 [Binance] Chamando via proxy: ${endpoint}`);
+    
+    const response = await fetch(proxyUrl, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
       }
-      
-      // Se chegou aqui, a requisição foi bem-sucedida
-      return await response.json();
-    } catch (error) {
-      console.warn(`Falha ao acessar ${url}:`, error);
-      lastError = error as Error;
-      // Continuar tentando a próxima URL
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ 
+        error: `HTTP ${response.status}` 
+      }));
+      throw new Error(errorData.error || `Binance API Error: ${response.status}`);
     }
+    
+    const result = await response.json();
+    
+    if (!result.success) {
+      throw new Error(result.error || 'Erro desconhecido da Binance API');
+    }
+    
+    return result.data as T;
+    
+  } catch (error) {
+    console.error(`❌ [Binance] Erro ao chamar ${endpoint}:`, error);
+    throw error;
   }
-  
-  // Se chegou aqui, todas as tentativas falharam
-  console.error('Todas as tentativas de acessar a Binance falharam:', lastError);
-  throw lastError;
 }
 
 /**

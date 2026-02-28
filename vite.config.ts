@@ -31,6 +31,19 @@ export default defineConfig(({ mode }) => ({
         '**/.git/**'
       ]
     },
+    proxy: {
+      // Proxy para API serverless local (desenvolvimento)
+      '/api': {
+        target: 'http://localhost:3000',
+        changeOrigin: true,
+        secure: false,
+        configure: (proxy, _options) => {
+          proxy.on('error', (err, _req, _res) => {
+            console.log('⚠️ Proxy error (API serverless não está rodando?):', err.message);
+          });
+        },
+      },
+    },
   },
   preview: {
     port: 8090, // Alterado de 3000 para 8090

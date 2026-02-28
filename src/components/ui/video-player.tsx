@@ -188,7 +188,7 @@ export function VideoPlayer({
     const isActuallyPlaying = !video.paused && !video.ended && video.readyState >= 2;
     wasPlayingBeforeSeekRef.current = isActuallyPlaying;
     
-    console.log(`📍 [SEEK-PRESERVE] Era ${isActuallyPlaying ? 'TOCANDO' : 'PAUSADO'}`);
+    // Era PAUSADO/TOCANDO (silenciado)
     return isActuallyPlaying;
   };
 
@@ -200,28 +200,28 @@ export function VideoPlayer({
     const wasPlayingBefore = wasPlayingBeforeSeekRef.current;
     const isCurrentlyPaused = video.paused;
     
-    console.log(`🎯 [SEEK-RESTORE] Era tocando: ${wasPlayingBefore} | Atualmente pausado: ${isCurrentlyPaused}`);
+    // SEEK-RESTORE (silenciado)
     
     // REGRA SIMPLES: Restaurar exatamente o estado que estava antes do seeking
     if (wasPlayingBefore && isCurrentlyPaused) {
-      console.log('▶️ [SEEK-RESTORE] Restaurando reprodução após seeking');
+      // Restaurando reprodução (silenciado)
       video.play()
         .then(() => {
           setIsPlaying(true);
-          console.log('✅ [SEEK-RESTORE] Reprodução restaurada');
+          // Reprodução restaurada (silenciado)
         })
         .catch(err => {
           console.warn('⚠️ [SEEK-RESTORE] Falha ao restaurar:', err);
           setIsPlaying(false);
         });
     } else if (!wasPlayingBefore && !isCurrentlyPaused) {
-      console.log('⏸️ [SEEK-RESTORE] Pausando vídeo (estava pausado antes)');
+      // Pausando vídeo (silenciado)
       video.pause();
       setIsPlaying(false);
     } else {
       // Estados já estão corretos, só sincronizar
       setIsPlaying(!isCurrentlyPaused);
-      console.log(`🔄 [SEEK-RESTORE] Estados já sincronizados: ${!isCurrentlyPaused ? 'tocando' : 'pausado'}`);
+      // Estados já sincronizados (silenciado)
     }
   };
 
@@ -287,7 +287,7 @@ export function VideoPlayer({
     const savedPosition = localStorage.getItem(`video-position-${videoKey}`);
     
     if (wasPreviouslyPaused) {
-      console.log('📋 [INIT] Restaurando estado pausado anterior');
+      // Restaurando estado pausado
       userPausedRef.current = true;
       video.setAttribute("data-user-paused", "true");
       setIsPlaying(false);
@@ -297,7 +297,7 @@ export function VideoPlayer({
         const position = parseFloat(savedPosition);
         if (!isNaN(position)) {
           video.currentTime = position;
-          console.log(`📍 [INIT] Posição restaurada: ${position}s`);
+          // Posição restaurada
         }
       }
     }
@@ -312,23 +312,23 @@ export function VideoPlayer({
     const updateDuration = () => {
       // Não atualizar a duração se o vídeo estiver pausado pelo usuário
       if (userPausedRef.current || preventLoadRef.current) {
-        console.log(`Evento de atualização de duração bloqueado porque o vídeo ${videoKey} foi pausado pelo usuário`);
+        // Evento bloqueado (silenciado)
         return;
       }
       
       setDuration(video.duration);
-      console.log(`Duração do vídeo ${videoKey} carregada:`, video.duration);
+      // Duração carregada (silenciado)
     };
     
         const handlePlay = () => {
-      console.log('🎵 [EVENT-PLAY] Vídeo iniciou reprodução');
+      // Vídeo iniciou
       setIsPlaying(true);
       setIsLoading(false);
       updateFullscreenPlayButton(true);
     };
 
     const handlePause = () => {
-      console.log('⏸️ [EVENT-PAUSE] Vídeo pausou');
+      // Vídeo pausou (silenciado)
       setIsPlaying(false);
       updateFullscreenPlayButton(false);
     };
@@ -354,7 +354,7 @@ export function VideoPlayer({
     // Adicionar manipulador para eventos de carregamento específicos do vídeo
     const handleLoadedMetadata = () => {
       if (userPausedRef.current || preventLoadRef.current) {
-        console.log(`Evento loadedmetadata bloqueado porque o vídeo ${videoKey} foi pausado pelo usuário`);
+        // Evento bloqueado (silenciado)
         return;
       }
     };
@@ -596,7 +596,7 @@ export function VideoPlayer({
     
     // CORREÇÃO: Inicialização específica para vídeo da dashboard
     if (isDashboardVideo && autoPlay && !video.hasAttribute("data-initialized")) {
-      console.log('🎬 [INIT-DASHBOARD] Configurando vídeo da dashboard');
+      // Configurando vídeo
       video.loop = true;
       video.muted = true;
       video.setAttribute("data-initialized", "true");
@@ -629,7 +629,7 @@ export function VideoPlayer({
     // Sobrescrever o método load
     video.load = function() {
       if (preventLoadRef.current || userPausedRef.current) {
-        console.log('Carregamento do vídeo bloqueado porque o usuário pausou manualmente');
+        // Carregamento bloqueado
         
         // Restaurar a posição do vídeo se houver uma salva
         const savedPosition = video.getAttribute("data-pause-position");
@@ -669,7 +669,7 @@ export function VideoPlayer({
       const savedPosition = localStorage.getItem(`video-position-${videoKey}`);
       if (savedPosition) {
         const position = parseFloat(savedPosition);
-        console.log(`Restaurando vídeo para posição salva: ${position}`);
+        // Restaurando posição
         video.currentTime = position;
         video.setAttribute("data-pause-position", position.toString());
       }
@@ -686,7 +686,7 @@ export function VideoPlayer({
     };
     const updateDuration = () => {
       setDuration(video.duration);
-      console.log(`Duração do vídeo ${videoKey} carregada:`, video.duration);
+      // Duração carregada (silenciado)
     };
     const handlePlay = () => {
       // Atualizar o estado de reprodução
@@ -1046,7 +1046,7 @@ export function VideoPlayer({
     const syncStateWithVideo = () => {
       const videoIsPlaying = !video.paused && !video.ended && video.readyState > 2;
       if (isPlaying !== videoIsPlaying) {
-        console.log(`🔄 [SYNC] Estado dessincronizado! React: ${isPlaying} | Video: ${videoIsPlaying} - Corrigindo...`);
+        // Estado dessincronizado - corrigindo
         setIsPlaying(videoIsPlaying);
       }
     };
@@ -1772,7 +1772,7 @@ export function VideoPlayer({
     const video = videoRef.current;
     if (!video) return;
     
-    console.log(`Fonte de vídeo alterada para: ${src}`);
+    // Fonte alterada
     
     // Definir diretamente o src
     if (video.src !== src) {
@@ -1799,7 +1799,7 @@ export function VideoPlayer({
       // Se estava reproduzindo, continuar a reprodução
       if (wasPlaying || autoPlay) {
         video.play().catch(err => {
-          console.log("Não foi possível reproduzir vídeo após mudança de idioma:", err);
+          // Erro ao reproduzir vídeo (silenciado)
         });
       }
     }
@@ -1896,7 +1896,7 @@ export function VideoPlayer({
       if (!isNaN(position) && isFinite(position)) {
         video.currentTime = position;
         setCurrentTime(position);
-        console.log(`Restaurando vídeo ${videoKey} para última posição conhecida: ${position}`);
+        // Restaurando vídeo (silenciado)
       }
     }
 
@@ -2078,6 +2078,7 @@ export function VideoPlayer({
                 autoPlay={autoPlay}
                 muted={muted}
                 loop={loop}
+                preload="metadata"
                 className="w-full h-96 object-cover"
                 playsInline
                 onClick={(e) => e.stopPropagation()}

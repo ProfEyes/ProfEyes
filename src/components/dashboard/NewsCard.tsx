@@ -45,6 +45,86 @@ function shouldPrefetchNews(): boolean {
   return !isNewsCacheValid();
 }
 
+// ✅ CACHE DE TRADUÇÃO para melhorar performance
+const translationCache: Record<string, string> = {};
+
+// Função para gerar chave de cache
+function getCacheKey(text: string, targetLang: string): string {
+  return `translation_${targetLang}_${text.substring(0, 100)}`;
+}
+
+// Função para carregar cache do localStorage
+function loadTranslationCache(): void {
+  try {
+    const cached = localStorage.getItem('translation_cache_google');
+    if (cached) {
+      const parsed = JSON.parse(cached);
+      Object.assign(translationCache, parsed);
+      console.log(`💾 [Tradução Google] Cache carregado: ${Object.keys(translationCache).length} entradas`);
+    }
+  } catch (e) {
+    console.warn('⚠️ [Tradução] Erro ao carregar cache:', e);
+  }
+}
+
+// Função para salvar cache no localStorage
+function saveTranslationCache(): void {
+  try {
+    localStorage.setItem('translation_cache_google', JSON.stringify(translationCache));
+  } catch (e) {
+    console.warn('⚠️ [Tradução] Erro ao salvar cache:', e);
+  }
+}
+
+// Carregar cache ao iniciar
+loadTranslationCache();
+
+// ✅ Função para traduzir texto usando Google Translate (GRATUITA E ILIMITADA)
+async function translateText(text: string, targetLang: string): Promise<string> {
+  if (!text || text.trim() === '') {
+    return text;
+  }
+  
+  // ✅ Verificar cache primeiro
+  const cacheKey = getCacheKey(text, targetLang);
+  if (translationCache[cacheKey]) {
+    return translationCache[cacheKey];
+  }
+  
+  try {
+    // ✅ Usar Google Translate público (gratuito, ilimitado e sem API key)
+    // Traduzindo (silenciado)
+    
+    // Usar endpoint público do Google Translate
+    const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=${targetLang}&dt=t&q=${encodeURIComponent(text.slice(0, 5000))}`;
+    
+    const response = await fetch(url);
+    
+    if (!response.ok) {
+      console.warn(`⚠️ [Google Translate] Erro ${response.status}`);
+      return text;
+    }
+    
+    const data = await response.json();
+    
+    // Google Translate retorna array com estrutura: [[[texto_traduzido, texto_original, ...]]]
+    const translated = data[0]?.map((item: any) => item[0]).join('') || text;
+    
+    // Tradução sucesso (silenciado)
+    
+    // ✅ Salvar no cache
+    translationCache[cacheKey] = translated;
+    saveTranslationCache();
+    
+    return translated;
+    
+  } catch (error) {
+    console.warn(`⚠️ [Google Translate] Erro ao traduzir:`, error);
+    // ✅ Fallback: retornar texto original
+    return text;
+  }
+}
+
 // Imagens de fallback confiáveis para casos de erro
 const FALLBACK_IMAGES = [
   "https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?w=600&auto=format&fit=crop&q=80",
@@ -80,7 +160,7 @@ type ExtendedMarketNews = Partial<MarketNews> & {
 export function NewsCard() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   
   // Estado para controlar o atraso adicional de exibição
   const [isDelayedLoading, setIsDelayedLoading] = useState(true);
@@ -105,23 +185,82 @@ export function NewsCard() {
     isSuccess,
     dataUpdatedAt
   } = useQuery({
-    queryKey: ['dashboardMarketNews'],
+    queryKey: ['dashboardMarketNews', language],
     queryFn: async () => {
-      // Buscar notícias do Finnhub com tratamento de erro para evitar rejeições não tratadas
       try {
-        return await fetchMarketNews();
+        const result = await fetchMarketNews();
+        
+        // ✅ PRIORIZAR CNBC: Ordenar notícias com CNBC primeiro
+        const sortedResult = result.sort((a, b) => {
+          const aIsCNBC = a.source?.toUpperCase().includes('CNBC') ? 1 : 0;
+          const bIsCNBC = b.source?.toUpperCase().includes('CNBC') ? 1 : 0;
+          
+          // CNBC vem primeiro (ordem decrescente)
+          if (aIsCNBC !== bIsCNBC) {
+            return bIsCNBC - aIsCNBC;
+          }
+          
+          // Para mesma fonte, ordenar por data (mais recente primeiro)
+          const dateA = new Date(a.publishedAt || a.datetime || 0).getTime();
+          const dateB = new Date(b.publishedAt || b.datetime || 0).getTime();
+          return dateB - dateA;
+        });
+        
+        // Pegar apenas 3 primeiras notícias
+        const newsToShow = sortedResult.slice(0, 3);
+        
+        // Determinar idioma de destino
+        const targetLang = language === 'pt' ? 'pt' : 
+                          language === 'es' ? 'es' : 
+                          language === 'en' ? 'en' : 'pt';
+        
+        // Se idioma for inglês, retornar imediatamente
+        if (targetLang === 'en') {
+          return newsToShow;
+        }
+        
+        // ✅ TRADUZIR IMEDIATAMENTE (bloquear até terminar)
+        const translated = await Promise.all(
+          newsToShow.map(async (item) => {
+            try {
+              const translatedTitle = await translateText(item.headline || item.title || '', targetLang);
+              const translatedSummary = await translateText(item.summary || item.content || '', targetLang);
+              
+              return {
+                ...item,
+                title: translatedTitle || item.title,
+                headline: translatedTitle || item.headline,
+                summary: translatedSummary || item.summary,
+                content: translatedSummary || item.content,
+              };
+            } catch (err) {
+              console.warn('⚠️ Erro ao traduzir notícia, usando original:', err);
+              return item;
+            }
+          })
+        );
+        
+        return translated;
       } catch (e) {
-        console.warn('Erro ao buscar notícias (queryFn):', e);
+        console.error('❌ [NewsCard] Erro ao buscar notícias:', e);
         return [] as ExtendedMarketNews[];
       }
     },
-    // Não buscar automaticamente se o cache estiver válido
-    enabled: shouldPrefetchNews(),
-    // Manter os dados em cache por 5 minutos
-    staleTime: 5 * 60 * 1000,
-    // Em caso de erro, tentar novamente 1 vez após 2 segundos
-    retry: 1,
-    retryDelay: 2000
+    // ✅ SEMPRE buscar notícias ao carregar
+    enabled: true,
+    // Reduzir cache para 30 minutos para garantir tradução atualizada
+    staleTime: 30 * 60 * 1000,
+    // ✅ Atualizar automaticamente a cada hora
+    refetchInterval: 60 * 60 * 1000,
+    // Continuar refetch mesmo quando a aba estiver em background
+    refetchIntervalInBackground: true,
+    // Em caso de erro, tentar novamente 2 vezes
+    retry: 2,
+    retryDelay: 3000,
+    // ✅ IMPORTANTE: Refetch ao focar na janela para garantir tradução correta
+    refetchOnWindowFocus: true,
+    // ✅ SEMPRE buscar ao abrir a página para garantir idioma correto
+    refetchOnMount: 'always',
   });
   
   // Efeito para adicionar o atraso adicional de um segundo após o carregamento real
@@ -149,13 +288,19 @@ export function NewsCard() {
       isManualRefetch.current = false;
       // Atualizar o timestamp da última atualização bem-sucedida
       lastSuccessfulUpdate.current = Date.now();
-      // Notícias carregadas com sucesso
-      console.log("Notícias carregadas com sucesso!");
     }
   }, [isQueryLoading, isError, news]);
   
+  // ✅ LISTENER: Invalidar cache quando o idioma mudar
+  useEffect(() => {
+    queryClient.invalidateQueries({ queryKey: ['dashboardMarketNews'] });
+  }, [language, queryClient]);
+  
   // Agregação dos estados de carregamento (real + atraso)
   const isLoading = isQueryLoading || isDelayedLoading;
+  
+  // ✅ As notícias já vêm traduzidas da query
+  const displayNews = news;
   
   // Função para navegar para a página de notícias
   const goToNewsPage = useCallback(() => {
@@ -261,7 +406,7 @@ export function NewsCard() {
             }, 2000);
             
             // Notícias atualizadas com sucesso
-            console.log("Notícias atualizadas com sucesso!");
+            // Notícias atualizadas (silenciado)
           } else {
             // Se não há notícias anteriores, apenas usar as novas notícias
             queryClient.setQueryData(['dashboardMarketNews'], newNews);
@@ -273,7 +418,7 @@ export function NewsCard() {
             }, 2000);
             
             // Notícias carregadas com sucesso
-            console.log("Notícias carregadas com sucesso!");
+            // Notícias carregadas (silenciado)
           }
         } else {
           // Se não houver novas notícias, apenas fazer refetch
@@ -592,15 +737,15 @@ export function NewsCard() {
         {!isLoading && isError ? renderErrorMessage() : null}
         
         {/* Data loaded state */}
-        {!isLoading && !isError && news && news.length > 0 ? (
+        {!isLoading && !isError && displayNews && displayNews.length > 0 ? (
           <div className="divide-y">
             {/* Mostrar apenas as 3 primeiras notícias no Dashboard */}
-            {news.slice(0, 3).map((item, index) => renderNewsItem(item as ExtendedMarketNews, index))}
+            {displayNews.slice(0, 3).map((item, index) => renderNewsItem(item as ExtendedMarketNews, index))}
           </div>
         ) : null}
         
         {/* Empty state - no news found but no error */}
-        {!isLoading && !isError && (!news || news.length === 0) ? (
+        {!isLoading && !isError && (!displayNews || displayNews.length === 0) ? (
           <div className="py-8 text-center">
             <p className="text-muted-foreground">{t('news.none')}</p>
           </div>

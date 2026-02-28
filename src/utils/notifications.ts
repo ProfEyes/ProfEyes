@@ -22,16 +22,6 @@ export interface NotificationOptions {
   requireInteraction?: boolean;
 }
 
-// Sons de notificação por prioridade
-const NOTIFICATION_SOUNDS = {
-  high: '/sounds/notification-high.mp3',
-  medium: '/sounds/notification-medium.mp3',
-  low: '/sounds/notification-low.mp3',
-  system: '/sounds/notification-system.mp3',
-  success: '/sounds/notification-success.mp3',
-  error: '/sounds/notification-error.mp3'
-};
-
 // Verifica se as notificações estão disponíveis no navegador
 export const isNotificationSupported = (): boolean => {
   return 'Notification' in window;
@@ -148,11 +138,6 @@ export const sendNotification = (options: NotificationOptions): void => {
           }
         };
       }
-      
-      // Tocar som se habilitado para este tipo
-      if (settings.sound && typeConfig.sound && sound) {
-        playNotificationSound(priority);
-      }
     } else {
       // Se não houver configurações, usa comportamento padrão
       if (isNotificationPermissionGranted()) {
@@ -166,11 +151,6 @@ export const sendNotification = (options: NotificationOptions): void => {
           window.focus();
           notification.close();
         };
-      }
-      
-      // Tocar som por padrão
-      if (sound) {
-        playNotificationSound(priority);
       }
     }
     
@@ -194,35 +174,6 @@ export const sendNotification = (options: NotificationOptions): void => {
   }
 };
 
-// Toca um som baseado na prioridade da notificação
-export const playNotificationSound = (priority: NotificationPriority = 'medium'): void => {
-  try {
-    // Obter o volume das configurações
-    let volume = 0.7; // 70% volume padrão
-    
-    try {
-      const settingsStr = localStorage.getItem('notificationSettings');
-      if (settingsStr) {
-        const settings = JSON.parse(settingsStr);
-        volume = settings.volume ? settings.volume / 100 : 0.7;
-      }
-    } catch (e) {
-      console.error('Erro ao obter volume das configurações:', e);
-    }
-    
-    // Selecionar o som baseado na prioridade
-    const soundFile = NOTIFICATION_SOUNDS[priority] || NOTIFICATION_SOUNDS.medium;
-    
-    // Criar e tocar o áudio
-    const audio = new Audio(soundFile);
-    audio.volume = volume;
-    audio.play().catch(error => {
-      console.error('Erro ao tocar som de notificação:', error);
-    });
-  } catch (error) {
-    console.error('Erro ao reproduzir som de notificação:', error);
-  }
-};
 
 // Envia uma notificação de teste
 export const sendTestNotification = (): void => {

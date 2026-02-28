@@ -1,0 +1,15 @@
+{
+  "name": "supabase-mcp-connector",
+  "version": "1.0.0",
+  "description": "Conector MCP para explorar tabelas do Supabase",
+  "main": "supabase-mcp-connector.js",
+  "scripts": {
+    "start": "node supabase-mcp-connector.js"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.38.4"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  }
+} 
