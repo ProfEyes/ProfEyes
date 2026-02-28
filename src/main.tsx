@@ -48,7 +48,6 @@ signalCacheKeys.forEach(key => {
   const isProtected = protectedKeys.some(protectedKey => key.toLowerCase().includes(protectedKey));
   
   if (isProtected) {
-    console.error(`❌ [SEGURANÇA] Tentativa de remover chave protegida bloqueada: ${key}`);
     return;
   }
   
@@ -91,14 +90,10 @@ ensureCorrectPort();
 
 // 🗑️ LIMPEZA FORÇADA: Remover notificações antigas do localStorage
 try {
-  const oldNotifications = localStorage.getItem('userNotifications');
-  if (oldNotifications) {
-    localStorage.removeItem('userNotifications');
-    console.log('🗑️ Notificações antigas removidas do localStorage');
-  }
+  localStorage.removeItem('userNotifications');
   localStorage.removeItem('pre-signal-notification-cache');
-} catch (e) {
-  console.warn('Erro ao limpar notificações antigas:', e);
+} catch {
+  // ignorar erros de limpeza
 }
 
 // Inicializar sistema de pré-carregamento de avatar para evitar flickering
@@ -117,9 +112,7 @@ if (storedAvatar) {
         detail: { avatarUrl: storedAvatar }
       }));
     })
-    .catch((error) => {
-      console.warn('Erro ao precarregar avatar na inicialização:', error);
-    });
+    .catch(() => {});
 }
 
 // Verificar avatar sempre que a aba receber foco
@@ -203,8 +196,8 @@ function cleanOldCacheData() {
             cleanedCount++;
             // Removido (silenciado)
           }
-        } catch (e) {
-          console.warn(`⚠️ Erro ao processar ${key}:`, e);
+        } catch {
+          // ignorar
         }
       }
     });
@@ -223,13 +216,11 @@ function cleanOldCacheData() {
           cleanedCount++;
         }
       }
-    } catch (e) {
-      console.warn('⚠️ Erro ao limitar cache de traduções:', e);
+    } catch {
+      // ignorar
     }
-    
-    // Limpeza concluída
-  } catch (error) {
-    console.warn('⚠️ Erro na limpeza de cache (não crítico):', error);
+  } catch {
+    // ignorar erros de limpeza de cache
   }
 }
 
@@ -275,8 +266,8 @@ try {
   localStorage.removeItem('pre-signal-notification-cache'); // ✅ Limpar cache de pré-sinais
   
   // Todos os caches limpos
-} catch (error) {
-  console.error('❌ [APP INIT] Erro durante limpeza:', error);
+} catch {
+  // ignorar erros de limpeza inicial
 }
 
 // Inicializar o gerenciador de visibilidade
@@ -383,68 +374,32 @@ import { signalNotificationService } from './services/signalNotifications';
 
 // Verificar se a API do Supabase está acessível
 supabaseInstance.auth.getSession().then(({ data, error }) => {
-  if (error) {
-    console.warn('Erro ao verificar sessão do Supabase:', error.message);
-  } else {
+  if (!error) {
     // Conexão estabelecida
     
     // Só inicializar o serviço de usuários se houver uma sessão ativa
     if (data?.session?.user) {
       // Sessão ativa (silenciado)
       
-      // ✅ Inicializar serviço de notificações de sinais
-      signalNotificationService.initialize().then((success) => {
-        if (success) {
-          // Serviço inicializado (silenciado)
-        } else {
-          console.warn('⚠️ Serviço de notificações de sinais não pôde ser inicializado');
-        }
-      }).catch((err) => {
-        console.error('❌ Erro ao inicializar notificações de sinais:', err);
-      });
+      signalNotificationService.initialize().catch(() => {});
       
-      // Inicializar o serviço de usuários para garantir persistência de perfis
       userService.init().then(() => {
-        // Serviço inicializado (silenciado)
-        
-        // Tentar inicializar tabelas necessárias para persistência de dados
-        // incluindo persistência de avatares e nomes em user_profiles
         try {
-          // Migrações iniciadas (silenciado)
-          
-          // Importação dinâmica para não bloquear o carregamento inicial
           import('./scripts/migrateAvatarsToDb').then((module) => {
-            const initAvatarMigration = module.default;
-            initAvatarMigration();
-            // Migração de avatares (silenciado)
-          }).catch(err => {
-            console.warn('Aviso: migração de avatares falhou:', err);
-          });
+            module.default();
+          }).catch(() => {});
           
-          // Importar migração de nomes de usuário
           import('./scripts/migrateUserNamesToDb').then((module) => {
-            const initUserNameMigration = module.default;
-            initUserNameMigration();
-            // Migração de nomes (silenciado)
-          }).catch(err => {
-            console.warn('Aviso: migração de nomes falhou:', err);
-          });
-        } catch (initError) {
-          console.warn('Não foi possível inicializar todos os serviços:', initError);
+            module.default();
+          }).catch(() => {});
+        } catch {
+          // ignorar erros de migração
         }
-      }).catch(err => {
-        console.warn('Aviso: inicialização do serviço de usuários falhou:', err);
-      });
-    } else {
-      // Nenhuma sessão ativa
-    }
+      }).catch(() => {});
   }
 });
 
-// Verificar sincronização pendente durante o carregamento da aplicação
-checkPendingSyncOnLoad().catch(error => {
-  console.warn("Erro ao verificar sincronização pendente:", error);
-});
+checkPendingSyncOnLoad().catch(() => {});
 
 // Iniciar serviço de persistência global
 const stopUserSettingsSync = startUserSettingsSyncService();

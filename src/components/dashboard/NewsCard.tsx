@@ -60,10 +60,9 @@ function loadTranslationCache(): void {
     if (cached) {
       const parsed = JSON.parse(cached);
       Object.assign(translationCache, parsed);
-      console.log(`💾 [Tradução Google] Cache carregado: ${Object.keys(translationCache).length} entradas`);
     }
-  } catch (e) {
-    console.warn('⚠️ [Tradução] Erro ao carregar cache:', e);
+  } catch {
+    // ignorar erros de cache
   }
 }
 

@@ -35,24 +35,18 @@ class SignalNotificationService {
    */
   async initialize(): Promise<boolean> {
     if (this.isInitialized) {
-      console.log('📢 [Signal Notifications] Já inicializado');
       return true;
     }
     
-    // Verificar se notificações são suportadas
     if (!('Notification' in window)) {
-      console.error('📢 [Signal Notifications] Notificações não suportadas neste navegador');
       return false;
     }
     
-    // Solicitar permissão
     const permission = await this.requestPermission();
     if (!permission) {
-      console.warn('📢 [Signal Notifications] Permissão negada pelo usuário');
       return false;
     }
     
-    console.log('✅ [Signal Notifications] Serviço inicializado com sucesso');
     this.isInitialized = true;
     
     // Iniciar verificação periódica
@@ -67,10 +61,8 @@ class SignalNotificationService {
   async requestPermission(): Promise<boolean> {
     try {
       const permission = await Notification.requestPermission();
-      console.log(`📢 [Signal Notifications] Permissão: ${permission}`);
       return permission === 'granted';
-    } catch (error) {
-      console.error('📢 [Signal Notifications] Erro ao solicitar permissão:', error);
+    } catch {
       return false;
     }
   }
@@ -79,7 +71,6 @@ class SignalNotificationService {
    * Inicia verificação periódica de sinais (a cada 1 minuto)
    */
   private startPeriodicCheck(): void {
-    console.log('⏰ [Signal Notifications] Iniciando verificação periódica (1 minuto)');
     
     // Verificar imediatamente
     this.checkUpcomingSignals();
@@ -99,7 +90,6 @@ class SignalNotificationService {
       this.checkInterval = null;
     }
     this.isInitialized = false;
-    console.log('⏹️ [Signal Notifications] Serviço parado');
   }
   
   /**
@@ -117,9 +107,6 @@ class SignalNotificationService {
       const targetMinute = targetDate.getMinutes();
       const targetTime = `${targetHour.toString().padStart(2, '0')}:${targetMinute.toString().padStart(2, '0')}`;
       
-      console.log(`🔍 [Signal Notifications] Verificando sinais para ${targetTime} (daqui a 10min)`);
-      
-      // Buscar sinais do banco que têm entry_time igual ao horário alvo
       const supabase = getSupabase();
       const { data: signals, error } = await supabase
         .from('active_signals')
@@ -127,15 +114,7 @@ class SignalNotificationService {
         .eq('is_active', true)
         .order('position', { ascending: true });
       
-      if (error) {
-        console.error('❌ [Signal Notifications] Erro ao buscar sinais:', error);
-        return;
-      }
-      
-      if (!signals || signals.length === 0) {
-        console.log('📭 [Signal Notifications] Nenhum sinal ativo encontrado');
-        return;
-      }
+      if (error || !signals || signals.length === 0) return;
       
       // Filtrar sinais que entram daqui a ~10 minutos
       for (const signal of signals) {
@@ -147,9 +126,6 @@ class SignalNotificationService {
           const notificationKey = `${signal.id}_${signalTime}`;
           
           if (!this.notifiedSignals.has(notificationKey)) {
-            console.log(`📢 [Signal Notifications] Enviando notificação para: ${signal.display_name || signal.symbol} às ${signalTime}`);
-            
-            // Enviar notificação
             await this.sendSignalNotification(signal);
             
             // Marcar como notificado
@@ -160,8 +136,8 @@ class SignalNotificationService {
           }
         }
       }
-    } catch (error) {
-      console.error('❌ [Signal Notifications] Erro ao verificar sinais:', error);
+    } catch {
+      // ignorar erros de verificação de sinais
     }
   }
   
@@ -236,9 +212,8 @@ Prepare-se para realizar o trade!`;
         notification.close();
       };
       
-      console.log(`✅ [Signal Notifications] Notificação enviada: ${signal.display_name || signal.symbol}`);
-    } catch (error) {
-      console.error('❌ [Signal Notifications] Erro ao enviar notificação:', error);
+    } catch {
+      // ignorar erros de notificação
     }
   }
   
@@ -251,7 +226,6 @@ Prepare-se para realizar o trade!`;
       const array = Array.from(this.notifiedSignals);
       const toKeep = array.slice(-50);
       this.notifiedSignals = new Set(toKeep);
-      console.log('🧹 [Signal Notifications] Cache de notificações limpo');
     }
   }
   

@@ -103,8 +103,8 @@ class RealtimeSignalsService {
       } else {
         // Cache na versão correta (silenciado)
       }
-    } catch (error) {
-      console.warn('⚠️ [Dashboard] Erro durante verificação:', error);
+    } catch {
+      // ignorar erros de verificação de cache
     }
   }
   
@@ -125,10 +125,6 @@ class RealtimeSignalsService {
     const cached = getCachedData<ActiveSignal[]>(this.STORAGE_KEY);
     if (cached) {
       this.signals = cached;
-      console.log('📦 Sinais carregados do cache:', this.signals.length);
-      console.warn('⚠️ Cache pode estar desatualizado - será atualizado do servidor em seguida');
-    } else {
-      console.log('📦 Sem cache válido ou cache expirado (> 3 minutos)');
     }
   }
 
@@ -136,20 +132,15 @@ class RealtimeSignalsService {
    * Inicializa o serviço e estabelece conexão Realtime
    */
   async initialize(): Promise<void> {
-    const now = new Date().toLocaleTimeString('pt-BR');
-    // Verificando inicialização
     
     if (this.isInitialized && this.signals.length > 0 && this.channel) {
-      console.log(`✅ [Dashboard Init] Já inicializado com ${this.signals.length} sinais - SKIP (${now})`);
       return;
     }
 
     try {
       // Inicializando
 
-      // Se já estava inicializado mas perdeu sinais, fazer limpeza primeiro
       if (this.isInitialized) {
-        console.log(`🔄 [Dashboard Init] Re-inicializando (sinais perdidos ou sem canal) (${now})`);
         this.cleanup();
       }
 
@@ -163,18 +154,10 @@ class RealtimeSignalsService {
       this.setupRealtimeSubscription();
       // Realtime configurado
       
-      // ✅ CORREÇÃO 5: Iniciar monitoramento de conexão
       this.startConnectionMonitor();
-      console.log(`✅ [Dashboard Init] Monitoramento de conexão iniciado (${now})`);
-      
-      // ✅ NOVO: Listener para refresh forçado
       this.setupForceRefreshListener();
-      console.log(`✅ [Dashboard Init] Listener de refresh forçado configurado (${now})`);
-
       this.isInitialized = true;
-      console.log(`🎉 [Dashboard Init] Inicialização COMPLETA com ${this.signals.length} sinais (${now})`);
     } catch (error) {
-      console.error(`❌ [Dashboard Init] Erro ao inicializar (${now}):`, error);
       this.isInitialized = false;
       throw error;
     }
@@ -229,8 +212,6 @@ class RealtimeSignalsService {
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
         const supabase = getSupabase();
-        const now = new Date().toLocaleTimeString('pt-BR');
-        // Buscando sinais do banco
         
         // ⚡ Timeout REDUZIDO para 8 segundos (evitar travamento da UI)
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -249,24 +230,17 @@ class RealtimeSignalsService {
         const { data, error } = await Promise.race([queryPromise, timeoutPromise]) as any;
 
         if (error) {
-          console.error(`❌ [Dashboard] Erro na tentativa ${attempt}/${maxRetries}:`, error);
           lastError = error;
-          
-          // Aguardar antes de tentar novamente (só se não for a última tentativa)
           if (attempt < maxRetries) {
-            console.log(`⏳ [Dashboard] Aguardando 500ms antes da próxima tentativa...`);
             await new Promise(resolve => setTimeout(resolve, 500));
-            continue; // Tentar novamente
+            continue;
           }
-          
-          // Última tentativa falhou
           throw error;
         }
 
         // Sinais recebidos do banco
 
         if (!data || data.length === 0) {
-          console.warn('⚠️ [Dashboard] Banco retornou array vazio!');
           this.signals = [];
           this.notifyCallbacks();
           return;
@@ -292,27 +266,14 @@ class RealtimeSignalsService {
           // Se a diferença for > 720 minutos (12 horas), o sinal é do próximo dia (futuro)
           if (timeDiffMinutes > 720) {
             timeDiffMinutes -= 1440;
-            console.log(`🔄 [Dashboard] Ajuste meia-noite: ${entryTimeStr} detectado como FUTURO`);
-          }
-          // Se a diferença for < -720, o horário é do dia anterior (muito antigo)
-          else if (timeDiffMinutes < -720) {
+          } else if (timeDiffMinutes < -720) {
             timeDiffMinutes += 1440;
-            console.log(`🔄 [Dashboard] Ajuste meia-noite: ${entryTimeStr} detectado como ANTIGO`);
           }
           
-          // 🔥 VALIDAÇÃO RIGOROSA: REJEITAR sinais com entry_time > 30 minutos no PASSADO
-          // (mas aceitar sinais futuros - diff negativo)
           if (timeDiffMinutes > 30) {
-            console.warn(`⚠️ [Dashboard] Sinal ${signal.symbol} REJEITADO - entry_time muito antigo (>30min):`, {
-              entry_time: entryTimeStr,
-              current_time: `${currentHour}:${currentMinute}`,
-              diff_minutes: timeDiffMinutes
-            });
             return false;
           }
           
-          const status = timeDiffMinutes < 0 ? 'FUTURO' : 'ATUAL';
-          // Sinal aceito
           return true;
         });
 
@@ -334,27 +295,16 @@ class RealtimeSignalsService {
         return;
       } catch (error) {
         lastError = error as Error;
-        console.error(`❌ [Dashboard] Exceção na tentativa ${attempt}/${maxRetries}:`, error);
-        
-        // Aguardar antes de tentar novamente (só se não for a última tentativa)
         if (attempt < maxRetries) {
-          console.log(`⏳ [Dashboard] Aguardando 500ms antes da próxima tentativa...`);
           await new Promise(resolve => setTimeout(resolve, 500));
         }
       }
     }
     
-    // Se chegou aqui, TODAS as tentativas falharam
-    console.error('❌ [Dashboard] TODAS as tentativas falharam! Último erro:', lastError);
-    
-    // ✅ Usar cache como fallback (mas avisar que pode estar desatualizado)
+    // Fallback: usar cache ou array vazio para desbloquear UI
     if (this.signals.length > 0) {
-      console.warn(`⚠️ [Dashboard] Usando ${this.signals.length} sinais do cache (PODE ESTAR DESATUALIZADO!)`);
       this.notifyCallbacks();
     } else {
-      console.error('❌ [Dashboard] Sem cache disponível e sem dados do servidor!');
-      // 🔥 CRÍTICO: Notificar callbacks mesmo sem dados para desbloquear UI
-      console.warn('🚨 [Dashboard] Notificando callbacks com array vazio para desbloquear UI...');
       this.signals = [];
       this.notifyCallbacks();
     }
@@ -465,9 +415,7 @@ class RealtimeSignalsService {
           
           // Se passou 15 minutos, forçar refresh (silencioso)
           if (minutesSinceEntry >= 15) {
-            this.fetchInitialSignals().catch(err => 
-              console.error('❌ Erro ao forçar refresh:', err)
-            );
+            this.fetchInitialSignals().catch(() => {});
           }
         }
       }
@@ -489,23 +437,13 @@ class RealtimeSignalsService {
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
         const timeInBackground = Date.now() - lastCheckTime;
-        console.log(`🔄 [Dashboard Monitor] Aba VOLTOU após ${Math.floor(timeInBackground / 1000)}s em background`);
-        
-        // Cancelar timeout atual e verificar imediatamente
         if (monitorTimeoutId) {
           clearTimeout(monitorTimeoutId);
           monitorTimeoutId = null;
         }
-        
-        // Se ficou mais de 30s em background, forçar refresh completo
         if (timeInBackground > MONITOR_INTERVAL) {
-          console.log(`🔄 [Dashboard Monitor] Forçando refresh completo (${Math.floor(timeInBackground / 1000)}s em background)...`);
-          this.fetchInitialSignals().catch(err => 
-            console.error('❌ Erro ao atualizar sinais após retorno:', err)
-          );
+          this.fetchInitialSignals().catch(() => {});
         }
-        
-        // Reiniciar verificação imediata
         checkConnection();
       }
     };
@@ -622,8 +560,8 @@ class RealtimeSignalsService {
     this.callbacks.forEach(callback => {
       try {
         callback([...this.signals]);
-      } catch (error) {
-        console.error('❌ Erro ao notificar callback:', error);
+      } catch {
+        // ignorar erros de callback
       }
     });
   }
@@ -635,8 +573,8 @@ class RealtimeSignalsService {
     this.updateCallbacks.forEach(callback => {
       try {
         callback(update);
-      } catch (error) {
-        console.error('❌ Erro ao notificar update callback:', error);
+      } catch {
+        // ignorar erros de callback
       }
     });
   }
@@ -706,30 +644,18 @@ class RealtimeSignalsService {
     this.updateCallbacks.clear();
     this.signals = [];
     this.isInitialized = false;
-    
-    console.log('🛑 RealtimeSignals: Destruído');
   }
 
   /**
    * Configura listener para refresh forçado de sinais
    */
   private setupForceRefreshListener(): void {
-    const handleForceRefresh = (event: Event) => {
-      const customEvent = event as CustomEvent;
-      const reason = customEvent.detail?.reason || 'unknown';
-      const timeInBackground = customEvent.detail?.timeInBackground || 0;
-      
-      console.log(`🔄 [Dashboard] Refresh forçado recebido (motivo: ${reason}, tempo background: ${Math.floor(timeInBackground / 1000)}s)`);
-      
-      this.fetchInitialSignals().catch(err => 
-        console.error('❌ Erro ao forçar refresh:', err)
-      );
+    const handleForceRefresh = () => {
+      this.fetchInitialSignals().catch(() => {});
     };
     
     window.addEventListener('force-refresh-signals', handleForceRefresh);
     window.addEventListener('force-update-after-background', handleForceRefresh);
-    
-    console.log('✅ [Dashboard] Listeners de refresh forçado configurados');
   }
 
   /**
@@ -737,17 +663,9 @@ class RealtimeSignalsService {
    */
   async forceRotation(): Promise<void> {
     const supabase = getSupabase();
-    console.log('🔄 Forçando rotação de sinais...');
-    
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data, error } = await (supabase as any).rpc('rotate_signals');
-    
-    if (error) {
-      console.error('❌ Erro ao forçar rotação:', error);
-      throw error;
-    }
-    
-    console.log('✅ Rotação forçada:', data);
+    const { error } = await (supabase as any).rpc('rotate_signals');
+    if (error) throw error;
   }
 
   /**
@@ -755,17 +673,9 @@ class RealtimeSignalsService {
    */
   async reinitialize(): Promise<void> {
     const supabase = getSupabase();
-    console.log('🔄 Reinicializando sistema de sinais...');
-    
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data, error } = await (supabase as any).rpc('initialize_signals');
-    
-    if (error) {
-      console.error('❌ Erro ao reinicializar:', error);
-      throw error;
-    }
-    
-    console.log('✅ Sistema reinicializado:', data);
+    const { error } = await (supabase as any).rpc('initialize_signals');
+    if (error) throw error;
     await this.refresh();
   }
 }
@@ -776,9 +686,6 @@ class RealtimeSignalsService {
 
 export const realtimeSignalsService = new RealtimeSignalsService();
 
-// Auto-inicializar quando o módulo for importado
 if (typeof window !== 'undefined') {
-  realtimeSignalsService.initialize().catch(error => {
-    console.error('❌ Falha na inicialização automática:', error);
-  });
+  realtimeSignalsService.initialize().catch(() => {});
 }
