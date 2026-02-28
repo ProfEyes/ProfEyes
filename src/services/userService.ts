@@ -1139,6 +1139,43 @@ export const userService = {
       return { language: 'pt' }; // Fallback para português
     }
   },
+
+  /**
+   * Atualizar preferências do trader (link e broker)
+   */
+  async updateTraderPreferences(preferences: {
+    preferred_trader_link?: string;
+    preferred_broker?: string;
+  }): Promise<{ success: boolean; error: Error | null }> {
+    try {
+      const { data: { user } } = await (supabase as SupabaseClient<Database>).auth.getUser();
+      
+      if (!user) {
+        return { success: false, error: new Error('Usuário não autenticado') };
+      }
+
+      // Atualizar na tabela user_profiles
+      const { error } = await supabase
+        .from('user_profiles')
+        .update({
+          preferred_trader_link: preferences.preferred_trader_link,
+          preferred_broker: preferences.preferred_broker,
+          updated_at: new Date().toISOString()
+        })
+        .eq('user_id', user.id);
+      
+      if (error) {
+        console.error('❌ [userService] Erro ao atualizar preferências do trader:', error);
+        return { success: false, error: error as Error };
+      }
+
+      console.log('✅ [userService] Preferências do trader atualizadas com sucesso');
+      return { success: true, error: null };
+    } catch (error) {
+      console.error('❌ [userService] Erro ao atualizar preferências do trader:', error);
+      return { success: false, error: error as Error };
+    }
+  },
 };
 
 // Inicializar o serviço

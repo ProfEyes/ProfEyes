@@ -1673,8 +1673,6 @@ const isAssetAvailableForSignal = (asset: string, entryDate: Date = new Date()):
 };
 
 const Signals = () => {
-  console.log('?? [Signals] Componente montado/renderizado');
-  
   const { t, language } = useLanguage();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
