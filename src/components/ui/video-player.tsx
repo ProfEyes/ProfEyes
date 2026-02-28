@@ -454,6 +454,9 @@ export function VideoPlayer({
     
     const handleError = (e: Event) => {
       console.error(`Erro ao carregar o vídeo ${videoKey}:`, video.error);
+      console.error('Código do erro:', video.error?.code);
+      console.error('Mensagem do erro:', video.error?.message);
+      console.error('Caminho do vídeo:', video.src);
       setHasError(true);
       setIsLoading(false);
     };
@@ -794,6 +797,9 @@ export function VideoPlayer({
     };
     const handleError = (e: Event) => {
       console.error(`Erro ao carregar o vídeo ${videoKey}:`, video.error);
+      console.error('Código do erro:', video.error?.code);
+      console.error('Mensagem do erro:', video.error?.message);
+      console.error('Caminho do vídeo:', video.src);
       setHasError(true);
       setIsLoading(false);
     };
@@ -2038,23 +2044,27 @@ export function VideoPlayer({
                 <div className="absolute inset-0 flex items-center justify-center bg-black/50 z-10">
                   <div className="flex flex-col items-center">
                     <RefreshCw className="h-8 w-8 text-white animate-spin mb-2" />
-                    <span className="text-white text-sm">Carregando vídeo...</span>
+                    <span className="text-white text-sm font-medium">Carregando vídeo...</span>
+                    <span className="text-white/60 text-xs mt-1">Isso pode levar alguns segundos</span>
                   </div>
                 </div>
               )}
               
               {hasError && (
                 <div className="absolute inset-0 flex items-center justify-center bg-black/70 z-10">
-                  <div className="flex flex-col items-center">
+                  <div className="flex flex-col items-center max-w-md px-6">
                     <Button 
                       variant="outline" 
                       onClick={reloadVideo}
-                      className="border-white/20 bg-black/50 text-white hover:bg-white/10 flex items-center gap-2 mb-2"
+                      className="border-white/20 bg-black/50 text-white hover:bg-white/10 flex items-center gap-2 mb-3"
                     >
                       <RefreshCw className="h-4 w-4" /> Tentar Novamente
                     </Button>
-                    <span className="text-white/70 text-sm text-center max-w-xs">
-                      Não foi possível carregar o vídeo. Verifique se o arquivo existe no caminho correto.
+                    <span className="text-white/90 text-sm text-center font-medium mb-1">
+                      Não foi possível carregar o vídeo
+                    </span>
+                    <span className="text-white/60 text-xs text-center">
+                      O vídeo pode ser muito grande e estar demorando para carregar. Tente recarregar a página ou aguarde alguns instantes.
                     </span>
                   </div>
                 </div>
@@ -2237,23 +2247,27 @@ export function VideoPlayer({
             <div className="absolute inset-0 flex items-center justify-center bg-black/50 z-10">
               <div className="flex flex-col items-center">
                 <RefreshCw className="h-8 w-8 text-white animate-spin mb-2" />
-                <span className="text-white text-sm">Carregando vídeo...</span>
+                <span className="text-white text-sm font-medium">Carregando vídeo...</span>
+                <span className="text-white/60 text-xs mt-1">Isso pode levar alguns segundos</span>
               </div>
             </div>
           )}
           
           {hasError && (
             <div className="absolute inset-0 flex items-center justify-center bg-black/70 z-10">
-              <div className="flex flex-col items-center">
+              <div className="flex flex-col items-center max-w-md px-6">
                 <Button 
                   variant="outline" 
                   onClick={reloadVideo}
-                  className="border-white/20 bg-black/50 text-white hover:bg-white/10 flex items-center gap-2 mb-2"
+                  className="border-white/20 bg-black/50 text-white hover:bg-white/10 flex items-center gap-2 mb-3"
                 >
                   <RefreshCw className="h-4 w-4" /> Tentar Novamente
                 </Button>
-                <span className="text-white/70 text-sm text-center max-w-xs">
-                  Não foi possível carregar o vídeo. Verifique se o arquivo existe no caminho correto.
+                <span className="text-white/90 text-sm text-center font-medium mb-1">
+                  Não foi possível carregar o vídeo
+                </span>
+                <span className="text-white/60 text-xs text-center">
+                  O vídeo pode ser muito grande e estar demorando para carregar. Tente recarregar a página ou aguarde alguns instantes.
                 </span>
               </div>
             </div>

@@ -21,6 +21,10 @@ export default defineConfig(({ mode }) => ({
     fs: {
       strict: false
     },
+    headers: {
+      'Accept-Ranges': 'bytes',
+      'Cache-Control': 'public, max-age=31536000',
+    },
     watch: {
       usePolling: false,
       interval: 1000,

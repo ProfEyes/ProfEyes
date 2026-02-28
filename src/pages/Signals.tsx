@@ -4916,14 +4916,6 @@ const handleVisibilityChangeConservative = useCallback((
               <div className="flex items-center gap-2">
                 <TimeZoneSelector variant="compact" />
                 
-                {/* Indicador de status do Supabase Realtime */}
-                <RealtimeStatus 
-                  status={realtimeStatus} 
-                  label="Ao Vivo" 
-                  showLabel={true}
-                  size="sm"
-                />
-                
                 {/* Bot??o de diagn??stico - vis??vel apenas no navegador Operar para ajudar na depura????o */}
                 {(window.BROWSER_INFO?.isOperar || navigator.userAgent.includes('Opera')) && (
                   <Button
