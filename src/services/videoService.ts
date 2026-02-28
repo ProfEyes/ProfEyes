@@ -4,17 +4,17 @@ import type { Database } from '@/types/supabase';
 import { Video, Short, LiveStream, VideoComment } from '@/types/video';
 import { toast } from 'sonner';
 
-// Verificar se o usuário está verificado
+// Verificar se o usuário está verificado (coluna correta: verified_email)
 export const isUserVerified = async (userId: string): Promise<boolean> => {
   try {
     const { data, error } = await (getSupabase() as SupabaseClient<Database>).from('user_profiles')
-      .select('is_verified')
+      .select('verified_email')
       .eq('user_id', userId)
       .maybeSingle();
 
     if (error) throw error;
     
-    return data?.is_verified === true;
+    return data?.verified_email === true;
   } catch (error) {
     console.error('Erro ao verificar status de verificação do usuário:', error);
     return false;

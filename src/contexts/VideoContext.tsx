@@ -293,14 +293,16 @@ export const VideoProvider: React.FC<{children: ReactNode}> = ({ children }) => 
     }
   };
 
-  // Carregar conteúdo inicial quando o contexto for montado
-  useEffect(() => {
-    if (user) {
-      getVideos();
-      getShorts();
-      getLiveStreams();
-    }
-  }, [user]);
+  // As tabelas videos/shorts/live_streams ainda não estão criadas no banco.
+  // Este useEffect foi desativado para evitar erros 404 repetidos no console.
+  // Reativar quando as tabelas forem criadas no Supabase.
+  // useEffect(() => {
+  //   if (user) {
+  //     getVideos();
+  //     getShorts();
+  //     getLiveStreams();
+  //   }
+  // }, [user]);
 
   const value = {
     videos,

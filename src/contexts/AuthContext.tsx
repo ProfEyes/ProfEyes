@@ -167,7 +167,7 @@ export const AuthProvider = React.memo<AuthProviderProps>(({ children }) => {
                 created_at: new Date().toISOString(),
                 updated_at: new Date().toISOString(),
                 verified_email: true
-              })
+              }, { onConflict: 'user_id' })
               .select()
               .maybeSingle();
             
@@ -333,7 +333,7 @@ export const AuthProvider = React.memo<AuthProviderProps>(({ children }) => {
                     created_at: new Date().toISOString(),
                     updated_at: new Date().toISOString(),
                     verified_email: true
-                  })
+                  }, { onConflict: 'user_id' })
                   .select()
                   .maybeSingle();
                 

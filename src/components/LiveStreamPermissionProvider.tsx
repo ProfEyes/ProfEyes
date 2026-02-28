@@ -90,22 +90,7 @@ export const LiveStreamPermissionProvider: React.FC<LiveStreamPermissionProvider
           console.warn('⚠️ Erro ao consultar user_profiles:', dbError);
           }
 
-        // 4. Consultar a tabela stream_permissions para verificar can_create
-          try {
-          const { data: streamPermissions, error: permError } = await getSupabase()
-            .from('stream_permissions')
-            .select('can_create, can_moderate')
-              .eq('user_id', user.id)
-              .maybeSingle();
-              
-          if (!permError && streamPermissions) {
-            if (streamPermissions.can_create === true) {
-              canStart = true;
-                          }
-          }
-        } catch (permError) {
-          console.warn('⚠️ Erro ao consultar stream_permissions:', permError);
-              }
+        // Permissões de stream gerenciadas via is_admin em user_profiles
 
                 
         setPermissions({

@@ -475,6 +475,7 @@ class RealtimeSignalsService {
       lastCheckTime = now;
       
       // ✅ OTIMIZAÇÃO: Intervalo adaptativo - mais frequente quando está visível
+      const isVisible = document.visibilityState === 'visible';
       const nextInterval = isVisible ? MONITOR_INTERVAL : MONITOR_INTERVAL * 2; // 30s visível, 60s background
       
       // Agendar próxima verificação (usar setTimeout recursivo em vez de setInterval)
