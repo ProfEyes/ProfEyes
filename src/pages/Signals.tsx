@@ -1,4 +1,4 @@
-import Layout from "@/components/Layout";
+﻿import Layout from "@/components/Layout";
 import { 
   ArrowDownRight, 
   ArrowUpRight, 
@@ -2135,14 +2135,19 @@ const Signals = () => {
       // Verificar se j?? se passaram 20 minutos desde a entrada do primeiro sinal
       const [entryHour, entryMin] = String(firstSignal.entry_time).split(':').map(Number);
       
-      // Criar hor??rio de entrada
-      const entryTime = new Date();
-      entryTime.setHours(entryHour, entryMin, 0, 0);
-      
-      // Se o hor??rio de entrada for no futuro, ajustar para o dia anterior
+      // Sinais sao sempre no horario de Brasilia (GMT-3). Converter BRT -> UTC: UTC = BRT + 3
       const currentTime = new Date();
-      if (entryTime > currentTime) {
-        entryTime.setDate(entryTime.getDate() - 1);
+      const entryTime = new Date(Date.UTC(
+        currentTime.getUTCFullYear(),
+        currentTime.getUTCMonth(),
+        currentTime.getUTCDate(),
+        entryHour + 3,
+        entryMin,
+        0,
+        0
+      ));
+      if (entryTime.getTime() - currentTime.getTime() > 12 * 60 * 60 * 1000) {
+        entryTime.setUTCDate(entryTime.getUTCDate() - 1);
       }
       
       // Calcular diferen??a em minutos desde a entrada
@@ -4126,14 +4131,19 @@ const handleVisibilityChangeConservative = useCallback((
         // Verificar se j?? se passaram 20 minutos desde a entrada do primeiro sinal
         const [entryHour, entryMin] = String(firstSignal.entry_time).split(':').map(Number);
         
-        // Criar hor??rio de entrada
-        const entryTime = new Date();
-        entryTime.setHours(entryHour, entryMin, 0, 0);
-        
-        // Se o hor??rio de entrada for no futuro, ajustar para o dia anterior
+        // Sinais sao sempre no horario de Brasilia (GMT-3). Converter BRT -> UTC: UTC = BRT + 3
         const currentTime = new Date();
-        if (entryTime > currentTime) {
-          entryTime.setDate(entryTime.getDate() - 1);
+        const entryTime = new Date(Date.UTC(
+          currentTime.getUTCFullYear(),
+          currentTime.getUTCMonth(),
+          currentTime.getUTCDate(),
+          entryHour + 3,
+          entryMin,
+          0,
+          0
+        ));
+        if (entryTime.getTime() - currentTime.getTime() > 12 * 60 * 60 * 1000) {
+          entryTime.setUTCDate(entryTime.getUTCDate() - 1);
         }
         
         // Calcular diferen??a em minutos desde a entrada

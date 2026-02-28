@@ -1969,23 +1969,40 @@ const signalCardStyles = `
   }
 `;
 
-// Função para converter string de horário em timestamp
+// Função para converter string de horário (no fuso de Brasília GMT-3) em timestamp UTC correto.
+// Os sinais são sempre armazenados no horário de Brasília, independente do fuso do usuário.
 const parseTimeString = (timeStr: string): Date => {
   const [hours, minutes] = timeStr.split(':').map(Number);
-  const date = new Date();
-  date.setHours(hours, minutes, 0, 0);
-  // Ajuste inteligente: escolher a ocorrência mais próxima (hoje, ontem ou amanhã)
+
+  // Brasília é sempre UTC-3 (sem horário de verão desde 2019)
+  // Para converter BRT → UTC: UTC_hours = BRT_hours + 3
+  const BRASILIA_UTC_OFFSET = 3; // horas a SOMAR para obter UTC
+
   const now = new Date();
+
+  // Criar o timestamp UTC correspondente ao horário de entrada em Brasília
+  const date = new Date(Date.UTC(
+    now.getUTCFullYear(),
+    now.getUTCMonth(),
+    now.getUTCDate(),
+    hours + BRASILIA_UTC_OFFSET,
+    minutes,
+    0,
+    0
+  ));
+
+  // Ajuste inteligente: escolher a ocorrência mais próxima (hoje, ontem ou amanhã)
   const diffMs = date.getTime() - now.getTime();
   const twelveHoursMs = 12 * 60 * 60 * 1000;
-  // Se a hora construída está muito à frente (>12h), então pertence ao dia anterior
+
   if (diffMs > twelveHoursMs) {
-    date.setDate(date.getDate() - 1);
+    // Mais de 12h no futuro → pertence ao dia anterior
+    date.setUTCDate(date.getUTCDate() - 1);
+  } else if (diffMs < -twelveHoursMs) {
+    // Mais de 12h no passado → pertence ao dia seguinte
+    date.setUTCDate(date.getUTCDate() + 1);
   }
-  // Se a hora construída está muito atrás (<-12h), então pertence ao dia seguinte
-  else if (diffMs < -twelveHoursMs) {
-    date.setDate(date.getDate() + 1);
-  }
+
   return date;
 };
 
@@ -2089,16 +2106,28 @@ const SignalsCard: React.FC = () => {
       return;
     }
     
-    // ✅ Criar data de entrada considerando se é hoje ou amanhã
-    const entryDate = new Date(now);
-    entryDate.setHours(hours, minutes, 0, 0);
-    
+    // Sinais são sempre em horário de Brasília (GMT-3 = UTC-3)
+    // Para converter BRT → UTC: UTC_hours = BRT_hours + 3
+    const BRASILIA_UTC_OFFSET = 3;
+    const nowDate = new Date(now);
+
+    // Criar timestamp UTC correto para o horário de entrada em Brasília
+    const entryDate = new Date(Date.UTC(
+      nowDate.getUTCFullYear(),
+      nowDate.getUTCMonth(),
+      nowDate.getUTCDate(),
+      hours + BRASILIA_UTC_OFFSET,
+      minutes,
+      0,
+      0
+    ));
+
     // ✅ LÓGICA CORRETA: Verificar se já passou do tempo de rotação (15 min após entrada)
     const minutesDiff = (entryDate.getTime() - now) / (60 * 1000);
-    
+
     // Se o horário está muito no passado (mais de 3 horas), considerar amanhã
     if (minutesDiff < -180) {
-      entryDate.setDate(entryDate.getDate() + 1);
+      entryDate.setUTCDate(entryDate.getUTCDate() + 1);
     }
     
     const entryTimestamp = entryDate.getTime();
@@ -2118,9 +2147,17 @@ const SignalsCard: React.FC = () => {
       console.error('   📅 Horário atual:', new Date(now).toLocaleString('pt-BR'));
       console.error('   📊 Diferença de minutos:', minutesDiff);
       
-      // ✅ CORREÇÃO EMERGENCIAL: Recriar o timestamp de forma mais segura
-      const safeEntryDate = new Date();
-      safeEntryDate.setHours(hours, minutes, 0, 0);
+      // ✅ CORREÇÃO EMERGENCIAL: Recriar o timestamp de forma mais segura (usando Brasília GMT-3)
+      const safeNow = new Date();
+      const safeEntryDate = new Date(Date.UTC(
+        safeNow.getUTCFullYear(),
+        safeNow.getUTCMonth(),
+        safeNow.getUTCDate(),
+        hours + 3,
+        minutes,
+        0,
+        0
+      ));
       
       // Se já passou da hora de entrada, deve ser hoje (dentro das 24h)
       const diffMs = safeEntryDate.getTime() - now;
