@@ -1,4 +1,4 @@
-﻿import Layout from "@/components/Layout";
+import Layout from "@/components/Layout";
 import { 
   ArrowDownRight, 
   ArrowUpRight, 
@@ -3245,15 +3245,15 @@ const handleVisibilityChangeConservative = useCallback((
       } as TradingSignal;
     });
     
-    // ???? SALVAMENTO AUTOM??TICO IMEDIATO: SEMPRE salvar os sinais finais no cache de navega????o
-    if (processedSignals && processedSignals.length >= 7) {
-      saveSignalsToNavigationCache(processedSignals as PlaceholderSignal[]);
-    } else if (processedSignals && processedSignals.length >= 4) {
-      saveSignalsToNavigationCache(processedSignals as PlaceholderSignal[]);
-    }
-    
     return processedSignals;
   }, [signals, dashboardSignals, ensureSevenSignals]);
+
+  // Salvar cache FORA do useMemo (nunca chamar side-effects durante render)
+  useEffect(() => {
+    if (filteredSignals && filteredSignals.length >= 4) {
+      saveSignalsToNavigationCache(filteredSignals as PlaceholderSignal[]);
+    }
+  }, [filteredSignals]);
 
   // Usar hook para notifica????es 5 minutos antes do hor??rio de entrada
   const { upcomingSignals, notificationsEnabled } = useSignalNotifications(

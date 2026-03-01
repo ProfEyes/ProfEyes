@@ -187,7 +187,7 @@ const getNextValidTime = (timeStr: string, removedSignalTime?: string): string =
     }
     
     // FALLBACK CASO O MINUTO NÃO SEJA UM DOS PADRÕES - Forçar para o padrão correto
-    console.log(`⚠️ Minuto não padrão detectado: ${removedMinutes}, forçando para o padrão correto`);
+
     // Determinar qual é o próximo minuto válido na sequência 03→23→43→03
     if (removedMinutes < 3) {
       return getNextSpecificMinuteTime(timeStr, 3);
@@ -233,9 +233,7 @@ const calculateNextThreeValidTimes = (): string[] => {
   const now = new Date();
   const currentHour = now.getHours();
   const currentMinute = now.getMinutes();
-  
-  console.log(`🕐 CALCULANDO HORÁRIOS FUTUROS: Hora atual ${currentHour}:${currentMinute.toString().padStart(2, '0')}`);
-  
+
   // Lista de minutos válidos (sempre: 03, 23, 43)
   const validMinutes = [3, 23, 43];
   const times: string[] = [];
@@ -267,7 +265,7 @@ const calculateNextThreeValidTimes = (): string[] => {
   
   if (!found) {
     // Fallback (não deveria acontecer)
-    console.error('🆘 Erro ao determinar próximo horário válido');
+
     // Forçar para 03 da próxima hora como segurança
     nextValidMinuteIdx = 0;
     currentHourToCheck = (currentHour + 1) % 24;
@@ -277,8 +275,7 @@ const calculateNextThreeValidTimes = (): string[] => {
   const firstValidMinute = validMinutes[nextValidMinuteIdx];
   const firstTime = `${currentHourToCheck.toString().padStart(2, '0')}:${firstValidMinute.toString().padStart(2, '0')}`;
         times.push(firstTime);
-  console.log(`✅ PRIMEIRO HORÁRIO VÁLIDO: ${firstTime}`);
-  
+
   // Gerar o segundo horário (seguindo a sequência 03→23→43→03)
   nextValidMinuteIdx = (nextValidMinuteIdx + 1) % 3;
   let secondHour = currentHourToCheck;
@@ -290,8 +287,7 @@ const calculateNextThreeValidTimes = (): string[] => {
   
   const secondTime = `${secondHour.toString().padStart(2, '0')}:${validMinutes[nextValidMinuteIdx].toString().padStart(2, '0')}`;
   times.push(secondTime);
-  console.log(`✅ SEGUNDO HORÁRIO VÁLIDO: ${secondTime}`);
-  
+
   // Gerar o terceiro horário (continuando a sequência)
   let thirdHour = secondHour;
   nextValidMinuteIdx = (nextValidMinuteIdx + 1) % 3;
@@ -303,8 +299,7 @@ const calculateNextThreeValidTimes = (): string[] => {
     
   const thirdTime = `${thirdHour.toString().padStart(2, '0')}:${validMinutes[nextValidMinuteIdx].toString().padStart(2, '0')}`;
   times.push(thirdTime);
-  console.log(`✅ TERCEIRO HORÁRIO VÁLIDO: ${thirdTime}`);
-  
+
   // VERIFICAÇÃO FINAL: Garantir que todos os horários são futuros
   const allAreFuture = times.every(time => {
     const [hour, minute] = time.split(':').map(Number);
@@ -320,12 +315,11 @@ const calculateNextThreeValidTimes = (): string[] => {
   });
   
   if (!allAreFuture) {
-    console.error('🆘 ERRO: Alguns horários gerados não são futuros!');
-    console.error('Horários gerados:', times);
-    console.error('Hora atual:', `${currentHour}:${currentMinute}`);
+
+
+
   }
-  
-  console.log(`🎯 HORÁRIOS FUTUROS FINAIS: ${times.join(', ')}`);
+
   return times;
 };
 
@@ -883,7 +877,7 @@ const getRandomAsset = (entryDate?: Date): string => {
   
   // Log para debug - apenas se houver problemas
   if (availableAssets.length === 0) {
-    console.warn('🚨 Dashboard: Nenhum ativo disponível encontrado, usando ativos padrão');
+
   }
   
   // Se não houver ativos disponíveis, usar ativos padrão que são sempre seguros
@@ -980,7 +974,7 @@ const checkDailySignalsCache = () => {
     const currentDate = new Date();
     
     if (cacheDate.toDateString() === currentDate.toDateString()) {
-      console.log('Usando sinais do dia do cache global');
+
       return globalDailySignalsCache;
     }
   }
@@ -995,7 +989,7 @@ const checkDailySignalsCache = () => {
       const currentDate = new Date();
       
       if (cacheDate.toDateString() === currentDate.toDateString()) {
-        console.log('Usando sinais do dia do localStorage');
+
         // Atualizar o cache global
         globalDailySignalsCache = {
           valid: true,
@@ -1007,7 +1001,7 @@ const checkDailySignalsCache = () => {
       }
     }
   } catch (error) {
-    console.error('Erro ao verificar sinais do dia no localStorage:', error);
+
   }
   return { valid: false, data: null, timestamp: 0, timeSlots: [] };
 };
@@ -1022,14 +1016,13 @@ const checkLocalStorageSignals = () => {
         // Verificar se o cache expirou (10 minutos)
       const now = Date.now();
         if (now - cachedData.timestamp < CACHE_DURATION) {
-          console.log(`Usando sinais do localStorage para o slot ${cachedData.timeSlot || 'unknown'}`);
-          
+
           // Validar os sinais do cache
           const validatedSignals = validateCachedSignals(cachedData.signals);
           
           // Se não houver sinais válidos após validação, retornar null
           if (!validatedSignals || validatedSignals.length === 0) {
-            console.log('Nenhum sinal válido no cache');
+
             return null;
           }
           
@@ -1039,13 +1032,13 @@ const checkLocalStorageSignals = () => {
             timeSlot: cachedData.timeSlot
           };
         } else {
-          console.log('Cache expirado, limpando...');
+
           localStorage.removeItem('dashboard-signals-cache');
         }
       }
     }
   } catch (e) {
-    console.error('Erro ao verificar sinais no localStorage:', e);
+
     // Em caso de erro, limpar o cache por segurança
     localStorage.removeItem('dashboard-signals-cache');
   }
@@ -1061,13 +1054,11 @@ const validateCachedSignals = (signals: EnrichedSignal[]): EnrichedSignal[] | nu
   const currentHour = now.getHours();
   const currentMinute = now.getMinutes();
   const currentTimeStr = `${currentHour.toString().padStart(2, '0')}:${currentMinute.toString().padStart(2, '0')}`;
-  
-  console.log(`🔍 VALIDAÇÃO ULTRA-RIGOROSA: Horário atual ${currentTimeStr} - Verificando ${signals.length} sinais`);
-  
+
   // Filtrar sinais APENAS com horários FUTUROS
   const validSignals = signals.filter(signal => {
     if (!signal.entry_time) {
-      console.log(`❌ Sinal ${signal.symbol || 'UNKNOWN'} rejeitado: sem horário de entrada`);
+
       return false;
     }
     
@@ -1088,25 +1079,23 @@ const validateCachedSignals = (signals: EnrichedSignal[]): EnrichedSignal[] | nu
     const isValidFutureTime = isFutureSignal || isNextDaySignal;
     
     if (!isValidFutureTime) {
-      console.log(`❌ SINAL REJEITADO: ${signal.symbol} - ${signal.entry_time} (horário PASSADO em relação a ${currentTimeStr})`);
+
     } else {
-      console.log(`✅ SINAL ACEITO: ${signal.symbol} - ${signal.entry_time} (horário FUTURO)`);
+
     }
     
     return isValidFutureTime;
   });
-  
-  console.log(`📊 VALIDAÇÃO CONCLUÍDA: ${validSignals.length} sinais FUTUROS de ${signals.length} sinais verificados`);
-  
+
   // Se não temos sinais futuros válidos, retornar null para forçar regeneração
   if (validSignals.length === 0) {
-    console.log(`🆘 NENHUM SINAL FUTURO VÁLIDO - Cache será descartado e novos sinais serão gerados`);
+
     return null;
   }
   
   // Se temos menos de 3 sinais válidos, também regenerar
   if (validSignals.length < 3) {
-    console.log(`⚠️ MENOS DE 3 SINAIS FUTUROS (${validSignals.length}) - Cache será descartado para gerar 3 sinais completos`);
+
     return null;
   }
   
@@ -1123,7 +1112,7 @@ const saveSignalsToLocalStorage = (signals, timestamp, timeSlot) => {
   try {
     // Verificar se temos sinais válidos
     if (!signals || signals.length === 0) {
-      console.warn('⚠️ Tentativa de salvar sinais vazios no localStorage - ignorando');
+
       return;
     }
     
@@ -1139,7 +1128,7 @@ const saveSignalsToLocalStorage = (signals, timestamp, timeSlot) => {
     
     // Sinais salvos (silenciado)
   } catch (error) {
-    console.error('❌ Erro ao salvar sinais no localStorage:', error);
+
   }
 };
 
@@ -1163,9 +1152,9 @@ const saveDailySignalsToLocalStorage = (signals, timeSlots) => {
     
     // Depois atualizar localStorage
     localStorage.setItem(DAILY_SIGNALS_CACHE_KEY, JSON.stringify(cacheData));
-    console.log('Sinais do dia inteiro salvos no cache global e localStorage com timestamp:', new Date(timestamp).toLocaleTimeString());
+
   } catch (error) {
-    console.error('Erro ao salvar sinais do dia no localStorage:', error);
+
   }
 };
 
@@ -1283,8 +1272,7 @@ const validateUniqueEntryTimes = (signals: EnrichedSignal[]): EnrichedSignal[] =
     
     // Se este horário já foi usado, precisamos ajustá-lo
     if (entryTimeMap.has(signal.entry_time)) {
-      console.log(`Encontrado horário duplicado: ${signal.entry_time}, ajustando...`);
-      
+
       // Calcular um novo horário 2 minutos depois
       const [hours, minutes] = signal.entry_time.split(':').map(Number);
       let newMinutes = minutes + 2;
@@ -1303,9 +1291,7 @@ const validateUniqueEntryTimes = (signals: EnrichedSignal[]): EnrichedSignal[] =
       const newExpiryTime = calculateNextTime(newEntryTime, SIGNAL_EXPIRY_TIME);
       const newGale1Time = newExpiryTime;
       const newGale2Time = calculateNextTime(newGale1Time, SIGNAL_EXPIRY_TIME);
-      
-      console.log(`Horário ajustado para: ${newEntryTime}`);
-      
+
       // Atualizar o sinal com os novos horários
       return {
         ...signal,
@@ -1324,8 +1310,7 @@ const validateUniqueEntryTimes = (signals: EnrichedSignal[]): EnrichedSignal[] =
 
 // Função para gerar a sequência de sinais para o dia todo, começando à meia-noite
 const generateDailySignals = async () => {
-  console.log('Verificando e gerando sinais atualizados com base no horário atual...');
-  
+
   // Verificar se já temos sinais salvos no localStorage
   const savedSignalsData = localStorage.getItem('dailySignalsData');
   const currentDate = new Date().toLocaleDateString();
@@ -1349,8 +1334,7 @@ const generateDailySignals = async () => {
                     new Date().getMinutes() < 10);
   
   if (isFirstRun) {
-    console.log('Primeira execução do dia. Gerando sequência completa de 72 sinais...');
-    
+
     // Gerar a sequência completa de sinais para as 24 horas do dia
     let numeroSinal = 1; // Contador para identificar cada sinal (usado para determinar ganho/perda)
     
@@ -1439,7 +1423,7 @@ const generateDailySignals = async () => {
     }
   } else {
     // Não é a primeira execução, recuperar dados do localStorage
-    console.log('Recuperando dados de sinais do localStorage...');
+
     const savedData = JSON.parse(savedSignalsData);
     todosSignais = savedData.signals || [];
     todosTimeSlots = savedData.timeSlots || [];
@@ -1550,8 +1534,7 @@ const generateDailySignals = async () => {
   
   // Garantir que temos pelo menos 3 sinais visíveis
   if (sinaisRelevantes.length < 3) {
-    console.log('Menos de 3 sinais relevantes. Buscando nos sinais futuros mais próximos...');
-    
+
     // Buscar sinais futuros mais próximos
     const sinaisFuturos = todosSignais
       .filter(s => !s.processed && s.entry_time && !sinaisRelevantes.includes(s))
@@ -1568,8 +1551,7 @@ const generateDailySignals = async () => {
   
   // Se ainda não temos 3 sinais, criar sinais emergenciais
   if (sinaisRelevantes.length < 3) {
-    console.log('Gerando sinais emergenciais para completar o fluxo...');
-    
+
     // Determinar qual o próximo horário válido (XX:03, XX:23 ou XX:43)
     let proximaHora = horaAtual;
     let proximoMinuto;
@@ -1625,9 +1607,7 @@ const generateDailySignals = async () => {
   
   // Limitar a 7 sinais para exibição
   sinaisRelevantes = sinaisRelevantes.slice(0, 7);
-  
-  console.log(`Selecionados ${sinaisRelevantes.length} sinais relevantes para exibição`);
-  
+
   // Salvar todos os sinais no cache
   saveDailySignalsToLocalStorage(todosSignais, todosTimeSlots);
   
@@ -1665,8 +1645,7 @@ const getCurrentTimeSlotSignals = (dailySignals, timeSlots) => {
     
     return diffA - diffB;
   }).slice(0, 3);
-  
-  console.log(`Usando ${relevantSignals.length} sinais mais relevantes para o horário atual: ${currentTimeStr}`);
+
   return relevantSignals;
 };
 
@@ -2032,13 +2011,13 @@ const SignalsCard: React.FC = () => {
         
         // Se os sinais ainda estão no período de fixação, USAR OBRIGATORIAMENTE
         if (Array.isArray(signals) && signals.length === 3 && fixedUntil > now) {
-          console.log('🔒 SINAIS FIXOS: Carregando sinais fixos do período de proteção');
+
           window.displayedSignalsRef = signals;
           return signals;
         }
       }
     } catch (err) {
-      console.warn('Erro ao carregar sinais fixos:', err);
+
     }
     
     // PRIORIDADE 2: Verificar localStorage normal
@@ -2052,7 +2031,7 @@ const SignalsCard: React.FC = () => {
         }
       }
     } catch (err) {
-      console.warn('Erro ao carregar sinais normais:', err);
+
     }
     
     return window.displayedSignalsRef || [];
@@ -2102,7 +2081,7 @@ const SignalsCard: React.FC = () => {
     
     // ✅ Validar entrada
     if (isNaN(hours) || isNaN(minutes)) {
-      console.error('❌ [Dashboard] Horário inválido:', firstSignal.entry_time);
+
       return;
     }
     
@@ -2156,7 +2135,7 @@ const SignalsCard: React.FC = () => {
       const diffMs = safeEntryDate.getTime() - now;
       if (diffMs < 0 && Math.abs(diffMs) < 24 * 60 * 60 * 1000) {
         // Já passou mas foi hoje - manter data
-        console.log('✅ [Dashboard] Corrigido: entrada foi HOJE (no passado recente)');
+
       }
       
       return; // ✅ Abortar este ciclo e aguardar próximo render
@@ -2180,8 +2159,8 @@ const SignalsCard: React.FC = () => {
     
     // ✅ VALIDAÇÃO: Timer zerado mas já passou da rotação
     if (secondsRemaining === 0 && minutesSinceEntry > 15) {
-      console.error('⚠️ [Dashboard] ERRO: Timer zerado mas já passou da rotação!');
-      console.error('   Isso indica que os sinais não foram rotacionados corretamente.');
+
+
     }
     
     // Atualizar timer a cada segundo
@@ -2279,7 +2258,7 @@ const SignalsCard: React.FC = () => {
       
       // Verificar se temos exatamente 3 sinais
       if (enrichedSignals.length !== 3) {
-        console.warn(`⚠️ AVISO: Número incorreto de sinais (${enrichedSignals.length}/3) para sincronização`);
+
       }
       
       // Criar objeto de dados para salvar
@@ -2304,7 +2283,7 @@ const SignalsCard: React.FC = () => {
       (window as Window & { lastSyncTimestamp?: number; lastSyncSource?: string }).lastSyncTimestamp = Date.now();
       (window as Window & { lastSyncTimestamp?: number; lastSyncSource?: string }).lastSyncSource = 'dashboard';
     } catch (error) {
-      console.error('❌ Erro durante sincronização de sinais:', error);
+
     }
   }, []);
 
@@ -2325,7 +2304,7 @@ const SignalsCard: React.FC = () => {
         window.rotationMonitorInterval = null;
       }
     } catch (err) {
-      console.warn('Erro ao limpar rotationMonitorInterval anterior:', err);
+
     }
 
     // Função de tick para verificar condições de rotação a cada segundo
@@ -2421,14 +2400,14 @@ const SignalsCard: React.FC = () => {
                 try { 
                   (window as Window & { executeRotationDirect?: () => void }).executeRotationDirect?.(); 
                 } catch (e) { 
-                  console.error('Erro executeRotationDirect:', e); 
+
                 }
               } else {
                 // Monitor: Tentativa fallback (silenciado)
-                try { await executeSignalRotation(); } catch (e) { console.error('Erro executeSignalRotation:', e); }
+                try { await executeSignalRotation(); } catch { /* ignorar */ }
               }
             } catch (e) {
-              console.error('Erro ao tentar iniciar rotação:', e);
+
             }
 
             // Aguarda 2s para ver se a rotação aconteceu
@@ -2444,7 +2423,7 @@ const SignalsCard: React.FC = () => {
             // Se não há initialFirstId (estado incerto), verificar se há sinais com posição atualizada
             if (!initialFirstId && window.displayedSignalsRef && window.displayedSignalsRef.length >=3) {
               // considerar sucesso se primeira posição for diferente do símbolo esperado
-              console.log('ℹ️ Rotação não detectada ainda, próxima tentativa...');
+
             }
           }
 
@@ -2462,7 +2441,7 @@ const SignalsCard: React.FC = () => {
         }
       }
       } catch (error) {
-        console.error('❌ Erro no monitor de rotação:', error);
+
       }
     };
 
@@ -2487,22 +2466,21 @@ const SignalsCard: React.FC = () => {
       try {
         // Evitar rotação concorrente
         if (window.isRotating) {
-          console.log('Evento 20min recebido mas rotação já em andamento, ignorando');
+
           return;
         }
 
         // Garantir que temos sinais suficientes
         if (!displayedSignals || displayedSignals.length < 3) {
-          console.log('Evento 20min recebido, mas sinais insuficientes para rotação');
+
           return;
         }
 
-        console.log('Evento dashboardFirstSignal20MinReached recebido — executando rotação automática');
         // Chamar a rotação real
         // executeSignalRotation pode ser assíncrono
         void executeSignalRotation();
       } catch (err) {
-        console.error('Erro ao processar evento dashboardFirstSignal20MinReached:', err);
+
       }
     };
 
@@ -2517,17 +2495,17 @@ const SignalsCard: React.FC = () => {
   // ❌❌❌ FUNÇÃO OBSOLETA: Rotação é feita no SUPABASE via rotate_signals() ❌❌❌
   // Esta função foi DESATIVADA - O Supabase gerencia a rotação automaticamente
   const executeSignalRotation = useCallback(async () => {
-    console.log('ℹ️ executeSignalRotation DESATIVADO - Rotação é feita no Supabase');
+
     return; // RETURN EARLY - não executar lógica obsoleta
     
     // Proteção contra múltiplas rotações simultâneas
     if (window.isRotating) {
-      console.log('🚫 Rotação já em andamento, cancelando nova tentativa');
+
         return;
       }
 
     if (!displayedSignals || displayedSignals.length < 3) {
-      console.log('⚠️ Rotação cancelada: sinais insuficientes');
+
         return;
       }
       
@@ -2537,11 +2515,9 @@ const SignalsCard: React.FC = () => {
       const firstSignal = displayedSignals[0];
     const secondSignal = displayedSignals[1];
     const thirdSignal = displayedSignals[2];
-    
-    console.log(`🔄 INICIANDO ROTAÇÃO REAL:`);
-    console.log(`   • 1º sinal (SAIR): ${firstSignal.symbol} ${firstSignal.entry_time}`);
-    console.log(`   • 2º sinal (→1º): ${secondSignal.symbol} ${secondSignal.entry_time}`);
-    console.log(`   • 3º sinal (→2º): ${thirdSignal.symbol} ${thirdSignal.entry_time}`);
+
+
+
 
     // LÓGICA CORRIGIDA: Gerar próximo horário válido baseado no horário do sinal removido
     // Usar o horário de entrada do sinal que está sendo removido (firstSignal) para determinar o próximo horário válido
@@ -2549,8 +2525,6 @@ const SignalsCard: React.FC = () => {
     const now = new Date();
     const currentTime = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
     const nextEntryTime = getNextValidTime(currentTime, firstSignal.entry_time);
-      
-    console.log(`   • Novo 3º sinal: ${nextEntryTime} (baseado no padrão do sinal removido: ${firstSignal.entry_time})`);
 
     // Criar novo sinal para terceira posição com horário correto
       const newThirdSignal = createSignalObject(nextEntryTime, 3);
@@ -2693,9 +2667,9 @@ const SignalsCard: React.FC = () => {
     const shouldRotate = minutesSinceEntry >= 20;
     
     if (shouldRotate) {
-      console.log(`🔄 ROTAÇÃO EXATA: Primeiro sinal (${firstSignal.symbol}) atingiu ${minutesSinceEntry} minutos desde entrada (${firstSignal.entry_time})`);
+
     } else if (minutesSinceEntry >= 18) {
-      console.log(`⏱️ AGUARDANDO: ${minutesSinceEntry} minutos desde entrada (${firstSignal.entry_time}) - aguardando 20 minutos exatos`);
+
     }
     
     return shouldRotate;
@@ -2729,7 +2703,7 @@ const SignalsCard: React.FC = () => {
   // Registrar timer baseado no horário de ENTRADA + 20 minutos
   const registerPersistentTimer = useCallback((signal) => {
     if (!signal || !signal.entry_time) {
-      console.log('Sinal sem horário de entrada, não é possível registrar timer');
+
       return;
     }
     
@@ -2762,11 +2736,9 @@ const SignalsCard: React.FC = () => {
         processingTime: processingDate.getTime(),
       processed: signal.processed || false
     };
-    
-      console.log(`Timer registrado para ${signal.symbol} (${signal.id}): será processado 20 min após ENTRADA (${entryHour}:${entryMin}) = ${processingDate.getHours()}:${processingDate.getMinutes()}`);
-      
+
     } catch (error) {
-      console.error('Erro ao registrar timer persistente:', error);
+
     }
   }, []);
   
@@ -2776,7 +2748,7 @@ const SignalsCard: React.FC = () => {
     
     // Verificar se o componente já está montado e se a última montagem foi recente (menos de 1 segundo)
     if (window.signalsCardMounted && window.lastMountTimestamp && now - window.lastMountTimestamp < 1000) {
-      console.log('SignalsCard já está montado, evitando montagem duplicada');
+
       mountedRef.current = false;
       return;
     }
@@ -2872,7 +2844,7 @@ const SignalsCard: React.FC = () => {
   const loadCachedSignalsIfAvailable = useCallback(() => {
     const cache = checkLocalStorageSignals();
     if (cache && cache.signals && cache.timeSlot === currentTimeSlot) {
-      console.log(`Carregando sinais em cache para o slot ${currentTimeSlot}`);
+
       setCachedSignals(cache.signals);
       return true;
     }
@@ -3026,8 +2998,7 @@ const SignalsCard: React.FC = () => {
   // FALLBACK: Função para gerar sinais locais se Realtime falhar
   const generateFallbackSignals = useCallback((): EnrichedSignal[] => {
     try {
-      console.warn('⚠️ DASHBOARD: Usando fallback local para gerar sinais');
-        
+
       // FALLBACK: Gerar localmente se banco falhar
       // Verificar se há cache válido
       const cachedData = localStorage.getItem('dashboard-signals-cache');
@@ -3037,11 +3008,11 @@ const SignalsCard: React.FC = () => {
           const validatedSignals = validateCachedSignals(cachedSignals);
           
           if (validatedSignals && validatedSignals.length === 3) {
-            console.log('✅ Cache válido: usando 3 sinais do cache');
+
             return validatedSignals;
           }
         } catch (e) {
-          console.log('⚠️ Cache corrompido: gerando novos sinais');
+
         }
         localStorage.removeItem('dashboard-signals-cache');
       }
@@ -3091,12 +3062,11 @@ const SignalsCard: React.FC = () => {
       // Salvar no cache
       setCachedSignals(baseSignals);
       saveSignalsToLocalStorage(baseSignals, Date.now(), currentTimeSlot);
-      
-      console.log(`✅ Novos sinais criados: ${baseSignals.map(s => `${s.symbol} (${s.entry_time})`).join(' | ')}`);
+
       return baseSignals;
       
     } catch (error) {
-      console.error("Erro ao buscar sinais:", error);
+
       throw error;
     }
   }, [currentTimeSlot]);
@@ -3152,7 +3122,7 @@ const SignalsCard: React.FC = () => {
           }
         }
       } catch (e) {
-        console.warn('⚠️ Erro ao tentar usar sinais da aba Trades:', e);
+
       }
       
       // PRIORIDADE 2: Se não há sinais da aba Trades, usar sinais do useQuery
@@ -3244,33 +3214,32 @@ const SignalsCard: React.FC = () => {
 
         // Verificar evento
         if (!eventDetail) {
-          console.warn('⚠️ Evento sem detalhes');  
-          
+
           // Tentar recuperar do localStorage como alternativa
           try {
             const storedData = localStorage.getItem('tradesSignals');
             if (storedData) {
               const parsedData = JSON.parse(storedData);
               if (parsedData && parsedData.signals && Array.isArray(parsedData.signals)) {
-                console.log('💡 Usando dados do localStorage em vez do evento');
+
                 return handleTradesSignalsUpdate(new CustomEvent('tradesSignalsUpdated', { detail: parsedData }));
               }
             }
           } catch (err) {
-            console.error('❌ Erro ao tentar recuperar do localStorage:', err);
+
           }
           return;
         }
 
         // Verificar sinais
         if (!eventDetail.signals || !Array.isArray(eventDetail.signals)) {
-          console.warn('⚠️ Evento sem sinais válidos');
+
           return;
         }
 
         // Garantir que temos pelo menos 3 sinais para sincronizar
         if (eventDetail.signals.length < 3) {
-          console.warn(`⚠️ Aba Trades enviou apenas ${eventDetail.signals.length} sinais, insuficiente para Dashboard`);
+
           return;
         }
 
@@ -3282,7 +3251,7 @@ const SignalsCard: React.FC = () => {
         );
         
         if (invalidSignals.length > 0) {
-          console.error('❌ SINAIS INVÁLIDOS da aba Trades:', invalidSignals);
+
           return;
         }
 
@@ -3334,7 +3303,7 @@ const SignalsCard: React.FC = () => {
           // Sinais idênticos
         }
       } catch (error) {
-        console.error('❌ ERRO GRAVE na sincronização com aba Trades:', error);
+
       } finally {
         // Garantir que a flag seja resetada
         isProcessingEvent = false;
@@ -3358,7 +3327,7 @@ const SignalsCard: React.FC = () => {
         try {
           parsedData = JSON.parse(storedData);
         } catch (e) {
-          console.warn(`⚠️ Erro ao analisar dados de ${key}:`, e);
+
           continue;
         }
         
@@ -3385,7 +3354,7 @@ const SignalsCard: React.FC = () => {
         }
       }
     } catch (error) {
-      console.error('❌ Erro ao verificar sinais da aba Trades no localStorage:', error);
+
     }
 
     // VERIFICACAO AUTOMÁTICA: Verificar a cada 10 segundos
@@ -3407,7 +3376,7 @@ const SignalsCard: React.FC = () => {
             
             const needsUpdate = !newSymbols.every((symbol, idx) => symbol === currentSymbols[idx]);
             if (needsUpdate) {
-              console.log('🔄 VERIFICAÇÃO AUTOMÁTICA: Sinais diferentes detectados');
+
               handleTradesSignalsUpdate(new CustomEvent('tradesSignalsUpdated', { detail: parsedData }));
             }
           }
@@ -3471,7 +3440,7 @@ const SignalsCard: React.FC = () => {
 
   // Função para forçar rotação manual
   const forceRotation = useCallback(() => {
-    console.log('🔧 Forçando rotação manual');
+
     executeSignalRotation();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -3494,7 +3463,7 @@ const SignalsCard: React.FC = () => {
     }
     
     // Fallback para outros casos (não deveria acontecer)
-    console.warn(`⚠️ Horário inválido para rotação: ${entryTime}`);
+
     return entryTime;
   };
 
@@ -3521,7 +3490,7 @@ const SignalsCard: React.FC = () => {
       
       // Se já estiver rotacionando, abortar para evitar rotações simultâneas
       if (window.isRotating) {
-        console.log('⚠️ Rotação já em andamento - abortando execução paralela');
+
         return;
       }
       
@@ -3538,20 +3507,19 @@ const SignalsCard: React.FC = () => {
       if ((!signalsToRotate || signalsToRotate.length < 3) && window.displayedSignalsRef && window.displayedSignalsRef.length >= 3) {
         // Se a referência global existir, verificar se ela foi criada por esta instância da Dashboard
         if (window.displayedSignalsOwner && window.displayedSignalsOwner === 'dashboard') {
-          console.log('ℹ️ Usando sinais da referência global window.displayedSignalsRef (criadas pela dashboard)');
+
           signalsToRotate = window.displayedSignalsRef;
           try { setDisplayedSignals(signalsToRotate); } catch (e) {
             // Intentionally empty
           }
         } else {
-          console.warn('⚠️ Existe window.displayedSignalsRef, mas não foi marcada como criada pela dashboard. Ignorando para evitar usar sinais de outra aba.');
+
         }
       }
 
       // CORREÇÃO ROBUSTA: Se não temos sinais no estado, tentar buscar do localStorage
       if (!signalsToRotate || signalsToRotate.length < 3) {
-        console.log('⚠️ Estado de sinais vazio ou insuficiente, buscando do localStorage...');
-        
+
         try {
           // Tentar carregar sinais do localStorage de múltiplas chaves possíveis
           // Priorizar a chave exata `dashboardSignals` criada pela dashboard
@@ -3565,10 +3533,10 @@ const SignalsCard: React.FC = () => {
               
               if (parsedData.signals && Array.isArray(parsedData.signals)) {
                 signalsArray = parsedData.signals;
-                console.log('✅ Sinais encontrados no formato signals[]:', signalsArray.length);
+
               } else if (Array.isArray(parsedData)) {
                 signalsArray = parsedData;
-                console.log('✅ Sinais encontrados no formato array direto:', signalsArray.length);
+
               }
 
               // Verificar se encontramos um array válido com pelo menos 3 elementos
@@ -3576,28 +3544,27 @@ const SignalsCard: React.FC = () => {
                 // Primeiro, verificar se os sinais salvos têm a flag isDashboard
                 const dashboardSignals = signalsArray.filter(s => s && s.isDashboard === true && s.entry_time);
                 if (dashboardSignals.length >= 3) {
-                  console.log('✅ Usando sinais marcados como Dashboard no localStorage:', dashboardSignals.length);
+
                   signalsToRotate = dashboardSignals.slice(0, 3);
                   setDisplayedSignals(signalsToRotate);
                 } else {
                   // Se não houver sinais marcados explicitamente, recusar usar sinais vindos de outras abas
-                  console.warn('⚠️ Sinais no localStorage não carregam a flag isDashboard. Ignorando para evitar usar sinais da aba Trades.');
+
                   // Não definir signalsToRotate aqui; deixaremos a verificação criar novos sinais se necessário
                 }
               }
             }
           } else {
-            console.log('❌ Nenhum dado encontrado no localStorage');
+
           }
         } catch (localStorageError) {
-          console.error('❌ Erro ao recuperar sinais do localStorage:', localStorageError);
+
         }
       }
 
       // Se ainda não temos sinais suficientes, tentar criar novos sinais
       if (!signalsToRotate || signalsToRotate.length < 3) {
-        console.log('⚠️ Não foi possível recuperar sinais. Criando novos sinais...');
-        
+
         try {
           // Gerar 3 novos horários seguindo o padrão 03→23→43→03
           const validTimes = calculateNextThreeValidTimes();
@@ -3608,8 +3575,7 @@ const SignalsCard: React.FC = () => {
             createSignalObject(validTimes[1], 2), // Pepe (OTC)
             createSignalObject(validTimes[2], 3)  // Gold/Silver (OTC)
           ];
-          
-          console.log('✅ Novos sinais criados com horários:', validTimes.join(', '));
+
           signalsToRotate = newSignals;
           
           // Atualizar o estado React e salvar no localStorage
@@ -3618,11 +3584,11 @@ const SignalsCard: React.FC = () => {
           saveDashboardSignalsForSync(newSignals);
           
           // Como acabamos de criar novos sinais, não precisamos rotacionar ainda
-          console.log('ℹ️ Sinais iniciais criados. Próxima verificação em 30 segundos.');
+
           window.isRotating = false;
           return;
         } catch (createError) {
-          console.error('❌ Erro ao criar novos sinais:', createError);
+
           window.isRotating = false;
           return;
         }
@@ -3635,7 +3601,7 @@ const SignalsCard: React.FC = () => {
         .sort((a, b) => a.position - b.position);
       
       if (sortedSignals.length < 3) {
-        console.log(`❌ Não há 3 sinais com posições definidas (encontrados: ${sortedSignals.length})`);
+
         window.isRotating = false;
         return;
       }
@@ -3648,7 +3614,7 @@ const SignalsCard: React.FC = () => {
       
       // Verificação rigorosa do primeiro sinal e seu horário
       if (!firstSignal || !firstSignal.entry_time || typeof firstSignal.entry_time !== 'string') {
-        console.log('❌ Primeiro sinal inválido ou sem horário de entrada:', firstSignal);
+
         window.isRotating = false;
         return;
       }
@@ -3694,7 +3660,7 @@ const SignalsCard: React.FC = () => {
       currentSignals.sort((a, b) => a.position - b.position);
       
       if (currentSignals.length < 3) {
-        console.log('❌ Não há sinais suficientes para rotação');
+
         window.isRotating = false;
         return;
       }
@@ -3763,7 +3729,7 @@ const SignalsCard: React.FC = () => {
       
       // ROTAÇÃO CONCLUÍDA (silenciado)
     } catch (error) {
-      console.error('❌ ERRO durante rotação:', error);
+
     } finally {
       // Garantir que a flag de rotação seja sempre limpa no final
       window.isRotating = false;
@@ -3785,18 +3751,17 @@ const SignalsCard: React.FC = () => {
     return; // RETURN EARLY - não executar lógica obsoleta
     
     // LIMPEZA COMPLETA: Remover TODOS os timers existentes para garantir que não há duplicação
-    console.log('🧹 LIMPEZA GLOBAL: Removendo todos os timers existentes');
-    
+
     // Limpar timer de rotação principal
     if (window.dashboardRotationTimer) {
-      console.log('🧹 Limpando timer de rotação principal');
+
       clearInterval(window.dashboardRotationTimer);
       window.dashboardRotationTimer = null;
     }
     
     // Limpar timer de monitoramento
     if (window.rotationMonitorInterval) {
-      console.log('🧹 Limpando timer de monitoramento');
+
       clearInterval(window.rotationMonitorInterval);
       window.rotationMonitorInterval = null;
     }
@@ -3807,7 +3772,7 @@ const SignalsCard: React.FC = () => {
         try {
           const value = window[key];
           if (typeof value === 'number') {
-            console.log(`🧹 Limpando timer global: ${key}`);
+
             clearTimeout(value);
             clearInterval(value);
             window[key] = null;
@@ -3817,12 +3782,10 @@ const SignalsCard: React.FC = () => {
         }
       }
     });
-    
-    console.log('⏰ TIMER ÚNICO: Iniciando timer de rotação a cada 30 segundos');
-    
+
     // VERIFICAÇÃO INICIAL: Executar após 5 segundos para dar tempo de carregar
     const initialCheck = setTimeout(() => {
-      console.log('🔍 Verificação inicial de rotação (5s após montagem)');
+
       if (window.signalsCardMounted) {
         executeRotationDirect();
       }
@@ -3839,10 +3802,10 @@ const SignalsCard: React.FC = () => {
         const checkInterval = now - lastCheck;
         
         if (checkInterval > 150000) { // Log detalhado a cada 2.5 minutos
-          console.log('⏰ VERIFICAÇÃO DETALHADA: Verificando rotação automática');
+
           window.lastRotationCheck = now;
         } else {
-          console.log('⏰ Verificando rotação...');
+
         }
         
         // Executar verificação de rotação
@@ -3853,12 +3816,12 @@ const SignalsCard: React.FC = () => {
           // Sincronizar a cada 2 minutos para garantir que as abas estão atualizadas
           const shouldSync = checkInterval > 120000;
           if (shouldSync) {
-            console.log('🔄 Sincronização periódica com aba Trades');
+
             saveDashboardSignalsForSync(displayedSignals);
           }
         }
       } catch (error) {
-        console.error('❌ Erro na verificação periódica de rotação:', error);
+
       }
     }, 30000); // 30 segundos - balanceando precisão e performance
     
@@ -3869,7 +3832,7 @@ const SignalsCard: React.FC = () => {
     
     // Limpeza completa ao desmontar
     return () => {
-      console.log('🧹 Desmontando componente - limpando todos os timers');
+
       clearTimeout(initialCheck);
       clearInterval(mainTimer);
       
@@ -3890,8 +3853,7 @@ const SignalsCard: React.FC = () => {
 
   // FUNÇÃO PARA GERAR NOVOS SINAIS COM HORÁRIOS VÁLIDOS
   const generateNewSignals = useCallback((validTimes: string[]): EnrichedSignal[] => {
-    console.log('🔄 GERANDO NOVOS SINAIS com horários:', validTimes);
-    
+
     return validTimes.map((time, index) => {
       const assetSymbol = getRandomAsset(); // Retorna string
       const entryTime = time;
@@ -3933,7 +3895,6 @@ const SignalsCard: React.FC = () => {
 
   // Função para atualizar sinais (movida após as outras declarações)
   const handleRefresh = useCallback(() => {
-    console.log('Solicitação de atualização manual dos sinais');
 
     // Verificar se há pelo menos um sinal atrasado (>20 min após entrada)
     const hasOutdated = displayedSignals.some(isSignalOutdated);
@@ -3966,7 +3927,6 @@ const SignalsCard: React.FC = () => {
 
     setTimeout(() => {
       const validTimes = calculateNextThreeValidTimes();
-      console.log('Gerando sinais novos após refresh manual:', validTimes);
 
       const newSignals = generateNewSignals(validTimes);
 
@@ -4057,7 +4017,7 @@ const SignalsCard: React.FC = () => {
       
       // Se temos dados na chave antiga e não na nova, migrar
       if (dashboardDataOld && !dashboardDataNew) {
-        console.log('🔄 Migrando dados de localStorage da chave antiga para nova');
+
         localStorage.setItem('dashboardSignals', dashboardDataOld);
       }
       
@@ -4075,15 +4035,15 @@ const SignalsCard: React.FC = () => {
               // Dados válidos
               setDisplayedSignals(signals);
             } else {
-              console.log('⚠️ Dados do localStorage muito antigos - serão renovados');
+
               // Os sinais serão renovados no fluxo normal da aplicação
             }
           } else {
-            console.log('⚠️ Dados do localStorage inválidos - serão renovados');
+
             // Os sinais serão renovados no fluxo normal da aplicação
           }
         } catch (error) {
-          console.error('❌ Erro ao processar dados do localStorage:', error);
+
           // Os sinais serão renovados no fluxo normal da aplicação
         }
       }
@@ -4093,7 +4053,7 @@ const SignalsCard: React.FC = () => {
         localStorage.removeItem('dashboard-signals');
       }
     } catch (error) {
-      console.error('❌ Erro durante inicialização do componente:', error);
+
     }
     
     return () => {
@@ -4113,7 +4073,7 @@ const SignalsCard: React.FC = () => {
         // Link do trader carregado (silenciado)
         setTraderLink(link);
       } catch (error) {
-        console.error('❌ SignalsCard - Erro ao carregar link do trader:', error);
+
         // Em caso de erro, manter o link padrão
         setTraderLink('https://trade.avalonbroker.io/register?aff=385853&aff_model=revenue&afftrack=mesnagensfree');
       }
@@ -4128,12 +4088,12 @@ const SignalsCard: React.FC = () => {
   const openTraderLink = useCallback((event: React.MouseEvent) => {
     event.preventDefault();
     if (!traderLink) {
-      console.warn('⚠️ SignalsCard - Tentativa de abrir link do trader, mas o link ainda não foi carregado');
+
       // Fallback para o link padrão caso o traderLink ainda não tenha sido carregado
       window.open('https://trade.avalonbroker.io/register?aff=385853&aff_model=revenue&afftrack=mesnagensfree', '_blank');
       return;
     }
-    console.log('🔗 SignalsCard - Abrindo link do trader:', traderLink);
+
     window.open(traderLink, '_blank');
   }, [traderLink]);
   
@@ -4141,8 +4101,7 @@ const SignalsCard: React.FC = () => {
 
   // Função para forçar rotação de sinais e sincronização com a aba Trades
   const forceRotationAndSync = () => {
-    console.log('⚙️ FORÇANDO ROTAÇÃO MANUAL dos sinais na dashboard');
-    
+
     // Executar rotação diretamente
     executeRotationDirect();
     
@@ -4153,17 +4112,15 @@ const SignalsCard: React.FC = () => {
         if (dashboardData) {
           const { signals, timestamp } = JSON.parse(dashboardData);
           if (signals && Array.isArray(signals) && signals.length >= 3) {
-            console.log('✅ VERIFICAÇÃO PÓS-ROTAÇÃO: Sinais rotacionados com sucesso');
-            console.log('📡 SINCRONIZAÇÃO FORÇADA: Disparando eventos de sincronização');
-            
+
+
             // Forçar sincronização com a aba Trades
             saveDashboardSignalsForSync(signals);
-            
-            console.log('✅ ROTAÇÃO E SINCRONIZAÇÃO FORÇADAS CONCLUÍDAS');
+
           }
         }
       } catch (error) {
-        console.error('❌ ERRO durante verificação pós-rotação:', error);
+
       }
     }, 500); // Pequeno delay para garantir que a rotação foi concluída
   };
@@ -4173,20 +4130,19 @@ const SignalsCard: React.FC = () => {
   // Função ultra-robusta para garantir a inicialização correta dos sinais
   const ensureCorrectSignalsInitialization = useCallback(() => {
     try {
-      console.log('🚀 INICIANDO SISTEMA DE SINAIS - Verificação completa');
-      
+
       // Flag para controlar se temos sinais válidos
       let hasValidSignals = false;
       
       // VERIFICAÇÃO 1: Verificar se já temos sinais válidos no estado
       if (displayedSignals && displayedSignals.length >= 3) {
-        console.log('✅ Sinais já existem no estado do componente');
+
         hasValidSignals = true;
       }
       
       // VERIFICAÇÃO 2: Se não temos sinais no estado, verificar localStorage
       if (!hasValidSignals) {
-        console.log('🔍 Verificando localStorage por sinais válidos');
+
         try {
           // Tentar carregar de diferentes chaves no localStorage
           const sources = [
@@ -4203,21 +4159,19 @@ const SignalsCard: React.FC = () => {
             try {
               parsedData = JSON.parse(storedData);
             } catch (e) {
-              console.log(`⚠️ Erro ao analisar dados de ${source}:`, e);
+
               continue;
             }
             
             // Verificar se temos sinais válidos
             if (parsedData && parsedData.signals && Array.isArray(parsedData.signals) && parsedData.signals.length >= 3) {
-              console.log(`✅ Sinais encontrados em ${source}:`, parsedData.signals.length);
-              
+
               // Verificar se os sinais estão no formato correto (posição 1, 2, 3)
               const validPositions = parsedData.signals.filter(s => [1, 2, 3].includes(s.position));
               if (validPositions.length >= 3) {
                 // Atualizar estado React com os sinais encontrados
                 const filteredSignals = validPositions.sort((a, b) => a.position - b.position).slice(0, 3);
-                console.log('✅ Carregando sinais do localStorage:', filteredSignals.map(s => `${s.position}: ${s.symbol} (${s.entry_time})`));
-                
+
                 // Atualizar estado
                 setDisplayedSignals(filteredSignals);
                 
@@ -4236,12 +4190,10 @@ const SignalsCard: React.FC = () => {
                   
                   const millisSinceEntry = now.getTime() - entryDate.getTime();
                   const minutesSinceEntry = Math.floor(millisSinceEntry / (1000 * 60));
-                  
-                  console.log(`⏱️ Primeiro sinal está ativo há ${minutesSinceEntry} minutos`);
-                  
+
                   // Se já passou 20 minutos, devemos executar uma rotação imediatamente
                   if (minutesSinceEntry >= 20) {
-                    console.log('⚠️ Sinais existentes já passaram do tempo de rotação! Forçando rotação...');
+
                     // Atrasar a rotação para dar tempo dos estados serem atualizados
                     setTimeout(() => {
                       if (window.signalsCardMounted) {
@@ -4257,15 +4209,14 @@ const SignalsCard: React.FC = () => {
             }
           }
         } catch (error) {
-          console.error('❌ Erro ao analisar dados do localStorage:', error);
+
           hasValidSignals = false;
         }
       }
       
       // Se não há sinais válidos, inicializar com novos sinais
       if (!hasValidSignals) {
-        console.log('🆕 Nenhum sinal válido encontrado. Criando novos sinais com o padrão correto...');
-        
+
         // Gerar 3 novos horários seguindo o padrão 03→23→43→03
         const validTimes = calculateNextThreeValidTimes();
         
@@ -4277,7 +4228,7 @@ const SignalsCard: React.FC = () => {
         ];
         
         // Atualizar estado e localStorage
-        console.log('✅ Novos sinais criados com horários:', validTimes.join(', '));
+
         setDisplayedSignals(newSignals);
         saveSignalsToLocalStorage(newSignals, Date.now(), getInitialTimeSlot());
         
@@ -4289,7 +4240,7 @@ const SignalsCard: React.FC = () => {
       window.displayedSignalsRef = displayedSignals;
 
     } catch (error) {
-      console.error('❌ Erro durante inicialização dos sinais:', error);
+
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -4300,37 +4251,35 @@ const SignalsCard: React.FC = () => {
     return; // RETURN EARLY - não executar lógica obsoleta
     
     // Timer único que verifica periodicamente SEM depender de displayedSignals
-    console.log('⏰ Timer de rotação ULTRA-ESTÁVEL ativado - verificando a cada 30 segundos');
-    
+
     // CORREÇÃO: Verificar e limpar qualquer timer existente para evitar duplicações
     if (window.dashboardRotationTimer) {
-      console.log('🧹 Limpando timer de rotação anterior');
+
       clearInterval(window.dashboardRotationTimer);
       window.dashboardRotationTimer = null;
     }
     
     // Inicialização imediata dos sinais com delay para garantir montagem completa
     setTimeout(() => {
-      console.log('🚀 Inicialização inicial dos sinais (após 100ms)');
+
       ensureCorrectSignalsInitialization();
     }, 100);
     
     // CORREÇÃO: Verificação inicial após 5 segundos apenas para diagnóstico, SEM executar rotação
     const initialCheck = setTimeout(() => {
-      console.log('🔍 Verificação inicial de diagnóstico (5s após montagem)');
-      
+
       // Verificar estado dos sinais sem executar rotação
       try {
         // Verificar se temos sinais
         if (!displayedSignals || displayedSignals.length < 3) {
-          console.log('⚠️ Diagnóstico: Sinais insuficientes ou não carregados');
+
           return;
         }
         
         // Verificar primeiro sinal
         const firstSignal = displayedSignals.find(signal => signal.position === 1);
         if (!firstSignal || !firstSignal.entry_time) {
-          console.log('⚠️ Diagnóstico: Primeiro sinal inválido ou sem horário de entrada');
+
           return;
         }
         
@@ -4347,13 +4296,11 @@ const SignalsCard: React.FC = () => {
         
         const millisSinceEntry = now.getTime() - entryDate.getTime();
         const minutesSinceEntry = Math.floor(millisSinceEntry / (1000 * 60));
-        
-        console.log(`⏱️ DIAGNÓSTICO: Sinal ${firstSignal.symbol} ativo há ${minutesSinceEntry} minutos`);
-        console.log(`⏱️ Próxima rotação programada para: ${20 - minutesSinceEntry} minutos depois`);
-        
+
+
         // NÃO executar rotação, apenas diagnóstico
       } catch (error) {
-        console.error('❌ Erro durante diagnóstico inicial:', error);
+
       }
     }, 5000);
 
@@ -4362,7 +4309,7 @@ const SignalsCard: React.FC = () => {
       try {
         // Verificar se o componente ainda está montado usando flag global
         if (!window.signalsCardMounted) {
-          console.log('🛑 Timer ignorado - componente desmontado');
+
           return;
         }
 
@@ -4372,7 +4319,7 @@ const SignalsCard: React.FC = () => {
         const timeSinceLastCheck = now - lastCheck;
         
         if (lastCheck > 0 && timeSinceLastCheck > 60000) {
-          console.warn(`⚠️ Timer atrasado! Última verificação há ${Math.floor(timeSinceLastCheck/1000)}s (deveria ser ~30s)`);
+
         }
         
         window.lastRotationCheck = now;
@@ -4381,7 +4328,7 @@ const SignalsCard: React.FC = () => {
         executeRotationDirect();
         
       } catch (error) {
-        console.error('❌ ERRO durante verificação periódica:', error);
+
       }
     }, 30 * 1000); // 30 segundos para verificações periódicas - tempo ideal para não sobrecarregar
 
@@ -4401,8 +4348,7 @@ const SignalsCard: React.FC = () => {
       if (window.dashboardRotationTimer === interval) {
         window.dashboardRotationTimer = null;
       }
-      
-      console.log('⏰ Timer de rotação ULTRA-ESTÁVEL desativado');
+
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Sem dependências para garantir que o timer seja criado apenas uma vez
@@ -4599,7 +4545,7 @@ const SignalsCard: React.FC = () => {
         }
       }
     } catch (e) {
-      console.error('⚠️ Erro ao tentar recuperar sinais do cache:', e);
+
     }
     
     // Se encontrou sinais em cache, usar eles ao invés de mostrar erro

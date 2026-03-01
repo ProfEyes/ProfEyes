@@ -56,22 +56,22 @@ export const ProfileMenu = () => {
   const [imageLoaded, setImageLoaded] = useState(false);
   const [hasAuthInconsistencies, setHasAuthInconsistencies] = useState(false);
   
-  // Cache de imagens para evitar flickering
+  // Cache de imagens para evitar flickering - usa ref para não causar re-renders
+  const imageLoadedRef = useRef(false);
   const cacheImage = useCallback((url: string | null) => {
     if (!url) return;
-    
-    // Criar uma imagem em background para pré-carregar
     const img = new Image();
     img.src = url;
     img.onload = () => {
-      setImageLoaded(true);
+      if (!imageLoadedRef.current) {
+        imageLoadedRef.current = true;
+        setImageLoaded(true);
+      }
     };
-    
-    // Manter a referência para a imagem atual
     if (imageRef.current) {
       imageRef.current.src = url;
     }
-  }, []); // ✅ Sem dependências - função estável
+  }, []);
 
   // Inicializar o avatar no carregamento inicial - isso ajuda com o SSR
   useEffect(() => {
