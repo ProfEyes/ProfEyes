@@ -207,8 +207,8 @@ export default function Layout({ children }: LayoutProps) {
         if (!error && data) {
           setLiveStreamsCount(data.length);
         }
-      } catch (error) {
-        console.error('Erro ao verificar transmissões ativas:', error);
+      } catch {
+        // silenciar erro de verificação de streams
       }
     };
     

@@ -75,7 +75,6 @@ export function useRealtimeSignals(
     
     // ✅ AGUARDAR AUTENTICAÇÃO COMPLETAR
     if (authLoading) {
-      console.log('⏳ [useRealtimeSignals] Aguardando autenticação completar...');
       return;
     }
 
@@ -95,7 +94,6 @@ export function useRealtimeSignals(
         
         setIsLoading(false);
       } catch (err) {
-        console.error('❌ Erro ao inicializar useRealtimeSignals:', err);
         setError(err as Error);
         setIsLoading(false);
       }
@@ -149,9 +147,8 @@ export function useRealtimeSignals(
             setSignals(recoveredSignals);
             setError(null);
           }
-        } catch (err) {
-          console.error('⚠️ Falha na recuperação automática:', err);
-          // Não setar erro aqui - deixar o usuário clicar em "Atualizar"
+        } catch {
+          // silenciar falha de recuperação automática
         }
       };
       
@@ -187,7 +184,6 @@ export function useRealtimeSignals(
       
       setIsLoading(false);
     } catch (err) {
-      console.error('❌ Erro ao fazer refresh:', err);
       setError(err as Error);
       setIsLoading(false);
     }
@@ -197,7 +193,6 @@ export function useRealtimeSignals(
     try {
       await realtimeSignalsService.forceRotation();
     } catch (err) {
-      console.error('❌ Erro ao forçar rotação:', err);
       throw err;
     }
   }, []);
@@ -208,7 +203,6 @@ export function useRealtimeSignals(
       await realtimeSignalsService.reinitialize();
       setIsLoading(false);
     } catch (err) {
-      console.error('❌ Erro ao reinicializar:', err);
       setError(err as Error);
       setIsLoading(false);
       throw err;
