@@ -628,17 +628,25 @@ export const userService = {
    */
   async getTradingPreferences(userId?: string): Promise<{ data: Record<string, unknown>; error: Record<string, unknown> }> {
     try {
-      // Retornar configurações padrão já que não temos tabela
-      const defaultPreferences = {
-        // risk_level removido - não definido no schema
+      const defaultPreferences: Record<string, unknown> = {
         preferred_markets: ['crypto', 'stocks'],
-        auto_trade: false
+        auto_trade: false,
+        preferred_trader_link: '',
+        preferred_broker: 'avalon'
       };
-      
+
+      // Ler preferências do trader salvas no localStorage
+      try {
+        const stored = localStorage.getItem('trader_preferences');
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          Object.assign(defaultPreferences, parsed);
+        }
+      } catch { /* ignorar erros de parse */ }
+
       return { data: defaultPreferences, error: null };
     } catch (error) {
-      console.error('Erro ao obter preferências de trading:', error);
-      return { data: null, error };
+      return { data: null, error: error as Record<string, unknown> };
     }
   },
 
@@ -1126,31 +1134,22 @@ export const userService = {
     preferred_broker?: string;
   }): Promise<{ success: boolean; error: Error | null }> {
     try {
-      const { data: { user } } = await (supabase as SupabaseClient<Database>).auth.getUser();
-      
-      if (!user) {
-        return { success: false, error: new Error('Usuário não autenticado') };
-      }
+      // Colunas não existem no banco — persistir no localStorage
+      const existing: Record<string, unknown> = {};
+      try {
+        const stored = localStorage.getItem('trader_preferences');
+        if (stored) Object.assign(existing, JSON.parse(stored));
+      } catch { /* ignorar */ }
 
-      // Atualizar na tabela user_profiles
-      const { error } = await supabase
-        .from('user_profiles')
-        .update({
-          preferred_trader_link: preferences.preferred_trader_link,
-          preferred_broker: preferences.preferred_broker,
-          updated_at: new Date().toISOString()
-        })
-        .eq('user_id', user.id);
-      
-      if (error) {
-        console.error('❌ [userService] Erro ao atualizar preferências do trader:', error);
-        return { success: false, error: error as Error };
-      }
+      const updated = {
+        ...existing,
+        ...(preferences.preferred_trader_link !== undefined && { preferred_trader_link: preferences.preferred_trader_link }),
+        ...(preferences.preferred_broker !== undefined && { preferred_broker: preferences.preferred_broker })
+      };
 
-      console.log('✅ [userService] Preferências do trader atualizadas com sucesso');
+      localStorage.setItem('trader_preferences', JSON.stringify(updated));
       return { success: true, error: null };
     } catch (error) {
-      console.error('❌ [userService] Erro ao atualizar preferências do trader:', error);
       return { success: false, error: error as Error };
     }
   },

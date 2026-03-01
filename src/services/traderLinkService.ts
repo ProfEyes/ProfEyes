@@ -34,7 +34,6 @@ export const traderLinkService = {
       
             
       if (error || !preferences) {
-        console.warn('⚠️ Erro ao obter preferências do trader, usando link padrão:', error);
         return this.getDefaultBrokerLink(brokerId || 'avalon');
       }
       
@@ -48,8 +47,7 @@ export const traderLinkService = {
       const brokerToUse = brokerId || String(preferences.preferred_broker || 'avalon');
       const defaultLink = this.getDefaultBrokerLink(brokerToUse);
             return defaultLink;
-    } catch (error) {
-      console.error('❌ Erro ao obter link do trader:', error);
+    } catch {
       return this.getDefaultBrokerLink(brokerId || 'avalon');
     }
   },
@@ -81,8 +79,7 @@ export const traderLinkService = {
       }
       
       return String(preferences.preferred_broker || 'avalon');
-    } catch (error) {
-      console.error('Erro ao obter corretora preferida:', error);
+    } catch {
       return 'avalon';
     }
   },
@@ -95,19 +92,12 @@ export const traderLinkService = {
   // Atualizar preferências do trader
   async updateTraderPreferences(link?: string, broker?: string): Promise<boolean> {
     try {
-            const { success, error } = await userService.updateTraderPreferences({
+      const { success } = await userService.updateTraderPreferences({
         preferred_trader_link: link,
         preferred_broker: broker
       });
-      
-      if (error) {
-        console.error('❌ Erro ao atualizar preferências do trader:', error);
-        return false;
-      }
-      
-            return success;
-    } catch (error) {
-      console.error('❌ Erro ao atualizar preferências do trader:', error);
+      return success;
+    } catch {
       return false;
     }
   }
