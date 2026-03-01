@@ -4778,16 +4778,14 @@ const SignalsCard: React.FC = () => {
     <Card className="h-full overflow-hidden flex flex-col shadow-md border border-white/5 
                  bg-black/20 
                  transition-all duration-300 signals-card-container" data-component="signals-card">
-      <CardHeader className="relative pb-2 border-b border-white/10 signal-header-gradient">
-        <div className="absolute left-4 top-1/2 -translate-y-1/2">
-          <CardTitle className="text-sm font-light tracking-wide text-white/90 flex items-center gap-2">
+      <CardHeader className="pb-2 border-b border-white/10 signal-header-gradient">
+        <div className="flex items-center justify-between gap-2 min-w-0">
+          <CardTitle className="text-sm font-light tracking-wide text-white/90 flex items-center gap-2 shrink-0">
             <TrendingUp className="h-4 w-4 signal-highlight-icon" />
-            {t('dashboard.signals.title')}
+            <span className="hidden xs:inline">{t('dashboard.signals.title')}</span>
           </CardTitle>
-        </div>
-        
-        <div className="absolute right-4 top-1/2 -translate-y-1/2">
-          <div className="flex items-center space-x-2">
+          
+          <div className="flex items-center gap-1 sm:gap-2 min-w-0 overflow-hidden">
             {/* Timezone Selector (compact version) */}
             <TimeZoneSelector variant="compact" />
             
@@ -4800,7 +4798,7 @@ const SignalsCard: React.FC = () => {
             >
               <Badge variant="outline" className="bg-green-950/30 text-green-400 border-green-500/30 flex items-center px-2 py-1">
                 <Check className="h-3.5 w-3.5 mr-1.5" />
-                <span className="text-xs">{t('dashboard.signals.updated')}</span>
+                <span className="text-xs hidden sm:inline">{t('dashboard.signals.updated')}</span>
               </Badge>
             </div>
             
@@ -4824,16 +4822,14 @@ const SignalsCard: React.FC = () => {
             <Button 
               size="sm" 
               variant="ghost"
-              className="h-7 px-2 text-xs text-white/80 hover:text-white hover:bg-white/10"
+              className="h-7 px-2 text-xs text-white/80 hover:text-white hover:bg-white/10 shrink-0"
               onClick={() => navigate('/signals')}
             >
-              <ChevronRight className="h-3.5 w-3.5 mr-1" />
-              {t('dashboard.signals.view_all')}
+              <ChevronRight className="h-3.5 w-3.5 sm:mr-1" />
+              <span className="hidden sm:inline">{t('dashboard.signals.view_all')}</span>
             </Button>
           </div>
         </div>
-        
-        <div className="h-8"></div>
       </CardHeader>
       <CardContent className="p-0 overflow-y-auto flex-grow custom-scrollbar">
         <div className="relative">

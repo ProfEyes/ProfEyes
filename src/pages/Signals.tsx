@@ -4687,7 +4687,7 @@ const handleVisibilityChangeConservative = useCallback((
                       </div>
                       
                       {/* Dados do sinal */}
-                      <div className="grid grid-cols-2 gap-3 mb-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
                         <div className="flex flex-col space-y-3">
                           <div className="flex items-center justify-start bg-black/80 backdrop-blur-md rounded-lg p-3 border border-white/5 shadow-inner min-h-[50px] signal-info-box gap-3">
                             <div>

@@ -408,10 +408,10 @@ export default function Layout({ children }: LayoutProps) {
           </SidebarContent>
         </Sidebar>
         
-        <main className="flex-1 p-4 md:p-6 overflow-y-auto relative" style={{ overflow: 'visible' }}>
-          <div className="md:hidden flex items-center mb-4">
-            <SidebarTrigger className="h-9 w-9 border-white/10 bg-black/20" />
-            <span className="ml-3 text-sm font-medium">{location.pathname === '/' ? 'Dashboard' : location.pathname.substring(1).charAt(0).toUpperCase() + location.pathname.substring(2)}</span>
+        <main className="flex-1 p-3 sm:p-4 md:p-6 overflow-y-auto relative min-w-0">
+          <div className="md:hidden flex items-center mb-4 gap-2">
+            <SidebarTrigger className="h-9 w-9 shrink-0 border-white/10 bg-black/20" />
+            <span className="ml-1 text-sm font-medium truncate">{location.pathname === '/' ? 'Dashboard' : location.pathname.substring(1).charAt(0).toUpperCase() + location.pathname.substring(2)}</span>
           </div>
           
           {children}
