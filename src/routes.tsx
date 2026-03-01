@@ -10,8 +10,6 @@ import { Session } from '@supabase/supabase-js';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from '@/types/supabase';
 
-// Log para debugging da rota de sinais
-console.log("[DEBUG] Importação de Signals:", !!Signals);
 
 // Função auxiliar para verificar autenticação
 const requireAuth = async () => {

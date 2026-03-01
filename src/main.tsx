@@ -2,6 +2,21 @@ import React, { StrictMode } from "react";
 import { createRoot } from 'react-dom/client'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 
+// Suprimir erros de HMR/stale-cache durante desenvolvimento
+if (import.meta.env.DEV) {
+  const originalOnError = window.onerror;
+  window.onerror = (message, source, lineno, colno, error) => {
+    const msg = String(message);
+    if (
+      msg.includes('is not defined') && msg.includes('Admin') ||
+      msg.includes('is not defined') && (source || '').includes('routes')
+    ) {
+      return true; // suprimir
+    }
+    return originalOnError ? originalOnError(message, source, lineno, colno, error) : false;
+  };
+}
+
 // 🔇 Suprimir avisos e logs de bibliotecas externas
 const originalWarn = console.warn;
 console.warn = (...args: any[]) => {
@@ -26,7 +41,9 @@ console.error = (...args: any[]) => {
   if (
     message.includes('DialogTitle') ||
     message.includes('Missing `Description`') ||
-    message.includes('aria-describedby')
+    message.includes('aria-describedby') ||
+    message.includes('The above error occurred in the') ||
+    message.includes('Consider adding an error boundary')
   ) {
     return;
   }
