@@ -12,7 +12,7 @@ import type { TradingSignal as ServiceTradingSignal } from "@/services/types";
 import type { TradingSignal } from "@/types/tradingSignals";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Badge } from "@/components/ui/badge";
-import { useEffect, useState, useCallback, useRef, useMemo } from "react";
+import { useEffect, useState, useCallback, useRef, useMemo, memo } from "react";
 import { notificationService } from "@/services/notificationService";
 import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -1985,6 +1985,20 @@ const parseTimeString = (timeStr: string): Date => {
   return date;
 };
 
+// Componente isolado para o countdown — re-renderiza apenas quando o timer muda
+const RotationCountdown = memo(({ state }: {
+  state: { secondsRemaining: number } | null
+}) => {
+  if (!state) return null;
+  const mins = Math.max(0, Math.floor(state.secondsRemaining / 60));
+  const secs = Math.max(0, state.secondsRemaining % 60);
+  return (
+    <span className="ml-2 text-xs text-white/70">
+      • até rotação {mins}m {secs}s
+    </span>
+  );
+});
+
 const SignalsCard: React.FC = () => {
   const navigate = useNavigate();
   const { t } = useLanguage();
@@ -1998,7 +2012,7 @@ const SignalsCard: React.FC = () => {
   const [cachedSignals, setCachedSignals] = useState<EnrichedSignal[]>([]);
   const [retryCount, setRetryCount] = useState<number>(0);
   const [currentTimeSlot, setCurrentTimeSlot] = useState<string>('');
-  const [currentTime, setCurrentTime] = useState<Date>(new Date());
+  const currentTimeRef = useRef<Date>(new Date()); // ref: sem re-render desnecessário
   
   // 🔒 SISTEMA ULTRA-FIXO: Estado dos sinais com persistência ABSOLUTA
   const [displayedSignals, setDisplayedSignals] = useState<EnrichedSignal[]>(() => {
@@ -2447,8 +2461,8 @@ const SignalsCard: React.FC = () => {
 
     // Rodar primeiro tick imediatamente
     tick();
-    // Agendar interval
-    window.rotationMonitorInterval = setInterval(tick, 1000);
+    // Verificar a cada 5s — precisão suficiente para detectar momento de rotação
+    window.rotationMonitorInterval = setInterval(tick, 5000);
 
     // Cleanup
     return () => {
@@ -2895,21 +2909,13 @@ const SignalsCard: React.FC = () => {
     };
   }, []);
 
-  // Atualizar horário atual constantemente
+  // Atualizar horário atual — usando ref para não causar re-render desnecessário
   useEffect(() => {
-    // Função para atualizar o horário atual a cada segundo
-    const updateCurrentTime = () => {
-      setCurrentTime(new Date());
-    };
-    
-    // Atualizar imediatamente e depois a cada segundo
-    updateCurrentTime();
-    timeUpdateIntervalRef.current = setInterval(updateCurrentTime, 1000);
-    
+    const tick = () => { currentTimeRef.current = new Date(); };
+    tick();
+    timeUpdateIntervalRef.current = setInterval(tick, 1000);
     return () => {
-      if (timeUpdateIntervalRef.current) {
-        clearInterval(timeUpdateIntervalRef.current);
-      }
+      if (timeUpdateIntervalRef.current) clearInterval(timeUpdateIntervalRef.current);
     };
   }, []);
 
@@ -4917,10 +4923,8 @@ const SignalsCard: React.FC = () => {
                           <div className="flex items-center mt-0.5 text-xs text-white/60 signal-time-badge">
                             <Tag className="h-3 w-3 mr-1" />
                             <span>{signal.exchange || inferExchangeCategory(signal.symbol)}</span>
-                            {index === 0 && rotationTimerState && (
-                              <span className="ml-2 text-xs text-white/70">
-                                • até rotação {Math.max(0, Math.floor(rotationTimerState.secondsRemaining / 60))}m {Math.max(0, rotationTimerState.secondsRemaining % 60)}s
-                              </span>
+                            {index === 0 && (
+                              <RotationCountdown state={rotationTimerState} />
                             )}
                           </div>
                         </div>

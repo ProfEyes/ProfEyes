@@ -156,20 +156,22 @@ export function useRealtimeSignals(
     }
   }, [authLoading, isLoading]);
 
+  // Ref para onUpdate — evita recriar subscriber quando callback inline muda referência
+  const onUpdateRef = useRef(onUpdate);
+  useEffect(() => { onUpdateRef.current = onUpdate; }, [onUpdate]);
+
   // Subscribe para updates individuais (se habilitado)
   useEffect(() => {
-    if (!listenToUpdates || !onUpdate) return;
+    if (!listenToUpdates) return;
 
     const unsubscribe = realtimeSignalsService.subscribeToUpdates((update) => {
-      // Log removido para evitar spam no console
-      // console.log('🔔 Hook recebeu update individual:', update.type);
-      onUpdate(update);
+      onUpdateRef.current?.(update);
     });
 
     return () => {
       unsubscribe();
     };
-  }, [listenToUpdates, onUpdate]);
+  }, [listenToUpdates]); // onUpdate não precisa mais estar nas deps
 
   // Funções auxiliares
   const refresh = useCallback(async () => {

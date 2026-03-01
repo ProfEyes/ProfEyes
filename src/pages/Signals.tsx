@@ -1678,7 +1678,6 @@ const Signals = () => {
     true // enabled
   );
 
-  useEffect(() => {}, [realtimeStatus]);
   // ===== FIM SUPABASE REALTIME INTEGRATION =====
 
   
@@ -2771,29 +2770,23 @@ const handleVisibilityChangeConservative = useCallback((
     };
   }, [getDailySignalsForCurrentTime, queryClient, safeSetTradingSignals]);
 
-  // Atualizar o hor??rio atual apenas quando realmente necess??rio
+  // Atualizar o horário atual a cada minuto — sem currentTime nas deps para não recriar interval
   useEffect(() => {
     const updateTime = () => {
-      // Verificar se a hora ou minuto mudaram antes de atualizar a UI
       const now = new Date();
-      const newTime = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
-      const currentDisplayedTime = `${currentTime.getHours().toString().padStart(2, '0')}:${currentTime.getMinutes().toString().padStart(2, '0')}`;
-      
-      // S?? atualizar se realmente o tempo mudou
-      if (newTime !== currentDisplayedTime) {
-        setCurrentTime(now);
-      }
+      setCurrentTime(prev => {
+        const sameMinute =
+          prev.getHours() === now.getHours() &&
+          prev.getMinutes() === now.getMinutes();
+        return sameMinute ? prev : now;
+      });
     };
-    
-    // Atualizar apenas a cada 2 minutos para eliminar piscadas constantes
-    // O rel??gio interno continuar?? funcionando, mas UI s?? atualiza ocasionalmente
-    const timeInterval = setInterval(updateTime, 120000);
-    
-    // Chamar imediatamente na montagem
+
+    const timeInterval = setInterval(updateTime, 60000);
     updateTime();
-    
+
     return () => clearInterval(timeInterval);
-  }, [currentTime]); // Adicionar currentTime como depend??ncia
+  }, []); // sem deps: interval estável durante toda a vida do componente
 
   // Dados para sinais quando n??o h?? dados suficientes dispon??veis
   const placeholderSignals: PlaceholderSignal[] = useMemo(() => {
@@ -2821,83 +2814,63 @@ const handleVisibilityChangeConservative = useCallback((
     return dailySignals.slice(0, 3) as PlaceholderSignal[];
   }, [generateDailySignals, convertTimeStringToDate]);
 
-  // Buscar os sinais da dashboard
+  // Ref para comparação sem colocar dashboardSignals nas deps (evita recriar interval)
+  const dashboardSignalsRef = useRef(dashboardSignals);
+  useEffect(() => { dashboardSignalsRef.current = dashboardSignals; }, [dashboardSignals]);
+
+  // Buscar os sinais da dashboard — interval estável, sem dashboardSignals nas deps
   useEffect(() => {
-    // Fun????o para buscar os sinais da dashboard de localStorage
     const fetchDashboardSignals = () => {
       try {
         const cachedSignalsData = localStorage.getItem('dashboardSignals');
         if (cachedSignalsData) {
           const { signals } = JSON.parse(cachedSignalsData);
           if (signals && Array.isArray(signals) && signals.length > 0) {
-            // Garantir que temos exatamente 3 sinais da dashboard
             const limitedSignals = signals.slice(0, 3);
-            
-            // Converter para o formato correto se necess??rio
-            const formattedSignals = limitedSignals.map(signal => {
-              // Garantir que todos os campos necess??rios est??o presentes
-              return {
-                ...signal,
-                id: signal.id || 'dashboard-' + Math.random().toString(36).substring(2, 9),
-                status: 'active',
-                success_rate: Math.min(signal.success_rate || 0.85, 0.934), // Limitar a 93.4%
-                isDashboard: true // Marcar como sinal da dashboard
-              };
-            });
-            
-            // Verificar se os sinais mudaram (comparar IDs e hor??rios)
-            const currentDashboardSignals = dashboardSignals;
-            const hasChanged = !currentDashboardSignals || 
-                              currentDashboardSignals.length !== formattedSignals.length ||
-                              formattedSignals.some((signal, index) => {
-                                const current = currentDashboardSignals[index];
-                                return !current || 
-                                       current.id !== signal.id || 
-                                       current.entry_time !== signal.entry_time ||
-                                       current.symbol !== signal.symbol;
-                              });
-            
+            const formattedSignals = limitedSignals.map(signal => ({
+              ...signal,
+              id: signal.id || 'dashboard-' + Math.random().toString(36).substring(2, 9),
+              status: 'active',
+              success_rate: Math.min(signal.success_rate || 0.85, 0.934),
+              isDashboard: true
+            }));
+
+            const current = dashboardSignalsRef.current;
+            const hasChanged = !current ||
+              current.length !== formattedSignals.length ||
+              formattedSignals.some((signal, index) => {
+                const c = current[index];
+                return !c || c.id !== signal.id || c.entry_time !== signal.entry_time || c.symbol !== signal.symbol;
+              });
+
             if (hasChanged) {
-              
-              // Limpar cache de navega????o para for??ar regenera????o com nova l??gica
               clearNavigationCacheOnDashboardChange();
-            
-            // Sempre armazenar apenas 3 sinais de dashboard
-            setDashboardSignals(formattedSignals);
-            
-            // For??ar uma atualiza????o da lista de sinais
-            queryClient.invalidateQueries({ queryKey: ['tradingSignals'] });
-            } else {
+              setDashboardSignals(formattedSignals);
+              queryClient.invalidateQueries({ queryKey: ['tradingSignals'] });
             }
-            
             return;
           }
         }
-        
-        // Se n??o h?? sinais da dashboard, limpar estado
-        if (dashboardSignals && dashboardSignals.length > 0) {
-        setDashboardSignals([]);
+
+        if (dashboardSignalsRef.current && dashboardSignalsRef.current.length > 0) {
+          setDashboardSignals([]);
           clearNavigationCacheOnDashboardChange();
           queryClient.invalidateQueries({ queryKey: ['tradingSignals'] });
         }
-      } catch (error) {
+      } catch {
         setDashboardSignals([]);
       }
     };
 
-    // Primeira verifica????o imediata
     fetchDashboardSignals();
-    
-    // Verifica????o adicional ap??s 1 segundo (garante sincroniza????o inicial)
-    setTimeout(() => {
-      fetchDashboardSignals();
-    }, 1000);
+    const initTimeout = setTimeout(fetchDashboardSignals, 1000);
+    const interval = setInterval(fetchDashboardSignals, 5000);
 
-    // CORRE????O: Verificar a cada 5 segundos para sincroniza????o r??pida
-    const interval = setInterval(fetchDashboardSignals, 5000); // 5 segundos
-    
-    return () => clearInterval(interval);
-  }, [queryClient, dashboardSignals]);
+    return () => {
+      clearTimeout(initTimeout);
+      clearInterval(interval);
+    };
+  }, [queryClient]); // interval estável: não recria quando dashboardSignals muda
 
   // Fun????o para verificar e evitar sinais com hor??rios duplicados
   const validateUniqueEntryTimes = useCallback((signals: TradingSignal[]): TradingSignal[] => {
@@ -3255,20 +3228,24 @@ const handleVisibilityChangeConservative = useCallback((
     }
   }, [filteredSignals]);
 
-  // Usar hook para notifica????es 5 minutos antes do hor??rio de entrada
-  const { upcomingSignals, notificationsEnabled } = useSignalNotifications(
-    // Usar TODOS os sinais filtrados da p??gina (n??o apenas da dashboard)
-    filteredSignals?.map(signal => ({
+  // Memoizar array para evitar novo objeto a cada render
+  const signalsForNotifications = useMemo<TradingSignal[]>(() =>
+    (filteredSignals ?? []).map(signal => ({
       ...signal,
       timestamp: typeof signal.timestamp === 'string' ? new Date(signal.timestamp).getTime() : Date.now(),
       pair: signal.symbol || signal.pair || signal.symbol,
       symbol: signal.symbol || signal.pair,
       entry_time: signal.entry_time || '00:00'
     })) as TradingSignal[],
+    [filteredSignals]
+  );
+
+  const { upcomingSignals, notificationsEnabled } = useSignalNotifications(
+    signalsForNotifications,
     {
-      notifyMinutesBefore: 5,       // Notificar 5 minutos antes da entrada
+      notifyMinutesBefore: 5,
       enabled: true,
-      notificationType: 'signals' // Classifica????o para a aba de notifica????es
+      notificationType: 'signals'
     }
   );
 
@@ -4617,7 +4594,7 @@ const handleVisibilityChangeConservative = useCallback((
               </p>
             </div>
           ) : (filteredSignals && Array.isArray(filteredSignals) && filteredSignals.length > 0) ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4">
               {(() => {
                 try {
                   if (!Array.isArray(paginatedSignals)) {
@@ -4671,7 +4648,7 @@ const handleVisibilityChangeConservative = useCallback((
                       </div>
                     </div>
                     
-                    <div className="p-4 flex-grow relative backdrop-blur-md bg-black/70">
+                    <div className="p-3 flex-grow relative backdrop-blur-md bg-black/70">
                       {/* Indicadores de status */}
                       <div className="flex flex-wrap gap-2 mb-4 h-8 items-center">
                         {/* Taxa de sucesso */}
