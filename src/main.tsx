@@ -10,11 +10,27 @@ console.warn = (...args: any[]) => {
     message.includes('React Router Future Flag Warning') ||
     message.includes('Download the React DevTools') ||
     message.includes('startTransition') ||
-    message.includes('v7_')
+    message.includes('v7_') ||
+    message.includes('DialogTitle') ||
+    message.includes('Missing `Description`') ||
+    message.includes('aria-describedby')
   ) {
     return;
   }
   originalWarn.apply(console, args);
+};
+
+const originalError = console.error;
+console.error = (...args: any[]) => {
+  const message = args[0]?.toString() || '';
+  if (
+    message.includes('DialogTitle') ||
+    message.includes('Missing `Description`') ||
+    message.includes('aria-describedby')
+  ) {
+    return;
+  }
+  originalError.apply(console, args);
 };
 
 const originalLog = console.log;
