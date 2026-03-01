@@ -33,8 +33,8 @@ function isNewsCacheValid(): boolean {
       // Se o cache for mais recente que 3 minutos, considerá-lo válido
       return now - timestamp < 3 * 60 * 1000;
     }
-  } catch (e) {
-    console.warn('Erro ao verificar cache:', e);
+  } catch {
+    // ignorar erro de cache
   }
   return false;
 }
@@ -70,8 +70,8 @@ function loadTranslationCache(): void {
 function saveTranslationCache(): void {
   try {
     localStorage.setItem('translation_cache_google', JSON.stringify(translationCache));
-  } catch (e) {
-    console.warn('⚠️ [Tradução] Erro ao salvar cache:', e);
+  } catch {
+    // ignorar erro ao salvar cache
   }
 }
 
@@ -100,7 +100,6 @@ async function translateText(text: string, targetLang: string): Promise<string> 
     const response = await fetch(url);
     
     if (!response.ok) {
-      console.warn(`⚠️ [Google Translate] Erro ${response.status}`);
       return text;
     }
     
@@ -117,9 +116,7 @@ async function translateText(text: string, targetLang: string): Promise<string> 
     
     return translated;
     
-  } catch (error) {
-    console.warn(`⚠️ [Google Translate] Erro ao traduzir:`, error);
-    // ✅ Fallback: retornar texto original
+  } catch {
     return text;
   }
 }
@@ -232,16 +229,14 @@ export function NewsCard() {
                 summary: translatedSummary || item.summary,
                 content: translatedSummary || item.content,
               };
-            } catch (err) {
-              console.warn('⚠️ Erro ao traduzir notícia, usando original:', err);
+            } catch {
               return item;
             }
           })
         );
         
         return translated;
-      } catch (e) {
-        console.error('❌ [NewsCard] Erro ao buscar notícias:', e);
+      } catch {
         return [] as ExtendedMarketNews[];
       }
     },
@@ -427,12 +422,9 @@ export function NewsCard() {
         // Limpar o timeout em caso de erro
         clearTimeout(timeoutId);
 
-        // Verificar se é um AbortError e fornecer uma mensagem mais clara
         if (error instanceof Error && error.name === 'AbortError') {
-          console.warn('A requisição de notícias foi abortada devido ao timeout. Tentando refetch padrão.');
+          // requisição abortada
         }
-
-        console.warn('Erro ao recarregar notícias:', error);
         // Em caso de erro, fazer a refetch normal
         refetch();
       }
@@ -470,13 +462,11 @@ export function NewsCard() {
       
       // Verificar se a data é válida
       if (isNaN(date.getTime())) {
-        console.warn('Data inválida recebida:', dateValue);
         return 'Publicado recentemente';
       }
       
       return formatDistanceToNow(date, { addSuffix: true, locale: ptBR });
-    } catch (e) {
-      console.error('Erro ao formatar data:', e, 'Valor recebido:', dateValue);
+    } catch {
       return 'Publicado recentemente';
     }
   }, []);
