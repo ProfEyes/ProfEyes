@@ -2,23 +2,28 @@ import React, { StrictMode } from "react";
 import { createRoot } from 'react-dom/client'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 
-// 🔇 Suprimir avisos de bibliotecas externas
+// 🔇 Suprimir avisos e logs de bibliotecas externas
 const originalWarn = console.warn;
 console.warn = (...args: any[]) => {
   const message = args[0]?.toString() || '';
-  
-  // Suprimir avisos específicos de bibliotecas
   if (
     message.includes('React Router Future Flag Warning') ||
     message.includes('Download the React DevTools') ||
     message.includes('startTransition') ||
     message.includes('v7_')
   ) {
-    return; // Silenciar esses avisos
+    return;
   }
-  
-  // Manter outros avisos importantes
   originalWarn.apply(console, args);
+};
+
+const originalLog = console.log;
+console.log = (...args: any[]) => {
+  const message = args[0]?.toString() || '';
+  if (message.includes('Download the React DevTools')) {
+    return;
+  }
+  originalLog.apply(console, args);
 };
 
 // ✅ CRÍTICO: Limpar APENAS caches de SINAIS (NUNCA tocar em auth!)

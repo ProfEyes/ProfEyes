@@ -271,29 +271,7 @@ export const userService = {
         // O Supabase já salva a sessão automaticamente no localStorage
         // Sessão criada (silenciado)
         
-        // Debug: Verificar se a sessão foi realmente salva no localStorage
-        const storageKeys = Object.keys(localStorage).filter(key => key.includes('supabase') || key.includes('auth'));
-        console.log('🔍 DEBUG - Chaves de autenticação no localStorage:', storageKeys);
-        
-        // Verificar conteúdo da chave de sessão
-        storageKeys.forEach(key => {
-          try {
-            const value = localStorage.getItem(key);
-            if (value) {
-              const parsed = JSON.parse(value);
-              console.log(`🔍 DEBUG - ${key}:`, {
-                hasSession: !!parsed,
-                hasAccessToken: !!(parsed?.access_token || parsed?.currentSession?.access_token),
-                expiresAt: parsed?.expires_at || parsed?.currentSession?.expires_at || 'N/A'
-              });
-            }
-          } catch (e) {
-            console.log(`🔍 DEBUG - ${key}: (não é JSON)`);
-          }
-        });
       }
-
-      console.log('Login bem-sucedido. Sessão será persistida.');
       return { data: data.session, error: null };
     } catch (error) {
       console.error('Erro não tratado ao fazer login:', error);

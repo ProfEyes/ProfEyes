@@ -628,21 +628,17 @@ export const AuthProvider = React.memo<AuthProviderProps>(({ children }) => {
         
         const loginCompleted = sessionStorage.getItem('login-completed');
         if (loginCompleted === loginId) {
-          console.log('✅ [AuthContext] onAuthStateChange completou! Limpando timeout...');
           clearTimeout(signInTimeout);
           sessionStorage.removeItem('login-completed');
           break;
         }
         
-        // Log a cada segundo
-        if (i % 10 === 0 && i > 0) {
-          console.log(`⏳ [AuthContext] Aguardando onAuthStateChange... (${i / 10}s)`);
-        }
+        
       }
       
       const totalLoginDuration = Date.now() - totalLoginStart;
       // signInWithEmail finally completado (silenciado)
-      console.log('⏱️ [PERF] ✅ Login TOTAL em', totalLoginDuration, 'ms');
+      
     }
   }, [checkTokenState]);
 

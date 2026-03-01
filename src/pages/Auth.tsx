@@ -923,11 +923,7 @@ export default function Auth() {
       // Chamando signInWithEmail (silenciado)
       const { error } = await signInWithEmail(email, password, true);
       
-      console.log('📬 [AUTH] Resposta do signInWithEmail recebida');
-      console.log('   ❌ Erro?', error ? 'SIM' : 'NÃO');
-      
       if (error) {
-        console.error('❌ [AUTH] Erro no login:', error);
         
         // Verificar se é uma chave de tradução
         if ('isTranslationKey' in error && (error as Record<string, unknown>).isTranslationKey) {
