@@ -816,8 +816,7 @@ const News = () => {
                         alt={item.headline || item.title || "Notícia"}
                           className="w-full h-full object-cover"
                           loading="lazy"
-                          // Otimização para melhorar carregamento de imagens
-                          fetchPriority="high"
+                          fetchpriority="high"
                           decoding="async"
                         onError={(e) => {
                             // Se a imagem falhar, esconder o elemento
