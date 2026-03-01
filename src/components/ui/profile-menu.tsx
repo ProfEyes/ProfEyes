@@ -445,10 +445,10 @@ export const ProfileMenu = () => {
   // Verificar quando a página é restaurada após fechamento/suspensão (similar ao WhatsApp)
   useEffect(() => {
     const handleAppResume = () => {
-      // Verificar se temos o avatar no cache do localStorage
       const storedAvatar = getSavedAvatar();
-      if (storedAvatar) {
+      if (storedAvatar && storedAvatar !== localAvatarRef.current) {
         setLocalAvatarUrl(storedAvatar);
+        localAvatarRef.current = storedAvatar;
         cacheImage(storedAvatar);
       }
     };
@@ -459,16 +459,14 @@ export const ProfileMenu = () => {
       }
     };
     
-    // Verificar quando o app é restaurado de diversos estados
     window.addEventListener('pageshow', handleAppResume);
     document.addEventListener('visibilitychange', handleVisibilityChange);
     
-    // Limpar no unmount
     return () => {
       window.removeEventListener('pageshow', handleAppResume);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, []); // ✅ Apenas uma vez ao montar
+  }, [cacheImage]);
 
   return (
     <>

@@ -71,7 +71,6 @@ export function useSupabaseRealtime<T = unknown>(config: RealtimeConfig<T>) {
           setStatus('connected');
           setError(null);
         } else if (payload.status === 'error') {
-          console.error(`[Realtime] Erro no canal ${channelName}:`, payload);
           setStatus('disconnected');
           setError(new Error(String(payload.error || 'Erro desconhecido')));
         }
@@ -83,7 +82,6 @@ export function useSupabaseRealtime<T = unknown>(config: RealtimeConfig<T>) {
           // Subscrito com sucesso (silenciado)
           setStatus('connected');
         } else if (status === 'CHANNEL_ERROR') {
-          console.error(`[Realtime] Erro ao se inscrever no canal ${channelName}:`, err);
           setStatus('disconnected');
           setError(err || new Error('Erro ao se inscrever'));
         } else if (status === 'TIMED_OUT') {
