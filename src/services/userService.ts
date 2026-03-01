@@ -667,8 +667,19 @@ export const userService = {
    * Verificar se o usuário é administrador
    */
   async isAdmin(): Promise<boolean> {
-    // Como não temos a tabela de perfis, consideramos que ninguém é admin por padrão
-    return false;
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return false;
+      const { data, error } = await supabase
+        .from('user_profiles')
+        .select('is_admin')
+        .eq('user_id', user.id)
+        .single();
+      if (error || !data) return false;
+      return !!data.is_admin;
+    } catch {
+      return false;
+    }
   },
 
   /**

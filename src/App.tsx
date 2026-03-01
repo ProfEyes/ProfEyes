@@ -33,6 +33,7 @@ import { VideoProvider } from '@/contexts/VideoContext';
 
 import { useLanguage, Language } from '@/contexts/LanguageContext';
 import Support from '@/pages/Support';
+import Admin from '@/pages/Admin';
 import Live from '@/pages/Live';
 import { LiveStreamProvider } from '@/contexts/LiveStreamContext';
 import { LiveStreamPermissionProvider } from '@/components/LiveStreamPermissionProvider';
@@ -367,6 +368,7 @@ const AppRouter = () => {
       <Route path="/notifications" element={<AuthGuard checkOnly={true}><NotificationsPage /></AuthGuard>} />
       <Route path="/instructions" element={<AuthGuard checkOnly={true}><Instructions /></AuthGuard>} />
       <Route path="/support" element={<AuthGuard checkOnly={true}><Support /></AuthGuard>} />
+      <Route path="/admin" element={<AuthGuard checkOnly={true}><Admin /></AuthGuard>} />
       
       {/* Novas rotas para o sistema de mídia */}
       <Route path="/media" element={<AuthGuard checkOnly={true}><MediaHub /></AuthGuard>} />
