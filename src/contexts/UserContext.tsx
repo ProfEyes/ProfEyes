@@ -95,6 +95,14 @@ const SecureUserProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [sessionCheckAttempts, setSessionCheckAttempts] = React.useState<number>(0);
   const [shouldRedirectToAuth, setShouldRedirectToAuth] = React.useState<boolean>(false);
   
+  // 📌 REF para estabilizar checkSession — hasActiveSession não será dependência
+  const hasActiveSessionRef = React.useRef<boolean>(false);
+  
+  // Sincronizar ref sempre que hasActiveSession mudar
+  React.useEffect(() => {
+    hasActiveSessionRef.current = hasActiveSession;
+  }, [hasActiveSession]);
+  
   // 🔍 FUNÇÃO DE VERIFICAÇÃO DE SESSÃO - ULTRA-INTELIGENTE COM DETECÇÃO DE INCONSISTÊNCIAS
   const checkSession = React.useCallback(async (): Promise<boolean> => {
     try {
@@ -121,8 +129,8 @@ const SecureUserProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       // PASSO 2: Verificar sessão válida no servidor (não apenas localStorage)
       const serverHasSession = await hasValidSession();
       
-      // Atualizar estado apenas se houver mudança
-      if (hasActiveSession !== serverHasSession) {
+      // Atualizar estado apenas se houver mudança (usa ref para comparar)
+      if (hasActiveSessionRef.current !== serverHasSession) {
         setHasActiveSession(serverHasSession);
       }
       
@@ -159,7 +167,7 @@ const SecureUserProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setSessionCheckAttempts(prev => prev + 1);
       return false;
     }
-  }, [hasActiveSession]); // Dependência otimizada
+  }, []); // ✅ ESTÁVEL — hasActiveSession REMOVIDO, acessado via ref
   
   // 🔍 FUNÇÃO PRINCIPAL DE BUSCA DE DADOS - ULTRA SEGURA
   const fetchUserData = React.useCallback(async (): Promise<void> => {
@@ -467,6 +475,24 @@ const SecureUserProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, [fetchUserData]);
 
+  // 📌 REFS para callbacks — garantem que as referências expostas no contexto nunca mudem
+  const updateProfileRef = React.useRef(updateProfile);
+  const refreshUserDataRef = React.useRef(refreshUserData);
+  
+  React.useEffect(() => {
+    updateProfileRef.current = updateProfile;
+    refreshUserDataRef.current = refreshUserData;
+  }, [updateProfile, refreshUserData]);
+
+  // 🔒 Callbacks estáveis expostos ao contexto (referências NUNCA mudam)
+  const stableUpdateProfile = React.useCallback(async (data: { name?: string; avatar?: string | null; display_name?: string }) => {
+    return await updateProfileRef.current(data);
+  }, []);
+
+  const stableRefreshUserData = React.useCallback(async () => {
+    return await refreshUserDataRef.current();
+  }, []);
+
   // 🔄 EFEITO PARA LIDAR COM REDIRECIONAMENTO DE AUTENTICAÇÃO
   React.useEffect(() => {
     if (shouldRedirectToAuth) {
@@ -569,8 +595,8 @@ const SecureUserProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setUserName, 
       avatarUrl, 
       setAvatarUrl,
-      updateProfile,
-      refreshUserData,
+      updateProfile: stableUpdateProfile, // Callback estável — referência NUNCA muda
+      refreshUserData: stableRefreshUserData, // Callback estável — referência NUNCA muda
     };
     
     if (import.meta.env.DEV) {
@@ -578,7 +604,7 @@ const SecureUserProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
     
     return value;
-  }, [userName, avatarUrl, updateProfile, refreshUserData]);
+  }, [userName, avatarUrl, stableUpdateProfile, stableRefreshUserData]);
 
   return React.createElement(
     UserContext.Provider,

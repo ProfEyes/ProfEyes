@@ -308,22 +308,41 @@ export const ProfileMenu = () => {
     };
   }, []); // ✅ Apenas uma vez ao montar - updateUserDisplayName é estável
 
-  // Otimizar atualização quando o menu abrir
-  const handleOpenChange = (newOpen: boolean) => {
+  // 📌 REF para userDisplayName — necessária para estabilizar handleOpenChange
+  const userDisplayNameRef = useRef(userDisplayName);
+  
+  useEffect(() => {
+    userDisplayNameRef.current = userDisplayName;
+  }, [userDisplayName]);
+
+  // Otimizar atualização quando o menu abrir — ESTÁVEL para evitar loop no Radix Popper
+  const handleOpenChange = useCallback((newOpen: boolean) => {
     setOpen(newOpen);
     
     // Se o menu estiver abrindo, verificar apenas se há mudanças
     if (newOpen) {
-      // Verificar se há nome no localStorage diferente
+      // Verificar se há nome no localStorage diferente (usa ref para evitar dependência)
       const storedName = localStorage.getItem("user-name");
-      if (storedName && storedName !== userDisplayName) {
+      if (storedName && storedName !== userDisplayNameRef.current) {
         setUserDisplayName(storedName);
       }
       
       // Verificar avatar apenas se necessário
       checkAndSyncAvatar();
     }
-  };
+  }, [checkAndSyncAvatar]); // ✅ ESTÁVEL — checkAndSyncAvatar já é estável ([])
+
+  // 📌 REF para refreshUserData — usada nos onError handlers para evitar recriação
+  const refreshUserDataRef = useRef(refreshUserData);
+  
+  useEffect(() => {
+    refreshUserDataRef.current = refreshUserData;
+  }, [refreshUserData]);
+
+  // Handler estável para erro de carregamento de imagem do avatar
+  const handleAvatarError = useCallback(() => {
+    refreshUserDataRef.current();
+  }, []);
 
   // Função de logout que preserva dados de perfil para recarregar do banco
   const handleLogout = () => {
@@ -469,16 +488,13 @@ export const ProfileMenu = () => {
         <DropdownMenuTrigger className="focus:outline-none" asChild>
           <button 
             className="flex items-center gap-2 rounded-full focus:outline-none"
-            onClick={() => checkAndSyncAvatar()} // Garantir sincronização quando clicado
+            onClick={checkAndSyncAvatar} // Referência direta à função estável
           >
             <Avatar className="h-10 w-10 ring-1 ring-white/10 hover:ring-white/20 transition-all cursor-pointer">
               <AvatarImage 
                 src={displayAvatarUrl || null} 
                 alt={displayName}
-                onError={() => {
-                  // Se a imagem falhar ao carregar, tentar recarregar dados
-                  refreshUserData();
-                }}
+                onError={handleAvatarError} // Referência direta ao handler estável
                 className="!important object-cover"
                 style={{ 
                   visibility: displayAvatarUrl ? 'visible' : 'hidden',
@@ -501,10 +517,7 @@ export const ProfileMenu = () => {
               <AvatarImage 
                 src={displayAvatarUrl || null} 
                 alt={displayName}
-                onError={() => {
-                  // Se a imagem falhar ao carregar, tentar recarregar dados
-                  refreshUserData();
-                }}
+                onError={handleAvatarError} // Referência direta ao handler estável
                 className="!important object-cover"
                 style={{ 
                   visibility: displayAvatarUrl ? 'visible' : 'hidden',

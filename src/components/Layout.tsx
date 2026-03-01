@@ -65,6 +65,13 @@ export default function Layout({ children }: LayoutProps) {
   // Usando o contexto do usuário
   const { userName, avatarUrl, refreshUserData } = useUser();
   
+  // 📌 REF para estabilizar refreshUserData nos useEffects
+  const refreshUserDataRef = useRef(refreshUserData);
+  
+  useEffect(() => {
+    refreshUserDataRef.current = refreshUserData;
+  }, [refreshUserData]);
+  
   // Estado para rastrear transmissões ativas
   const [liveStreamsCount, setLiveStreamsCount] = useState(0);
   
@@ -89,8 +96,8 @@ export default function Layout({ children }: LayoutProps) {
         sessionStorage.removeItem('redirecting-from-language-select');
         sessionStorage.removeItem('language-selection-completed');
         
-        // Forçar a atualização de dados do usuário
-        refreshUserData();
+        // Forçar a atualização de dados do usuário (usa ref para evitar loop)
+        refreshUserDataRef.current();
       }
     };
     
@@ -103,7 +110,7 @@ export default function Layout({ children }: LayoutProps) {
     }, 100);
     
     return () => clearTimeout(timer);
-  }, [refreshUserData]);
+  }, []); // ✅ ESTÁVEL — refreshUserData REMOVIDO, acessado via ref
   
   // Forçar renderização completa quando vem da página de seleção de idioma
   useEffect(() => {
