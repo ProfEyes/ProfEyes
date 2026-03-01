@@ -2140,14 +2140,7 @@ const SignalsCard: React.FC = () => {
     const minutesToRotation = Math.floor(secondsRemaining / 60);
     
     if (minutesToRotation > 60) {
-      console.error('❌ [Dashboard] ERRO CRÍTICO: Timer com valor absurdo detectado!');
-      console.error('   ⏱️ Minutos até rotação:', minutesToRotation);
-      console.error('   📅 Entry time:', firstSignal.entry_time);
-      console.error('   📅 Entry timestamp:', new Date(entryTimestamp).toLocaleString('pt-BR'));
-      console.error('   📅 Horário atual:', new Date(now).toLocaleString('pt-BR'));
-      console.error('   📊 Diferença de minutos:', minutesDiff);
-      
-      // ✅ CORREÇÃO EMERGENCIAL: Recriar o timestamp de forma mais segura (usando Brasília GMT-3)
+      // Timer com valor absurdo - aplicar correção
       const safeNow = new Date();
       const safeEntryDate = new Date(Date.UTC(
         safeNow.getUTCFullYear(),
