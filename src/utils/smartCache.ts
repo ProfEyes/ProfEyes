@@ -8,7 +8,7 @@
  * Tempo de validade padrão: 3 minutos
  */
 
-const CACHE_VALIDITY = 3 * 60 * 1000; // 3 minutos
+const CACHE_VALIDITY = 30 * 60 * 1000; // 30 minutos
 
 interface CachedData<T> {
   data: T;

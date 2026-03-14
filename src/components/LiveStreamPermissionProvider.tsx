@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { getSupabase } from '@/lib/supabase';
+import type { SupabaseClient } from '@supabase/supabase-js';
 
 interface LiveStreamPermissionContextType {
   canStartLive: boolean;
@@ -74,7 +75,7 @@ export const LiveStreamPermissionProvider: React.FC<LiveStreamPermissionProvider
                 
         // 3. Consultar a tabela user_profiles para verificar is_admin
           try {
-          const { data: profile, error: profileError } = await getSupabase()
+          const { data: profile, error: profileError } = await (getSupabase() as SupabaseClient)
               .from('user_profiles')
               .select('is_admin')
               .eq('user_id', user.id)

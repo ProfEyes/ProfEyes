@@ -1,4 +1,4 @@
-import { ArrowDownRight, ArrowUpRight, Target, Shield, TrendingUp, BarChart2, Clock, Percent, RefreshCw, Check, X, LineChart, BarChart, TrendingDown, Activity, AlertTriangle, ChevronUp, ChevronDown, BarChart4, BookOpen, ChevronRight, Loader2, ChevronsUp, Tag } from "lucide-react";
+import { ArrowDownRight, ArrowUpRight, Clock, Check, Activity, ChevronUp, ChevronDown, BookOpen, ChevronRight, Loader, ChevronsUp, TrendingUp, AlertTriangle, RefreshCw, Tag, LineChart } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -16,8 +16,8 @@ import { useEffect, useState, useCallback, useRef, useMemo, memo } from "react";
 import { notificationService } from "@/services/notificationService";
 import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
-import { toast } from "sonner";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useInAppNotification } from "@/hooks/useInAppNotification";
 import { TimeZoneSelector } from "@/components/dashboard/TimeZoneSelector";
 import { useTimeZone } from "@/contexts/TimeZoneContext";
 import { motion, AnimatePresence } from "framer-motion";
@@ -25,6 +25,7 @@ import { useSignalNotifications } from "@/hooks/useSignalNotifications";
 import { isBackgroundModeEnabled } from '../../utils/visibilityManager';
 import { traderLinkService } from "@/services/traderLinkService";
 import { useRealtimeSignals } from "@/hooks/useRealtimeSignals";
+import { saveClickEvent } from "@/lib/admin-api";
 
 // Declarações globais para TypeScript
 declare global {
@@ -1894,6 +1895,7 @@ interface EnrichedSignal {
   dashboardPosition?: number;
   entryTimestamp?: number;
   position?: number;
+  display_name?: string; // Adicionar display_name como propriedade explícita
   [key: string]: unknown; // Permite campos adicionais
 }
 
@@ -2003,6 +2005,7 @@ const SignalsCard: React.FC = () => {
   const navigate = useNavigate();
   const { t } = useLanguage();
   const { convertTimeToSelected } = useTimeZone();
+  const { notify } = useInAppNotification();
   const [currentPrices, setCurrentPrices] = useState<Record<string, string>>({});
   
   // Use refs para dados que precisam persistir entre re-renderizações
@@ -3906,7 +3909,11 @@ const SignalsCard: React.FC = () => {
     const hasOutdated = displayedSignals.some(isSignalOutdated);
 
     if (!hasOutdated) {
-      toast.info('Os sinais atuais ainda são válidos. Aguarde a próxima rotação.', { duration: 4000 });
+      notify({
+        title: "Informação",
+        description: "Os sinais atuais ainda são válidos. Aguarde a próxima rotação.",
+        type: "signals"
+      });
       return;
     }
 
@@ -4093,13 +4100,11 @@ const SignalsCard: React.FC = () => {
   // Função para abrir o link do trader
   const openTraderLink = useCallback((event: React.MouseEvent) => {
     event.preventDefault();
+    saveClickEvent('dashboard');
     if (!traderLink) {
-
-      // Fallback para o link padrão caso o traderLink ainda não tenha sido carregado
       window.open('https://trade.avalonbroker.io/register?aff=385853&aff_model=revenue&afftrack=mesnagensfree', '_blank');
       return;
     }
-
     window.open(traderLink, '_blank');
   }, [traderLink]);
   
@@ -5021,4 +5026,5 @@ if (typeof document !== 'undefined') {
   }
 }
 
+export { SignalsCard };
 export default SignalsCard;

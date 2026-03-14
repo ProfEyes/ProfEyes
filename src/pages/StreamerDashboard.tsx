@@ -3,7 +3,8 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from "@/contexts/AuthContext";
 import { useLiveStream } from "@/contexts/LiveStreamContext";
 import { useNotifications } from "@/contexts/NotificationContext";
-import { BlockedUsersManager } from "@/components/settings/BlockedUsersManager";
+import { StreamSettingsPanel } from "@/components/streaming/StreamSettingsPanel";
+import { ViewersControlPanel } from "@/components/streaming/ViewersControlPanel";
 import { getSupabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -125,6 +126,11 @@ export default function StreamerDashboard() {
     peakViewers: 0,
     totalMessages: 0
   });
+  
+  // Estados para viewers adicionados (boost)
+  const [realViewerCount, setRealViewerCount] = useState(0);
+  const [addedViewers, setAddedViewers] = useState(0);
+  const [totalViewerCount, setTotalViewerCount] = useState(0);
 
   // Estados dos controles de mídia
   const [isCameraOn, setIsCameraOn] = useState(true);
@@ -181,6 +187,11 @@ export default function StreamerDashboard() {
   const [streamLanguage, setStreamLanguage] = useState('pt');
   const [streamTags, setStreamTags] = useState('');
   const [chatEnabled, setChatEnabled] = useState(true);
+  const [chatDelaySeconds, setChatDelaySeconds] = useState(0);
+  const [subscribersOnly, setSubscribersOnly] = useState(false);
+  const [linksAllowed, setLinksAllowed] = useState(true);
+  const [linksModeratorOnly, setLinksModeratorOnly] = useState(false);
+  const [showExitConfirmation, setShowExitConfirmation] = useState(false);
 
   // Estados para controle avançado da câmera
   const [cameraPosition, setCameraPosition] = useState<CameraPosition>({
@@ -396,6 +407,12 @@ export default function StreamerDashboard() {
       setStreamStats(prev => ({ ...prev, totalMessages: formattedComments.length }));
     }
   }, [comments, user?.id]);
+  
+  // Sincronizar viewers reais com o sistema de viewers adicionados
+  useEffect(() => {
+    setRealViewerCount(streamStats.viewerCount);
+    setTotalViewerCount(streamStats.viewerCount + addedViewers);
+  }, [streamStats.viewerCount, addedViewers]);
 
   // Carregar usuários bloqueados
   useEffect(() => {
@@ -2559,7 +2576,7 @@ export default function StreamerDashboard() {
                   <div className="flex items-center space-x-3 text-sm text-gray-300">
                     <div className="flex items-center space-x-1">
                       <Eye className="w-4 h-4" />
-                      <span>{streamStats.viewerCount}</span>
+                      <span>{totalViewerCount}</span>
                     </div>
                     <div className="flex items-center space-x-1">
                       <Clock className="w-4 h-4" />
@@ -2572,7 +2589,7 @@ export default function StreamerDashboard() {
                   {/* Botão de encerrar */}
                   <Button
                     variant="destructive"
-                    onClick={handleEndStream}
+                    onClick={() => setShowExitConfirmation(true)}
                     disabled={isEnding}
                     className="px-4"
                   >
@@ -2812,127 +2829,130 @@ export default function StreamerDashboard() {
         )}
       </div>
 
-      {/* Painel de configurações */}
-      {showStreamSettings && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-md z-50 flex items-center justify-center">
-          <Card className="w-96 bg-black/40 backdrop-blur-xl border-white/10">
-            <CardHeader>
-              <CardTitle className="text-white/90">Configurações da Transmissão</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div>
-                <Label htmlFor="title" className="text-white/80">Título</Label>
-                <Input
-                  id="title"
-                  value={streamTitle}
-                  onChange={(e) => setStreamTitle(e.target.value)}
-                    className="bg-black/20 border-white/15 text-white/95 placeholder:text-white/40 focus:border-white/25 backdrop-blur-sm"
-                />
-              </div>
-              <div>
-                <Label htmlFor="description" className="text-white/80">Descrição</Label>
-                <Input
-                  id="description"
-                  value={streamDescription}
-                  onChange={(e) => setStreamDescription(e.target.value)}
-                    className="bg-black/20 border-white/15 text-white/95 placeholder:text-white/40 focus:border-white/25 backdrop-blur-sm"
-                />
-              </div>
+      {/* Painel de configurações ultra minimalista (padrão Admin) */}
+      <StreamSettingsPanel
+        isOpen={showStreamSettings}
+        onClose={() => setShowStreamSettings(false)}
+        streamId={streamId}
+        
+        streamTitle={streamTitle}
+        setStreamTitle={setStreamTitle}
+        streamDescription={streamDescription}
+        setStreamDescription={setStreamDescription}
+        streamLanguage={streamLanguage}
+        setStreamLanguage={setStreamLanguage}
+        streamTags={streamTags}
+        setStreamTags={setStreamTags}
+        
+        chatEnabled={chatEnabled}
+        setChatEnabled={setChatEnabled}
+        chatDelaySeconds={chatDelaySeconds}
+        setChatDelaySeconds={setChatDelaySeconds}
+        subscribersOnly={subscribersOnly}
+        setSubscribersOnly={setSubscribersOnly}
+        linksAllowed={linksAllowed}
+        setLinksAllowed={setLinksAllowed}
+        linksModeratorOnly={linksModeratorOnly}
+        setLinksModeratorOnly={setLinksModeratorOnly}
 
-              <div>
-                <Label htmlFor="language" className="text-white/80">Idioma da Transmissão</Label>
-                <select 
-                  id="language"
-                  value={streamLanguage}
-                  onChange={(e) => setStreamLanguage(e.target.value)}
-                  className="w-full p-2 bg-black/20 border border-white/15 rounded-md text-white/95 focus:border-white/25 focus:outline-none backdrop-blur-sm"
-                  title="Selecionar idioma da transmissão"
-                  aria-label="Idioma da transmissão"
-                >
-                  {availableLanguages.map(lang => (
-                    <option key={lang.id} value={lang.id} className="bg-black text-white">
-                      {lang.flag} {lang.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
+        viewerCount={totalViewerCount}
+        peakViewers={streamStats.peakViewers}
+        duration={streamStats.duration}
+        totalMessages={streamStats.totalMessages}
+        
+        realViewers={realViewerCount}
+        onViewersUpdate={(total, added) => {
+          setTotalViewerCount(total);
+          setAddedViewers(added);
+        }}
+        
+        onSave={async () => {
+          if (streamId) {
+            await updateStream(streamId, {
+              title: streamTitle,
+              description: streamDescription,
+              language: streamLanguage,
+              tags: streamTags.split(',').map(tag => tag.trim()).filter(tag => tag.length > 0)
+            });
+            toast.success('Configurações salvas com sucesso!');
+            setShowStreamSettings(false);
+          }
+        }}
+        isSaving={false}
+      />
 
-              <div>
-                <Label htmlFor="tags" className="text-white/80">Tags</Label>
-                <Input
-                  id="tags"
-                  value={streamTags}
-                  onChange={(e) => setStreamTags(e.target.value)}
-                  placeholder="bitcoin, análise, trading (separadas por vírgula)"
-                  className="bg-black/20 border-white/15 text-white/95 placeholder:text-white/40 focus:border-white/25 backdrop-blur-sm"
-                />
+      {/* Modal de confirmação ao sair */}
+      {showExitConfirmation && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100] flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl shadow-2xl max-w-md w-full p-6 animate-in zoom-in-95 duration-200">
+            {/* Ícone de alerta */}
+            <div className="flex justify-center mb-4">
+              <div className="bg-red-500/20 rounded-full p-4">
+                <AlertCircle className="h-12 w-12 text-red-500" />
               </div>
+            </div>
 
-              <div className="flex items-center justify-between p-4 bg-black/30 border border-white/10 rounded-lg">
-                <div className="flex-1 mr-4">
-                  <Label className="text-sm font-medium text-white/80 block">
-                    Chat da Transmissão
-                  </Label>
-                  <p className="text-xs text-white/50 mt-1">
-                    Permitir que os usuários comentem durante a live
-                  </p>
-                </div>
-                <div className="flex items-center space-x-3">
-                  <span className={`text-xs font-medium ${chatEnabled ? 'text-green-400' : 'text-red-400'}`}>
-                    {chatEnabled ? 'Ativo' : 'Inativo'}
-                  </span>
-                  <button
-                    onClick={() => setChatEnabled(!chatEnabled)}
-                    title={chatEnabled ? 'Desativar chat' : 'Ativar chat'}
-                    aria-label={`${chatEnabled ? 'Desativar' : 'Ativar'} chat da transmissão`}
-                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-200 ${
-                      chatEnabled 
-                        ? 'bg-green-600/80 hover:bg-green-600/90' 
-                        : 'bg-red-600/80 hover:bg-red-600/90'
-                    }`}
-                  >
-                    <span
-                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-200 ${
-                        chatEnabled ? 'translate-x-6' : 'translate-x-1'
-                      }`}
-                    />
-                  </button>
-                </div>
-              </div>
-              {/* Gerenciamento de Usuários Bloqueados */}
-              <div className="mt-8">
-                <h3 className="text-lg font-semibold mb-4 text-white/90">Usuários Bloqueados</h3>
-                {streamId && <BlockedUsersManager streamId={streamId} />}
-              </div>
+            {/* Título */}
+            <h2 className="text-2xl font-bold text-white text-center mb-2">
+              Encerrar Transmissão?
+            </h2>
 
-              {/* Botões de ação */}
-              <div className="flex justify-end space-x-2 mt-8">
-                <Button
-                  variant="ghost"
-                  onClick={() => setShowStreamSettings(false)}
-                  className="bg-black/20 hover:bg-black/30 text-white/80 border border-white/15 backdrop-blur-sm"
-                >
-                  Cancelar
-                </Button>
-                <Button
-                  onClick={async () => {
-                    if (streamId) {
-                      await updateStream(streamId, {
-                        title: streamTitle,
-                        description: streamDescription,
-                        language: streamLanguage,
-                        tags: streamTags.split(',').map(tag => tag.trim()).filter(tag => tag.length > 0)
-                      });
-                      setShowStreamSettings(false);
-                    }
-                  }}
-                  className="bg-blue-500/40 hover:bg-blue-500/50 text-white/90 border border-blue-400/25 backdrop-blur-sm"
-                >
-                  Salvar
-                </Button>
+            {/* Descrição */}
+            <p className="text-zinc-400 text-center mb-6">
+              Você está prestes a encerrar sua transmissão ao vivo. Esta ação não pode ser desfeita e todos os visualizadores serão desconectados.
+            </p>
+
+            {/* Estatísticas da live */}
+            <div className="bg-zinc-950/50 border border-zinc-800/50 rounded-lg p-4 mb-6 space-y-2">
+              <div className="flex justify-between text-sm">
+                <span className="text-zinc-500">Viewers atuais:</span>
+                <span className="text-white font-semibold">{totalViewerCount}</span>
               </div>
-            </CardContent>
-          </Card>
+              <div className="flex justify-between text-sm">
+                <span className="text-zinc-500">Duração:</span>
+                <span className="text-white font-semibold">
+                  {Math.floor(streamStats.duration / 60)}:{String(streamStats.duration % 60).padStart(2, '0')}
+                </span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-zinc-500">Mensagens no chat:</span>
+                <span className="text-white font-semibold">{streamStats.totalMessages}</span>
+              </div>
+            </div>
+
+            {/* Botões */}
+            <div className="flex gap-3">
+              <Button
+                variant="outline"
+                onClick={() => setShowExitConfirmation(false)}
+                className="flex-1 bg-zinc-800/50 hover:bg-zinc-800 text-white border-zinc-700"
+                disabled={isEnding}
+              >
+                Cancelar
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={() => {
+                  setShowExitConfirmation(false);
+                  handleEndStream();
+                }}
+                className="flex-1 bg-red-600 hover:bg-red-700 text-white"
+                disabled={isEnding}
+              >
+                {isEnding ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Encerrando...
+                  </>
+                ) : (
+                  <>
+                    <PhoneOff className="h-4 w-4 mr-2" />
+                    Sim, Encerrar
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
         </div>
       )}
     </div>

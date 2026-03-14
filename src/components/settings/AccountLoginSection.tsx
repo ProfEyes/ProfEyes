@@ -8,6 +8,7 @@ import { ChevronRight, LogOut, Shield, Mail, Github, Laptop, Save, Check, Downlo
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/lib/supabase";
+import type { SupabaseClient } from '@supabase/supabase-js';
 
 interface AccountLoginSectionProps {
   onGoogleLogin?: () => Promise<void>;
@@ -41,7 +42,7 @@ export function AccountLoginSection({
       
       localStorage.setItem('user-preferences', JSON.stringify(userPreferences));
       
-      const { error } = await supabase.auth.signOut();
+      const { error } = await (supabase as SupabaseClient).auth.signOut();
       
       if (error) {
         throw error;
@@ -118,7 +119,7 @@ export function AccountLoginSection({
       // Escolhe o provedor de autenticação com base no parâmetro
       switch (provider) {
         case "google":
-          ({ data, error } = await supabase.auth.signInWithOAuth({
+          ({ data, error } = await (supabase as SupabaseClient).auth.signInWithOAuth({
             provider: 'google',
             options: {
               redirectTo: `${window.location.origin}/auth/callback`
@@ -127,7 +128,7 @@ export function AccountLoginSection({
           break;
           
         case "microsoft":
-          ({ data, error } = await supabase.auth.signInWithOAuth({
+          ({ data, error } = await (supabase as SupabaseClient).auth.signInWithOAuth({
             provider: 'azure',
             options: {
               redirectTo: `${window.location.origin}/auth/callback`
@@ -136,7 +137,7 @@ export function AccountLoginSection({
           break;
           
         case "github":
-          ({ data, error } = await supabase.auth.signInWithOAuth({
+          ({ data, error } = await (supabase as SupabaseClient).auth.signInWithOAuth({
             provider: 'github',
             options: {
               redirectTo: `${window.location.origin}/auth/callback`

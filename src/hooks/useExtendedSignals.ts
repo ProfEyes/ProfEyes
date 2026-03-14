@@ -34,16 +34,42 @@ export function useExtendedSignals() {
         localStorage.removeItem(STORAGE_KEY);
         localStorage.removeItem(CACHE_DATE_KEY);
         localStorage.setItem(CACHE_VERSION_KEY, CURRENT_VERSION);
+        return [];
+      }
+      
+      const today = new Date().toDateString();
+      const cacheDate = localStorage.getItem(CACHE_DATE_KEY);
+      
+      if (cacheDate === today) {
+        const cached = localStorage.getItem(STORAGE_KEY);
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            return parsed;
+          }
+        }
       }
     } catch {
-      // silenciar erro de verificação de cache
+      // cache inválido
     }
     
     return [];
   });
   
-  // ✅ SEMPRE mostrar loading no início (já que não carregamos cache inicial)
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(() => {
+    try {
+      const today = new Date().toDateString();
+      const cacheDate = localStorage.getItem(CACHE_DATE_KEY);
+      const cached = localStorage.getItem(STORAGE_KEY);
+      if (cacheDate === today && cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return false;
+        }
+      }
+    } catch {}
+    return true;
+  });
   const [error, setError] = useState<Error | null>(null);
   
   // 🔥 TIMEOUT GLOBAL: Garantir que isLoading sempre vire false após 12s
@@ -204,11 +230,9 @@ export function useExtendedSignals() {
     }
   }, []); // ✅ SEM DEPENDÊNCIAS - função estável
 
-  // ✅ CORREÇÃO: Buscar APENAS UMA VEZ ao montar (depois só via Realtime)
   const hasInitialized = useRef(false);
   
   useEffect(() => {
-    // ✅ AGUARDAR AUTENTICAÇÃO COMPLETAR
     if (authLoading) {
       const authTimeout = setTimeout(() => {
         setIsLoading(false);
@@ -217,56 +241,44 @@ export function useExtendedSignals() {
       return () => clearTimeout(authTimeout);
     }
     
-    if (hasInitialized.current) {
-      return;
+    if (!hasInitialized.current) {
+      hasInitialized.current = true;
+      
+      // Carregar cache existente imediatamente enquanto busca dados frescos
+      try {
+        const cached = localStorage.getItem(STORAGE_KEY);
+        if (cached) {
+          const parsedCache = JSON.parse(cached);
+          if (Array.isArray(parsedCache) && parsedCache.length > 0) {
+            setSignals(parsedCache);
+            setIsLoading(false);
+          }
+        }
+      } catch {
+        // cache inválido - ignorar
+      }
     }
     
-    hasInitialized.current = true;
-    
-    // ✅ CRÍTICO: SEMPRE limpar cache ao montar o hook
-    const keysToRemove = [
-      'tradesSignals',
-      'dailyTradingSignals',
-      'dashboardSignals',
-      'extended_signals_cache',
-      'extended_signals_cache_date'
-    ];
-    
-    keysToRemove.forEach(key => {
-      localStorage.removeItem(key);
-    });
-    
+    // Sempre buscar dados frescos do servidor
     fetchExtendedSignals();
     
     let refreshTimeout: NodeJS.Timeout | null = null;
     
     const handleBackgroundResume = () => {
-      if (refreshTimeout) {
-        clearTimeout(refreshTimeout);
-      }
-      
-      refreshTimeout = setTimeout(() => {
-        fetchExtendedSignals();
-      }, 500);
+      if (refreshTimeout) clearTimeout(refreshTimeout);
+      refreshTimeout = setTimeout(() => { fetchExtendedSignals(); }, 500);
     };
     
     const handleForceRefresh = () => {
-      if (refreshTimeout) {
-        clearTimeout(refreshTimeout);
-      }
-      
-      refreshTimeout = setTimeout(() => {
-        fetchExtendedSignals();
-      }, 500);
+      if (refreshTimeout) clearTimeout(refreshTimeout);
+      refreshTimeout = setTimeout(() => { fetchExtendedSignals(); }, 500);
     };
     
     window.addEventListener('force-update-after-background', handleBackgroundResume);
     window.addEventListener('force-refresh-signals', handleForceRefresh);
     
     return () => {
-      if (refreshTimeout) {
-        clearTimeout(refreshTimeout);
-      }
+      if (refreshTimeout) clearTimeout(refreshTimeout);
       window.removeEventListener('force-update-after-background', handleBackgroundResume);
       window.removeEventListener('force-refresh-signals', handleForceRefresh);
     };

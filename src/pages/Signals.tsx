@@ -1302,6 +1302,8 @@ const styles = `
     backdrop-filter: blur(15px);
     transition: all 0.3s ease;
     overflow: hidden;
+    max-width: 100%;
+    word-wrap: break-word;
   }
   
   .signal-card:hover {
@@ -1309,6 +1311,16 @@ const styles = `
     background: rgba(5, 5, 10, 0.65);
     box-shadow: 0 0 20px rgba(255, 255, 255, 0.08);
     transform: translateY(-3px);
+  }
+  
+  @media (max-width: 639px) {
+    .signal-card {
+      max-width: 100%;
+    }
+    
+    .signal-card:hover {
+      transform: translateY(-2px);
+    }
   }
 
   /* Estilo unificado para todos os divisores */
@@ -1323,11 +1335,23 @@ const styles = `
     color: rgba(255, 255, 255, 0.8);
   }
 
-  /* Estilo para as caixas de informa????o */
+  /* Estilo para as caixas de informação */
   .signal-info-box {
     background: rgba(0, 0, 0, 0.8);
     border: 1px solid rgba(255, 255, 255, 0.05);
     backdrop-filter: blur(10px);
+    flex-wrap: nowrap;
+  }
+  
+  @media (max-width: 639px) {
+    .signal-info-box {
+      min-height: 44px !important;
+      padding: 0.5rem !important;
+    }
+    
+    .signal-info-box p {
+      font-size: 0.75rem;
+    }
   }
   
   /* Classes espec??ficas para a p??gina de sinais */
@@ -1398,13 +1422,19 @@ const styles = `
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    padding: 5rem 2rem;
+    padding: 3rem 1.5rem;
     background: rgba(0, 0, 0, 0.6);
     border-radius: 1rem;
     backdrop-filter: blur(15px);
     border: 1px solid rgba(255, 255, 255, 0.03);
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
     animation: glowPulse 3s ease-in-out infinite;
+  }
+  
+  @media (min-width: 640px) {
+    .loading-container {
+      padding: 5rem 2rem;
+    }
   }
 
   /* Estilo para o t??tulo principal da p??gina */
@@ -2596,6 +2626,22 @@ const handleVisibilityChangeConservative = useCallback((
     refresh: refetch 
   } = useExtendedSignals(); // ? Busca 7 sinais (3 ativos + 4 adicionais)
   
+  // Retry automático: se auth resolveu mas sinais vieram vazio, re-tentar
+  const retryCountRef = useRef(0);
+  useEffect(() => {
+    if (!isLoading && (!realtimeSignals || realtimeSignals.length === 0) && retryCountRef.current < 3) {
+      const retryDelay = (retryCountRef.current + 1) * 2000;
+      const retryTimer = setTimeout(() => {
+        retryCountRef.current += 1;
+        refetch();
+      }, retryDelay);
+      return () => clearTimeout(retryTimer);
+    }
+    if (realtimeSignals && realtimeSignals.length > 0) {
+      retryCountRef.current = 0;
+    }
+  }, [isLoading, realtimeSignals, refetch]);
+  
   // Converter sinais do Realtime para o formato esperado pela p??gina
   const signals = useMemo(() => {
     if (!realtimeSignals || realtimeSignals.length === 0) {
@@ -2844,21 +2890,16 @@ const handleVisibilityChangeConservative = useCallback((
               });
 
             if (hasChanged) {
-              clearNavigationCacheOnDashboardChange();
               setDashboardSignals(formattedSignals);
-              queryClient.invalidateQueries({ queryKey: ['tradingSignals'] });
             }
             return;
           }
         }
 
-        if (dashboardSignalsRef.current && dashboardSignalsRef.current.length > 0) {
-          setDashboardSignals([]);
-          clearNavigationCacheOnDashboardChange();
-          queryClient.invalidateQueries({ queryKey: ['tradingSignals'] });
-        }
+        // Se não há dados no localStorage mas já temos dados no state, manter o state
+        // Não limpar agressivamente - esperar dados frescos
       } catch {
-        setDashboardSignals([]);
+        // Manter estado atual em caso de erro de parse
       }
     };
 
@@ -4532,18 +4573,18 @@ const handleVisibilityChangeConservative = useCallback((
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4, delay: 0.1 }}
-          className="flex flex-col md:flex-row md:justify-between md:items-center gap-4 mb-8"
+          className="flex flex-col gap-3 sm:gap-4 mb-6 sm:mb-8"
         >
           <div>
-            <h1 className="text-2xl md:text-3xl font-medium text-white">
+            <h1 className="text-xl sm:text-2xl md:text-3xl font-medium text-white">
               {t('nav.signals.title')}
             </h1>
-            <div className="flex items-center gap-3 flex-wrap">
-              <p className="text-white/50 font-light text-sm tracking-wide">
+            <div className="flex items-center gap-2 sm:gap-3 flex-wrap mt-2">
+              <p className="text-white/50 font-light text-xs sm:text-sm tracking-wide">
                 {t('signals.subtitle')}
               </p>
               
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5 sm:gap-2">
                 <TimeZoneSelector variant="compact" />
                 
                 {/* Bot??o de diagn??stico - vis??vel apenas no navegador Operar para ajudar na depura????o */}
@@ -4594,7 +4635,7 @@ const handleVisibilityChangeConservative = useCallback((
               </p>
             </div>
           ) : (filteredSignals && Array.isArray(filteredSignals) && filteredSignals.length > 0) ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4 md:gap-5">
               {(() => {
                 try {
                   if (!Array.isArray(paginatedSignals)) {
@@ -4625,19 +4666,19 @@ const handleVisibilityChangeConservative = useCallback((
                       className="flex flex-col rounded-xl signal-card"
                       data-signal-number={index + 1}
                     >
-                    <div className="relative p-4 border-b signal-divider backdrop-blur-md bg-black/70">
+                    <div className="relative p-3 sm:p-4 border-b signal-divider backdrop-blur-md bg-black/70">
                       {/* Simbolo e nome do ativo - CORRIGIDO */}
-                      <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-start justify-between gap-2 sm:gap-3">
                         <div className="flex-1 min-w-0">
-                          <h3 className="text-lg font-semibold text-white leading-tight overflow-hidden text-ellipsis line-clamp-2 break-words">
+                          <h3 className="text-base sm:text-lg font-semibold text-white leading-tight overflow-hidden text-ellipsis line-clamp-2 break-words">
                             {String(signal.display_name || signal.symbol)}
                           </h3>
-                          <div className="flex items-center text-sm text-white/70 mt-1">
+                          <div className="flex items-center text-xs sm:text-sm text-white/70 mt-1">
                             <span className="truncate">{signal.exchange || 'Corretora'}</span>
                           </div>
                         </div>
                       
-                        <span className={`text-sm py-1 px-2 rounded-md flex-shrink-0 h-fit font-medium border border-white/10 ${
+                        <span className={`text-xs sm:text-sm py-1 px-2 rounded-md flex-shrink-0 h-fit font-medium border border-white/10 whitespace-nowrap ${
                           signal.signal === 'BUY' 
                             ? 'text-green-500' 
                             : 'text-red-500'
@@ -4648,71 +4689,71 @@ const handleVisibilityChangeConservative = useCallback((
                       </div>
                     </div>
                     
-                    <div className="p-3 flex-grow relative backdrop-blur-md bg-black/70">
+                    <div className="p-3 sm:p-4 flex-grow relative backdrop-blur-md bg-black/70">
                       {/* Indicadores de status */}
-                      <div className="flex flex-wrap gap-2 mb-4 h-8 items-center">
+                      <div className="flex flex-wrap gap-1.5 sm:gap-2 mb-3 sm:mb-4 min-h-[28px] items-center">
                         {/* Taxa de sucesso */}
-                        <span className="text-xs h-6 px-2 py-1 rounded-full bg-emerald-900/30 text-emerald-300/80 border border-white/5 flex items-center">
-                                <CheckCheck className="w-3 h-3 mr-1" />
+                        <span className="text-[10px] sm:text-xs h-5 sm:h-6 px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-full bg-emerald-900/30 text-emerald-300/80 border border-white/5 flex items-center whitespace-nowrap">
+                                <CheckCheck className="w-2.5 h-2.5 sm:w-3 sm:h-3 mr-0.5 sm:mr-1" />
                                 {formatSuccessRate(signal.success_rate || 0.77)}
                                 </span>
                         {/* N??vel de expectativa */}
-                        <span className={`text-xs h-6 px-2 py-1 rounded-full flex items-center text-teal-300/70 bg-teal-900/30 border border-white/5`}>
-                          <CheckCheck className="w-3 h-3 mr-1" />
+                        <span className={`text-[10px] sm:text-xs h-5 sm:h-6 px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-full flex items-center text-teal-300/70 bg-teal-900/30 border border-white/5 whitespace-nowrap`}>
+                          <CheckCheck className="w-2.5 h-2.5 sm:w-3 sm:h-3 mr-0.5 sm:mr-1" />
                           {getStrengthText(signal.strength)}
                             </span>
                       </div>
                       
                       {/* Dados do sinal */}
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
-                        <div className="flex flex-col space-y-3">
-                          <div className="flex items-center justify-start bg-black/80 backdrop-blur-md rounded-lg p-3 border border-white/5 shadow-inner min-h-[50px] signal-info-box gap-3">
+                      <div className="grid grid-cols-1 gap-2 sm:gap-3 mb-3 sm:mb-4">
+                        <div className="flex flex-col space-y-2 sm:space-y-3">
+                          <div className="flex items-center justify-between bg-black/80 backdrop-blur-md rounded-lg p-2 sm:p-3 border border-white/5 shadow-inner min-h-[44px] sm:min-h-[50px] signal-info-box gap-2">
                             <div>
-                              <p className="text-sm font-medium text-white/70">{t('dashboard.signals.entry') || "Entrada"}</p>
+                              <p className="text-xs sm:text-sm font-medium text-white/70 whitespace-nowrap">{t('dashboard.signals.entry') || "Entrada"}</p>
                             </div>
-                            <p className="text-base font-semibold text-white/80">{entryTime || "00:00"}</p>
+                            <p className="text-sm sm:text-base font-semibold text-white/80">{entryTime || "00:00"}</p>
                           </div>
                           
-                          <div className="flex items-center justify-between bg-black/80 backdrop-blur-md rounded-lg p-3 border border-white/5 shadow-inner min-h-[50px] signal-info-box gap-2">
+                          <div className="flex items-center justify-between bg-black/80 backdrop-blur-md rounded-lg p-2 sm:p-3 border border-white/5 shadow-inner min-h-[44px] sm:min-h-[50px] signal-info-box gap-2">
                             <div>
-                              <p className="text-sm font-medium text-white/70">{t('dashboard.signals.expiration') || "Expira????o"}</p>
+                              <p className="text-xs sm:text-sm font-medium text-white/70 whitespace-nowrap">{t('dashboard.signals.expiration') || "Expiração"}</p>
                             </div>
-                            <div className="flex items-center gap-1 text-base font-semibold text-white/80">
+                            <div className="flex items-center gap-1 text-sm sm:text-base font-semibold text-white/80">
                               <span>5m</span>
-                              <span className="text-xs text-white/50">({expiryTime})</span>
+                              <span className="text-[10px] sm:text-xs text-white/50">({expiryTime})</span>
                             </div>
                           </div>
                         </div>
                         
-                        <div className="flex flex-col space-y-3">
-                          <div className="flex items-center justify-between bg-black/80 backdrop-blur-md rounded-lg p-3 border border-white/5 shadow-inner min-h-[50px] signal-info-box gap-2">
+                        <div className="flex flex-col space-y-2 sm:space-y-3">
+                          <div className="flex items-center justify-between bg-black/80 backdrop-blur-md rounded-lg p-2 sm:p-3 border border-white/5 shadow-inner min-h-[44px] sm:min-h-[50px] signal-info-box gap-2">
                             <div>
-                              <p className="text-sm font-medium text-white/70">{t('dashboard.signals.reentry1') || "Reentrada 1"}</p>
+                              <p className="text-xs sm:text-sm font-medium text-white/70 whitespace-nowrap">{t('dashboard.signals.reentry1') || "Reentrada 1"}</p>
                             </div>
-                            <p className="text-base font-semibold text-white/80">{gale1Time || "00:29"}</p>
+                            <p className="text-sm sm:text-base font-semibold text-white/80">{gale1Time || "00:29"}</p>
                           </div>
                           
-                          <div className="flex items-center justify-between bg-black/80 backdrop-blur-md rounded-lg p-3 border border-white/5 shadow-inner min-h-[50px] signal-info-box gap-2">
+                          <div className="flex items-center justify-between bg-black/80 backdrop-blur-md rounded-lg p-2 sm:p-3 border border-white/5 shadow-inner min-h-[44px] sm:min-h-[50px] signal-info-box gap-2">
                             <div>
-                              <p className="text-sm font-medium text-white/70">{t('dashboard.signals.reentry2') || "Reentrada 2"}</p>
+                              <p className="text-xs sm:text-sm font-medium text-white/70 whitespace-nowrap">{t('dashboard.signals.reentry2') || "Reentrada 2"}</p>
                             </div>
-                            <p className="text-base font-semibold text-white/80">{gale2Time || "00:30"}</p>
+                            <p className="text-sm sm:text-base font-semibold text-white/80">{gale2Time || "00:30"}</p>
                           </div>
                         </div>
                       </div>
                       
                     {/* Bot??o de a????o */}
-                    <div className="p-4 border-t signal-divider bg-black/80">
+                    <div className="p-3 sm:p-4 border-t signal-divider bg-black/80">
                       <button
-                        className="w-full py-3 px-4 rounded-lg bg-gradient-to-r from-amber-700/80 via-yellow-600/70 to-amber-600/90 hover:from-amber-800/80 hover:via-yellow-700/70 hover:to-amber-700/90 text-amber-50 font-medium transition-all duration-300 flex items-center justify-center relative overflow-hidden shadow-lg backdrop-blur-sm border border-amber-500/20 group golden-button golden-shadow"
+                        className="w-full py-2.5 sm:py-3 px-3 sm:px-4 rounded-lg bg-gradient-to-r from-amber-700/80 via-yellow-600/70 to-amber-600/90 hover:from-amber-800/80 hover:via-yellow-700/70 hover:to-amber-700/90 text-amber-50 text-sm sm:text-base font-medium transition-all duration-300 flex items-center justify-center relative overflow-hidden shadow-lg backdrop-blur-sm border border-amber-500/20 group golden-button golden-shadow"
                         onClick={openTraderLink}
                       >
                         <span className="absolute inset-0 w-full h-full bg-black opacity-30 group-hover:opacity-20 transition-opacity duration-300"></span>
                         <span className="absolute inset-0 w-full h-full bg-gradient-to-tr from-amber-500/20 via-yellow-400/10 to-amber-300/20"></span>
-                        <span className="relative z-10 flex items-center">
+                        <span className="relative z-10 flex items-center whitespace-nowrap">
                           {t('dashboard.signals.trade') || "Realizar Trade"}
                         </span>
-                        <ExternalLink className="w-4 h-4 ml-2 relative z-10 text-amber-100" />
+                        <ExternalLink className="w-3.5 h-3.5 sm:w-4 sm:h-4 ml-1.5 sm:ml-2 relative z-10 text-amber-100 flex-shrink-0" />
                       </button>
                     </div>
                     </div>
@@ -4741,17 +4782,17 @@ const handleVisibilityChangeConservative = useCallback((
               })()}
             </div>
           ) : (
-            <div className="flex flex-col items-center justify-center p-10 signals-page-card-glass rounded-xl">
-              <div className="bg-black/60 p-4 rounded-full mb-4">
-                <ListFilter className="w-10 h-10 text-white/30" />
+            <div className="flex flex-col items-center justify-center p-6 sm:p-10 signals-page-card-glass rounded-xl">
+              <div className="bg-black/60 p-3 sm:p-4 rounded-full mb-4">
+                <ListFilter className="w-8 h-8 sm:w-10 sm:h-10 text-white/30" />
               </div>
-              <h3 className="text-xl font-medium mb-2">
+              <h3 className="text-lg sm:text-xl font-medium mb-2">
                 Nenhum sinal encontrado
               </h3>
-              <p className="text-white/60 text-center max-w-md mb-6">
+              <p className="text-white/60 text-center max-w-md mb-6 text-sm sm:text-base px-4">
                 {filterType !== 'ALL' 
-                  ? `N??o encontramos sinais do tipo ${filterType} com os filtros atuais.` 
-                  : 'N??o encontramos sinais de trading ativos no momento.'}
+                  ? `Não encontramos sinais do tipo ${filterType} com os filtros atuais.` 
+                  : 'Não encontramos sinais de trading ativos no momento.'}
               </p>
               <button
                 onClick={() => {
@@ -4771,15 +4812,15 @@ const handleVisibilityChangeConservative = useCallback((
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ duration: 0.4, delay: 0.3 }}
-              className="flex justify-center items-center mt-8 gap-2"
+              className="flex justify-center items-center mt-6 sm:mt-8 gap-1.5 sm:gap-2"
             >
               <button 
                 onClick={() => setActivePage(prev => Math.max(1, prev - 1))}
                 disabled={activePage === 1}
-                className="p-2 rounded-lg bg-black/80 hover:bg-gray-900/80 disabled:opacity-50 disabled:pointer-events-none transition-all"
+                className="p-1.5 sm:p-2 rounded-lg bg-black/80 hover:bg-gray-900/80 disabled:opacity-50 disabled:pointer-events-none transition-all"
                 aria-label="P??gina anterior"
               >
-                <ChevronRight className="w-5 h-5 rotate-180" />
+                <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5 rotate-180" />
               </button>
               
               <div className="flex gap-1">
@@ -4793,7 +4834,7 @@ const handleVisibilityChangeConservative = useCallback((
                   <button 
                     key={`page-${index + 1}`}
                     onClick={() => setActivePage(index + 1)}
-                        className={`w-9 h-9 rounded-lg flex items-center justify-center transition-all ${
+                        className={`w-8 h-8 sm:w-9 sm:h-9 rounded-lg flex items-center justify-center transition-all text-sm sm:text-base ${
                       activePage === index + 1 
                             ? 'bg-gray-900/90 text-white font-medium border border-gray-800/30 shimmer-effect' 
                             : 'bg-black/80 hover:bg-gray-900/70 text-white/70'
@@ -4803,9 +4844,9 @@ const handleVisibilityChangeConservative = useCallback((
                   </button>
                     );
                   } else if (index === 1 && activePage > 3) {
-                    return <span key="ellipsis-start" className="px-1 self-end text-white/50">...</span>;
+                    return <span key="ellipsis-start" className="px-0.5 sm:px-1 self-end text-white/50 text-sm">...</span>;
                   } else if (index === totalPages - 2 && activePage < totalPages - 2) {
-                    return <span key="ellipsis-end" className="px-1 self-end text-white/50">...</span>;
+                    return <span key="ellipsis-end" className="px-0.5 sm:px-1 self-end text-white/50 text-sm">...</span>;
                   }
                   return null;
                 })}
@@ -4814,10 +4855,10 @@ const handleVisibilityChangeConservative = useCallback((
               <button 
                 onClick={() => setActivePage(prev => Math.min(totalPages, prev + 1))}
                 disabled={activePage === totalPages}
-                className="p-2 rounded-lg bg-black/80 hover:bg-gray-900/80 disabled:opacity-50 disabled:pointer-events-none transition-all"
+                className="p-1.5 sm:p-2 rounded-lg bg-black/80 hover:bg-gray-900/80 disabled:opacity-50 disabled:pointer-events-none transition-all"
                 aria-label="Pr??xima p??gina"
               >
-                <ChevronRight className="w-5 h-5" />
+                <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5" />
               </button>
             </motion.div>
           )}

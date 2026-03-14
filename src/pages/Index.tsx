@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { BellRing, RefreshCw, PlayCircle } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import DashboardCard from "@/components/dashboard/DashboardCard";
-import { default as SignalsCard } from "@/components/dashboard/SignalsCard";
+import SignalsCard from "@/components/dashboard/SignalsCard";
 import { NewsCard } from "@/components/dashboard/NewsCard";
 import { fetchMarketData } from "@/services";
 import { toast } from "sonner";
@@ -14,8 +14,8 @@ import { useNavigate } from "react-router-dom";
 import { VideoPlayer } from "@/components/ui/video-player";
 import { Card } from "@/components/ui/card";
 import { useLanguage } from "@/contexts/LanguageContext";
-// Importar o serviço de links do trader
 import { traderLinkService } from "@/services/traderLinkService";
+import { saveClickEvent } from "@/lib/admin-api";
 
 // Lista de estatísticas do desempenho do trader
 const DASHBOARD_STATS = [
@@ -53,9 +53,8 @@ const Index = () => {
   
   // Função para abrir o link do trader - MOVIDA PARA O INÍCIO DO COMPONENTE
   const openTraderLink = useCallback(() => {
+    saveClickEvent('dashboard');
     if (!traderLink) {
-      console.warn('⚠️ Index - Tentativa de abrir link do trader, mas o link ainda não foi carregado');
-      // Fallback para o link padrão caso o traderLink ainda não tenha sido carregado
       window.open('https://trade.avalonbroker.io/register?aff=385853&aff_model=revenue&afftrack=mesnagensfree', '_blank');
       return;
     }

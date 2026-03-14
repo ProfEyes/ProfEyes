@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { getSavedAvatar, preloadImage, startAvatarPersistenceService } from '@/utils/imageUtils';
 import { useUser } from '@/contexts/UserContext';
 import { supabase, getSupabaseAdmin } from '@/lib/supabase';
+import type { SupabaseClient } from '@supabase/supabase-js';
 
 /**
  * Componente de serviço invisível que garante a persistência do avatar
@@ -38,14 +39,14 @@ export const AvatarPersistence = () => {
       // Agora busque também do banco de dados para garantir que temos a versão mais recente
       try {
         // Verificar se o usuário está autenticado
-        const { data: userData } = await supabase.auth.getUser();
+        const { data: userData } = await (supabase as SupabaseClient).auth.getUser();
         
         if (userData?.user) {
           // 1. Verificar na tabela de auth primeiro (metadados)
           const metadataAvatarUrl = userData.user.user_metadata?.avatar_url;
           
           // 2. Verificar também na tabela user_profiles (mais confiável para persistência)
-          const { data: profileData } = await supabase
+          const { data: profileData } = await (supabase as SupabaseClient)
             .from('user_profiles')
             .select('avatar_url')
             .eq('user_id', userData.user.id)
@@ -75,7 +76,7 @@ export const AvatarPersistence = () => {
             try {
               console.log('Sincronizando avatar local com o banco de dados...');
               // Atualizar na tabela user_profiles usando getSupabaseAdmin() para evitar erros de RLS
-              const { error } = await getSupabaseAdmin()
+              const { error } = await (getSupabaseAdmin() as SupabaseClient)
                 .from('user_profiles')
                 .update({ 
                   avatar_url: savedAvatar,
@@ -127,10 +128,10 @@ export const AvatarPersistence = () => {
           
           // Tentar restaurar do banco de dados
           try {
-            const { data } = await supabase.auth.getUser();
+            const { data } = await (supabase as SupabaseClient).auth.getUser();
             if (data?.user) {
               // Buscar da tabela user_profiles
-              const { data: profileData } = await supabase
+              const { data: profileData } = await (supabase as SupabaseClient)
                 .from('user_profiles')
                 .select('avatar_url')
                 .eq('user_id', data.user.id)

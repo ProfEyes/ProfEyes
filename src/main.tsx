@@ -43,7 +43,9 @@ console.error = (...args: any[]) => {
     message.includes('Missing `Description`') ||
     message.includes('aria-describedby') ||
     message.includes('The above error occurred in the') ||
-    message.includes('Consider adding an error boundary')
+    message.includes('Consider adding an error boundary') ||
+    message.includes('failed to connect to websocket') ||
+    message.includes('WebSocket (failing)')
   ) {
     return;
   }
@@ -59,44 +61,15 @@ console.log = (...args: any[]) => {
   originalLog.apply(console, args);
 };
 
-// ✅ CRÍTICO: Limpar APENAS caches de SINAIS (NUNCA tocar em auth!)
-// Limpando caches de sinais (silenciado)
-
-// Lista EXCLUSIVA de caches de sinais (NUNCA incluir auth, supabase, device, remember, etc.)
-const signalCacheKeys = [
-  'realtime_signals_cache',           // Dashboard (3 sinais)
-  'realtime_signals_cache_date',      // Data do cache do Dashboard
-  'extended_signals_cache',           // Aba Trades (7 sinais)
-  'extended_signals_cache_date',      // Data do cache da aba Trades
-  'tradesSignals',                    // Cache antigo
-  'dailyTradingSignals',              // Cache antigo
-  'dashboardSignals',                 // Cache antigo
-  'persistent-signals-navigation',    // Cache de navegação entre páginas
-  'trading-signals-cache',            // Cache adicional de trading
-  'daily-signals-cache',              // Cache adicional diário
-  'userNotifications',                // ✅ NOVO: Limpar notificações antigas do localStorage
-  'pre-signal-notification-cache'     // ✅ NOVO: Limpar cache de pré-sinais
-];
-
-// 🔥 VERIFICAÇÃO DE SEGURANÇA: NUNCA remover chaves de autenticação
-const protectedKeys = ['auth', 'supabase', 'device', 'remember', 'sb-'];
-
-signalCacheKeys.forEach(key => {
-  // Garantir que não é uma chave protegida
-  const isProtected = protectedKeys.some(protectedKey => key.toLowerCase().includes(protectedKey));
-  
-  if (isProtected) {
-    return;
-  }
-  
-  const hadCache = localStorage.getItem(key) !== null;
-  if (hadCache) {
-    // Removendo cache de sinal (silenciado)
-    localStorage.removeItem(key);
-  }
-});
-
-// Caches limpos (silenciado)
+// Limpar apenas caches órfãos e obsoletos (não interferir em caches ativos)
+try {
+  localStorage.removeItem('userNotifications');
+  localStorage.removeItem('pre-signal-notification-cache');
+  localStorage.removeItem('trading-signals-cache');
+  localStorage.removeItem('daily-signals-cache');
+} catch {
+  // ignorar
+}
 
 import App from './App.tsx'
 import './index.css'
@@ -126,13 +99,7 @@ import { removeCachesByPattern } from './utils/cacheValidator';
 // ⚡ GARANTIR PORTA CORRETA ANTES DE QUALQUER COISA
 ensureCorrectPort();
 
-// 🗑️ LIMPEZA FORÇADA: Remover notificações antigas do localStorage
-try {
-  localStorage.removeItem('userNotifications');
-  localStorage.removeItem('pre-signal-notification-cache');
-} catch {
-  // ignorar erros de limpeza
-}
+// Notificações já limpas na inicialização acima
 
 // Inicializar sistema de pré-carregamento de avatar para evitar flickering
 // e garantir persistência entre sessões
@@ -289,23 +256,22 @@ const toastOptions = {
   },
 };
 
-// 🔥 Limpeza SEMPRE ao abrir nova aba/navegador (não confiar em timestamp)
-// Limpando todos os caches de sinais (silenciado)
+// Limpar apenas caches com data diferente do dia atual (manter cache do dia)
 try {
-  // SEMPRE limpar - timestamp não garante idade dos DADOS dentro do cache
-  localStorage.removeItem('extended_signals_cache');
-  localStorage.removeItem('extended_signals_cache_date');
-  localStorage.removeItem('realtime_signals_cache');
-  localStorage.removeItem('realtime_signals_cache_date');
-  localStorage.removeItem('persistent-signals-navigation');
-  localStorage.removeItem('trading-signals-cache');
-  localStorage.removeItem('daily-signals-cache');
-  localStorage.removeItem('userNotifications'); // ✅ Limpar notificações antigas
-  localStorage.removeItem('pre-signal-notification-cache'); // ✅ Limpar cache de pré-sinais
+  const today = new Date().toDateString();
+  const extCacheDate = localStorage.getItem('extended_signals_cache_date');
+  const rtCacheDate = localStorage.getItem('realtime_signals_cache_date');
   
-  // Todos os caches limpos
+  if (extCacheDate && extCacheDate !== today) {
+    localStorage.removeItem('extended_signals_cache');
+    localStorage.removeItem('extended_signals_cache_date');
+  }
+  if (rtCacheDate && rtCacheDate !== today) {
+    localStorage.removeItem('realtime_signals_cache');
+    localStorage.removeItem('realtime_signals_cache_date');
+  }
 } catch {
-  // ignorar erros de limpeza inicial
+  // ignorar erros
 }
 
 // Inicializar o gerenciador de visibilidade

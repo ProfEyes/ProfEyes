@@ -22,6 +22,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useTranslation } from '@/contexts/LanguageContext';
 import { traderLinkService } from "@/services/traderLinkService";
+import { saveClickEvent } from "@/lib/admin-api";
 
 const Instructions = () => {
   const navigate = useNavigate();
@@ -57,13 +58,11 @@ const Instructions = () => {
 
   // Substituir a função existente ou criar nova para abrir o link do trader
   const openTraderLink = useCallback(() => {
+    saveClickEvent('instructions');
     if (!traderLink) {
-      console.warn('⚠️ Instructions - Tentativa de abrir link do trader, mas o link ainda não foi carregado');
-      // Fallback para o link padrão caso o traderLink ainda não tenha sido carregado
       window.open('https://trade.avalonbroker.io/register?aff=385853&aff_model=revenue&afftrack=mesnagensfree', '_blank');
       return;
     }
-    console.log('🔗 Instructions - Abrindo link do trader:', traderLink);
     window.open(traderLink, '_blank');
   }, [traderLink]);
 

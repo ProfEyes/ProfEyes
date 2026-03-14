@@ -1,8 +1,10 @@
 import { useState, useEffect } from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Heart, Link as LinkIcon, Check, ChevronRight } from "lucide-react";
+import { Heart, Hash, Check, ChevronRight, X, Loader2 } from "lucide-react";
 import { traderLinkService } from "@/services/traderLinkService";
+import { validateSupporterCode } from "@/lib/admin-api";
+import { supporterInfoService } from "@/services/supporterInfoService";
 import { toast } from "sonner";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { motion, AnimatePresence } from "framer-motion";
@@ -13,117 +15,127 @@ const TraderSupportSettings = () => {
   const { t } = useLanguage();
   const [isExpanded, setIsExpanded] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(false);
-  const [preferredTraderLink, setPreferredTraderLink] = useState<string>("");
+  const [supporterCode, setSupporterCode] = useState<string>("");
   const [isUsingDefault, setIsUsingDefault] = useState<boolean>(false);
   const [isMounted, setIsMounted] = useState<boolean>(false);
-  
-  // Debounce do link para evitar salvamentos excessivos
-  const debouncedLink = useDebounce(preferredTraderLink, 500);
+  const [validating, setValidating] = useState<boolean>(false);
+  const [codeStatus, setCodeStatus] = useState<'idle' | 'valid' | 'invalid' | 'expired'>('idle');
+  const [codeDescription, setCodeDescription] = useState<string | null>(null);
+  const [specialMessage, setSpecialMessage] = useState<string | null>(null);
+  const [displayName, setDisplayName] = useState<string | null>(null);
+  const [daysRemaining, setDaysRemaining] = useState<number | null>(null);
 
-  // Carregar preferências atuais
+  const debouncedCode = useDebounce(supporterCode, 600);
+
   useEffect(() => {
-    if (isExpanded) {
-      loadPreferences();
-    }
+    if (isExpanded) loadPreferences();
   }, [isExpanded]);
 
-  // Marcar componente como montado após carregar
   useEffect(() => {
     setIsMounted(true);
     return () => setIsMounted(false);
   }, []);
 
-  // Salvar automaticamente quando houver alterações
   useEffect(() => {
-    // Evitar salvar na montagem inicial
-    if (!isMounted) return;
-    
-    savePreferences();
-  }, [debouncedLink, isUsingDefault]);
+    if (!isMounted || isUsingDefault) return;
 
-    const loadPreferences = async () => {
-      setLoading(true);
-      try {
-        const { data: preferences } = await traderLinkService.getUserPreferences();
-        if (preferences) {
-          setPreferredTraderLink(preferences.preferred_trader_link || "");
-          setIsUsingDefault(!preferences.preferred_trader_link || preferences.preferred_trader_link.trim() === "");
-        }
-      } catch (error) {
-        console.error("Erro ao carregar preferências do trader:", error);
-      } finally {
-        setLoading(false);
-      // Marcar como montado após carregar dados iniciais
-      setIsMounted(true);
-      }
-    };
-
-  // Função para validar URL
-  const validateUrl = (url: string): boolean => {
-    if (!url || !url.trim()) return true; // Empty is OK (will use default)
-    
-    try {
-      new URL(url);
-      return true;
-    } catch (e) {
-      return false;
-    }
-  };
-
-  // Função para alternar o uso do link padrão
-  const toggleDefaultLink = (e?: React.MouseEvent | React.ChangeEvent<HTMLInputElement>) => {
-    // Prevenir comportamento padrão para evitar que a propagação cause problemas
-    if (e) e.preventDefault();
-    
-    // Inverte o valor atual
-    const newValue = !isUsingDefault;
-    setIsUsingDefault(newValue);
-    
-    // Se estiver ativando a opção padrão, limpa o link
-    if (newValue) {
-    setPreferredTraderLink("");
-    }
-  };
-
-  // Função para salvar as preferências
-  const savePreferences = async () => {
-    // Não salvar durante o carregamento inicial
-    if (!isMounted) return;
-    
-    // Validar URL se não estiver usando o padrão
-    if (!isUsingDefault && preferredTraderLink && !validateUrl(preferredTraderLink)) {
-      toast.error("Por favor, insira um link válido");
+    if (!debouncedCode || !debouncedCode.trim()) {
+      setCodeStatus('idle');
+      setCodeDescription(null);
+      setDaysRemaining(null);
+      savePreferences('');
       return;
     }
 
+    const validate = async () => {
+      setValidating(true);
+      try {
+        const result = await validateSupporterCode(debouncedCode);
+        setCodeStatus(result.valid ? 'valid' : 'invalid');
+        setCodeDescription(result.description);
+        setSpecialMessage(result.special_message);
+        setDisplayName(result.display_name);
+        if (result.valid) {
+          savePreferences(debouncedCode);
+        }
+      } catch {
+        setCodeStatus('invalid');
+      } finally {
+        setValidating(false);
+      }
+    };
+    validate();
+  }, [debouncedCode, isUsingDefault]);
+
+  useEffect(() => {
+    if (!isMounted) return;
+    if (isUsingDefault) {
+      savePreferences('');
+    }
+  }, [isUsingDefault]);
+
+  const loadPreferences = async () => {
     setLoading(true);
     try {
-      // Se estiver usando o padrão, salvar link vazio
-      const linkToSave = isUsingDefault ? "" : preferredTraderLink;
-      const success = await traderLinkService.updateTraderPreferences(linkToSave);
-      
-      if (success) {
-        // Notificação silenciosa ou nenhuma notificação para não interromper a experiência
-        console.log("Preferências salvas com sucesso");
-      } else {
+      const { data: preferences } = await traderLinkService.getUserPreferences();
+      if (preferences) {
+        const code = String(preferences.supporter_code || '');
+
+        setSupporterCode(code);
+        setIsUsingDefault(!code || !code.trim());
+        setDaysRemaining(null); // Código nunca expira
+        if (code && code.trim()) {
+          const result = await validateSupporterCode(code);
+          setCodeStatus(result.valid ? 'valid' : 'invalid');
+          setCodeDescription(result.description);
+          setSpecialMessage(result.special_message);
+          setDisplayName(result.display_name);
+        }
+      }
+    } catch (error) {
+      console.error("Erro ao carregar preferências do trader:", error);
+    } finally {
+      setLoading(false);
+      setIsMounted(true);
+    }
+  };
+
+  const savePreferences = async (code: string) => {
+    if (!isMounted) return;
+    try {
+      const success = await traderLinkService.updateTraderPreferences(
+        '', undefined, code.toUpperCase().trim()
+      );
+      if (!success) {
         toast.error("Erro ao salvar as preferências");
+      } else {
+        // Limpar cache para forçar reload das informações do apoiador
+        supporterInfoService.clearCache();
       }
     } catch (error) {
       console.error("Erro ao salvar preferências:", error);
-      toast.error("Erro ao salvar as preferências");
-    } finally {
-      setLoading(false);
+    }
+  };
+
+  const toggleDefaultLink = (e?: React.MouseEvent | React.ChangeEvent<HTMLInputElement>) => {
+    if (e) e.preventDefault();
+    const newValue = !isUsingDefault;
+    setIsUsingDefault(newValue);
+    if (newValue) {
+      setSupporterCode("");
+      setCodeStatus('idle');
+      setCodeDescription(null);
+      setDaysRemaining(null);
     }
   };
 
   return (
     <div className="relative">
-      {/* Cabeçalho clicável */}
-      <button 
+      <button
         onClick={() => setIsExpanded(!isExpanded)}
         className="w-full flex items-center justify-between py-2.5 px-3 rounded-lg hover:bg-black/10 transition-colors duration-200 group"
       >
-      <div className="flex items-center space-x-2">
+        <div className="flex items-center space-x-2">
           <div className={cn(
             "relative p-1 rounded-full transition-colors duration-300",
             isExpanded ? "bg-purple-600/20" : "bg-black/20 group-hover:bg-purple-600/10"
@@ -134,8 +146,8 @@ const TraderSupportSettings = () => {
             )} />
           </div>
           <h3 className="text-base font-medium text-white/90">{t('trader.support.title')}</h3>
-      </div>
-      
+        </div>
+
         <motion.div
           animate={{ rotate: isExpanded ? 90 : 0 }}
           transition={{ duration: 0.2 }}
@@ -143,8 +155,7 @@ const TraderSupportSettings = () => {
           <ChevronRight className="h-4 w-4 text-white/50" />
         </motion.div>
       </button>
-      
-      {/* Conteúdo expansível */}
+
       <AnimatePresence>
         {isExpanded && (
           <motion.div
@@ -155,33 +166,24 @@ const TraderSupportSettings = () => {
             className="overflow-hidden"
           >
             <div className="mt-2 pt-3 pb-2.5 px-3.5 space-y-4 border-t border-white/5">
-              {/* Descrição compacta */}
               <div className="flex items-start space-x-2">
                 <p className="text-xs text-white/70 leading-relaxed">
                   {t('trader.support.description')}
                 </p>
               </div>
-              
-          {/* Opção para usar link padrão */}
+
+              {/* Use default toggle */}
               <div className="bg-black/20 backdrop-blur-sm rounded-lg border border-white/5 p-2.5 hover:border-white/10 transition-all duration-300">
                 <div className="flex items-center space-x-2.5">
-                  {/* Checkbox com estrutura original mas com comportamento melhorado */}
-                  <div 
-                    className="relative" 
-                    onClick={toggleDefaultLink}
-                    style={{ zIndex: 10 }}
-                  >
-                    {/* Input real (invisível) */}
-              <input
-                type="checkbox"
-                id="use-default"
-                checked={isUsingDefault}
+                  <div className="relative" onClick={toggleDefaultLink} style={{ zIndex: 10 }}>
+                    <input
+                      type="checkbox"
+                      id="use-default"
+                      checked={isUsingDefault}
                       onChange={toggleDefaultLink}
                       className="peer absolute opacity-0 w-0 h-0 cursor-pointer"
                       style={{ zIndex: 20 }}
                     />
-                    
-                    {/* Label visual do checkbox */}
                     <label
                       htmlFor="use-default"
                       onClick={(e) => e.stopPropagation()}
@@ -203,8 +205,6 @@ const TraderSupportSettings = () => {
                         </motion.div>
                       )}
                     </label>
-
-                    {/* Efeito de brilho clicável */}
                     {isUsingDefault && (
                       <motion.div
                         className="absolute -inset-1 rounded-md bg-purple-600/10 blur-sm cursor-pointer"
@@ -214,10 +214,8 @@ const TraderSupportSettings = () => {
                         style={{ zIndex: 5 }}
                       />
                     )}
-            </div>
-                  
-                  {/* Label clicável */}
-                  <span 
+                  </div>
+                  <span
                     onClick={toggleDefaultLink}
                     className={cn(
                       "text-xs cursor-pointer transition-colors duration-300",
@@ -226,10 +224,10 @@ const TraderSupportSettings = () => {
                   >
                     {t('trader.support.use.default')}
                   </span>
-          </div>
-          
+                </div>
+
                 {isUsingDefault && (
-                  <motion.div 
+                  <motion.div
                     initial={{ opacity: 0, height: 0 }}
                     animate={{ opacity: 1, height: 'auto' }}
                     transition={{ duration: 0.3 }}
@@ -238,39 +236,87 @@ const TraderSupportSettings = () => {
                     {t('trader.support.default.info')}
                   </motion.div>
                 )}
-          </div>
-          
-          {/* Link do trader */}
+              </div>
+
+              {/* Supporter code input */}
               <div className={cn(
                 "space-y-1.5 transition-opacity duration-300",
                 isUsingDefault ? "opacity-50" : "opacity-100"
               )}>
-                <Label htmlFor="trader-link" className="text-xs text-white/60 flex items-center">
-                  <LinkIcon className="h-3.5 w-3.5 mr-1.5 text-purple-600/80" />
-                  {t('trader.support.link')}
-            </Label>
-                
+                <Label htmlFor="supporter-code" className="text-xs text-white/60 flex items-center">
+                  <Hash className="h-3.5 w-3.5 mr-1.5 text-purple-600/80" />
+                  Código de apoiador
+                </Label>
+
                 <div className="relative">
-                  <div className="absolute inset-0 bg-gradient-to-r from-white/5 via-white/3 to-white/5 rounded-lg blur transition-opacity duration-300 pointer-events-none" 
-                       style={{ opacity: preferredTraderLink && !isUsingDefault ? 0.2 : 0 }}></div>
-            <Input
-              id="trader-link"
-              type="url"
-              value={preferredTraderLink}
-              onChange={(e) => setPreferredTraderLink(e.target.value)}
-                    placeholder={t('trader.support.link.placeholder')}
+                  <Input
+                    id="supporter-code"
+                    type="text"
+                    value={supporterCode}
+                    onChange={(e) => {
+                      setSupporterCode(e.target.value.toUpperCase());
+                      setCodeStatus('idle');
+                    }}
+                    placeholder="Ex: TRADER123"
                     className={cn(
-                      "bg-black/30 border-white/10 h-9 rounded-lg py-0 px-2.5",
+                      "bg-black/30 border-white/10 h-9 rounded-lg py-0 px-2.5 pr-9",
                       "hover:bg-black/40 transition-all duration-300",
-                      "text-xs text-white/80 placeholder:text-white/20",
+                      "text-xs text-white/80 placeholder:text-white/20 font-mono uppercase tracking-wider",
                       "focus:outline-none focus:bg-black/40 focus:border-white/15",
-                      isUsingDefault ? "cursor-not-allowed" : "shadow-inner"
+                      isUsingDefault ? "cursor-not-allowed" : "shadow-inner",
+                      codeStatus === 'valid' && "border-emerald-500/30",
+                      codeStatus === 'invalid' && supporterCode && "border-red-500/30"
                     )}
-              disabled={isUsingDefault || loading}
-            />
+                    disabled={isUsingDefault || loading}
+                  />
+
+                  {/* Status indicator */}
+                  <div className="absolute right-2.5 top-1/2 -translate-y-1/2">
+                    {validating ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin text-white/30" />
+                    ) : codeStatus === 'valid' ? (
+                      <Check className="h-3.5 w-3.5 text-emerald-400" />
+                    ) : codeStatus === 'invalid' && supporterCode ? (
+                      <X className="h-3.5 w-3.5 text-red-400/70" />
+                    ) : null}
+                  </div>
+                </div>
+
+                {/* Validation feedback */}
+                <AnimatePresence>
+                  {codeStatus === 'valid' && specialMessage && (
+                    <motion.p
+                      initial={{ opacity: 0, y: -4 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0 }}
+                      className="text-[10px] text-emerald-400/70 pl-0.5"
+                    >
+                      {specialMessage}
+                    </motion.p>
+                  )}
+                  {codeStatus === 'invalid' && supporterCode && !validating && (
+                    <motion.p
+                      initial={{ opacity: 0, y: -4 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0 }}
+                      className="text-[10px] text-red-400/60 pl-0.5"
+                    >
+                      Código inválido ou inativo
+                    </motion.p>
+                  )}
+                  {codeStatus === 'expired' && (
+                    <motion.p
+                      initial={{ opacity: 0, y: -4 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0 }}
+                      className="text-[10px] text-amber-400/60 pl-0.5"
+                    >
+                      Código expirado. Insira novamente para renovar por mais 30 dias.
+                    </motion.p>
+                  )}
+                </AnimatePresence>
+              </div>
             </div>
-          </div>
-        </div>
           </motion.div>
         )}
       </AnimatePresence>
@@ -278,4 +324,4 @@ const TraderSupportSettings = () => {
   );
 };
 
-export default TraderSupportSettings; 
+export default TraderSupportSettings;

@@ -81,8 +81,8 @@ const SimpleChatComponent = forwardRef<ChatComponentRef, { darkTheme?: boolean }
     
     // Usar o nome do localStorage se estiver disponível, caso contrário, usar o nome dos metadados
     const userName = localStorageName || 
-                     auth.user?.user_metadata?.display_name || 
-                     auth.user?.user_metadata?.full_name || 
+                     (auth.user?.user_metadata?.display_name as string) || 
+                     (auth.user?.user_metadata?.full_name as string) || 
                      auth.user?.email?.split('@')[0] || 
                      '';
     
@@ -362,7 +362,7 @@ const SimpleChatComponent = forwardRef<ChatComponentRef, { darkTheme?: boolean }
                 
                 {message.sender === 'user' && (
                   <Avatar className="h-8 w-8 border-2 border-cyan-500/30">
-                    <AvatarImage src={auth.user?.user_metadata?.avatar_url} alt="Usuário" />
+                    <AvatarImage src={(auth.user?.user_metadata?.avatar_url as string) || undefined} alt="Usuário" />
                     <AvatarFallback className="bg-gradient-to-br from-cyan-700 to-blue-800 text-white text-xs">
                       {auth.user?.email?.substring(0, 2).toUpperCase() || 'U'}
                     </AvatarFallback>

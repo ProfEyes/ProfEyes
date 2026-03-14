@@ -11,22 +11,51 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from '@/types/supabase';
 
 
-// Função auxiliar para verificar autenticação
+// Função auxiliar para verificar autenticação - com timeout
 const requireAuth = async () => {
-  const { data: { session } } = await (getSupabase() as SupabaseClient<Database>).auth.getSession();
-  if (!session) {
+  try {
+    // Timeout de 5 segundos para evitar travamento
+    const sessionPromise = (getSupabase() as SupabaseClient<Database>).auth.getSession();
+    const timeoutPromise = new Promise((_, reject) => 
+      setTimeout(() => reject(new Error('Auth check timeout')), 5000)
+    );
+    
+    const result = await Promise.race([sessionPromise, timeoutPromise]) as any;
+    const session = result.data?.session;
+    
+    if (!session) {
+      throw redirect("/auth");
+    }
+    return null;
+  } catch (error) {
+    // Se timeout ou erro, redirecionar para auth
     throw redirect("/auth");
   }
-  return null;
 };
 
 // Função auxiliar para direcionar usuários já autenticados
 const redirectIfAuthenticated = async () => {
-  const { data: { session } } = await (getSupabase() as SupabaseClient<Database>).auth.getSession();
-  if (session) {
-    throw redirect("/");
+  try {
+    // Timeout de 3 segundos
+    const sessionPromise = (getSupabase() as SupabaseClient<Database>).auth.getSession();
+    const timeoutPromise = new Promise((_, reject) => 
+      setTimeout(() => reject(new Error('Auth check timeout')), 3000)
+    );
+    
+    const result = await Promise.race([sessionPromise, timeoutPromise]) as any;
+    const session = result.data?.session;
+    
+    if (session) {
+      throw redirect("/");
+    }
+    return null;
+  } catch (error) {
+    // Se timeout, apenas retornar null e deixar usuário na página
+    if (error instanceof Error && error.message === 'Auth check timeout') {
+      return null;
+    }
+    throw error;
   }
-  return null;
 };
 
 // Rotas da aplicação

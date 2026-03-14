@@ -8,6 +8,7 @@ import { useUser } from "@/contexts/UserContext";
 import { motion, AnimatePresence } from "framer-motion";
 import { Camera, Lock, Mail, User as UserIcon, Eye, EyeOff, KeyRound, AlertOctagon, CheckCircle2, XCircle, ArrowRight } from "lucide-react";
 import { getSupabase, getSupabaseNoPKCE } from "@/lib/supabase";
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { User } from "@/types/auth";
 import { resizeImage, blobToFile } from "@/utils/imageUtils";
@@ -120,14 +121,14 @@ export function ProfileSettings() {
             // Nome carregado (silenciado)
           }
         } else if (user?.user_metadata?.display_name) {
-          setUserName(user.user_metadata.display_name);
-          saveUserSettings({ displayName: user.user_metadata.display_name });
+          setUserName(user.user_metadata.display_name as string);
+          saveUserSettings({ displayName: user.user_metadata.display_name as string });
           if (import.meta.env.DEV) {
             // Nome carregado (silenciado)
           }
         } else if (user?.user_metadata?.name) {
-          setUserName(user.user_metadata.name);
-          saveUserSettings({ displayName: user.user_metadata.name });
+          setUserName(user.user_metadata.name as string);
+          saveUserSettings({ displayName: user.user_metadata.name as string });
           if (import.meta.env.DEV) {
             // Nome carregado (silenciado)
           }
@@ -142,7 +143,7 @@ export function ProfileSettings() {
         
         if (user?.id) {
           try {
-            const { data: profileData } = await getSupabase()
+            const { data: profileData } = await (getSupabase() as SupabaseClient)
               .from('user_profiles')
               .select('display_name')
               .eq('user_id', user.id)
@@ -164,8 +165,8 @@ export function ProfileSettings() {
         if (userSettings.avatarUrl) {
           setAvatarUrl(userSettings.avatarUrl);
         } else if (user?.user_metadata?.avatar_url) {
-          setAvatarUrl(user.user_metadata.avatar_url);
-          saveUserSettings({ avatarUrl: user.user_metadata.avatar_url });
+          setAvatarUrl(user.user_metadata.avatar_url as string);
+          saveUserSettings({ avatarUrl: user.user_metadata.avatar_url as string });
         }
         
         if (!syncServiceRef.current) {
@@ -286,14 +287,14 @@ export function ProfileSettings() {
       const fileExt = file.name.split('.').pop();
       const fileName = `${Date.now()}.${fileExt}`;
       
-      const { data, error } = await getSupabase().storage
+      const { data, error } = await (getSupabase() as SupabaseClient).storage
         .from('avatars')
         .upload(`public/${fileName}`, resizedFile);
       
       if (error) throw error;
       
       const avatarPath = data.path;
-      const { data: urlData } = getSupabase().storage
+      const { data: urlData } = (getSupabase() as SupabaseClient).storage
         .from('avatars')
         .getPublicUrl(avatarPath);
         
@@ -359,7 +360,7 @@ export function ProfileSettings() {
       // Remover o toast de erro
       // toast.error(t('profile.error.uploadFailed') || "Falha no upload da imagem. Tente novamente.");
       
-      const fallbackUrl = user?.user_metadata?.avatar_url || null;
+      const fallbackUrl = (user?.user_metadata?.avatar_url as string) || null;
       setAvatarUrl(fallbackUrl);
       setContextAvatarUrl(fallbackUrl);
       
@@ -424,41 +425,23 @@ export function ProfileSettings() {
           console.log("✅ Nome atualizado com sucesso (método simplificado)");
           setUserName(nameToSave);
         } else {
-          console.warn("⚠️ Falha no método simplificado, tentando método otimizado");
+          console.warn("⚠️ Falha no método simplificado, tentando método tradicional");
           
-          // Fallback 2: Método otimizado
-          const result = await userService.updateDisplayNameDirect(nameToSave);
-          
-          if (result.success) {
-            console.log("✅ Nome atualizado com sucesso no banco de dados:", result.data);
-            
-            if (result.data?.display_name) {
-              setUserName(result.data.display_name);
-            }
-            
-            window.dispatchEvent(new CustomEvent('userNameUpdated', { 
-              detail: nameToSave 
-            }));
-            
+          // Fallback 2: Método tradicional
+          const fallbackSuccess = await updateDisplayName(nameToSave);
+          if (fallbackSuccess) {
+            console.log("✅ Nome salvo usando método tradicional");
           } else {
-            console.warn("⚠️ Falha no método otimizado, tentando método tradicional");
-            
-            // Fallback 3: Método tradicional
-            const fallbackSuccess = await updateDisplayName(nameToSave);
-            if (fallbackSuccess) {
-              console.log("✅ Nome salvo usando método tradicional");
-            } else {
-              console.warn("⚠️ Falha em todos os métodos - dados salvos apenas localmente");
-            }
-            
-            // Atualizar estado local mesmo com falha
-            setUserName(nameToSave);
-            
-            // Disparar evento para manter UI consistente
-            window.dispatchEvent(new CustomEvent('userNameUpdated', { 
-              detail: nameToSave 
-            }));
+            console.warn("⚠️ Falha em todos os métodos - dados salvos apenas localmente");
           }
+          
+          // Atualizar estado local mesmo com falha
+          setUserName(nameToSave);
+          
+          // Disparar evento para manter UI consistente
+          window.dispatchEvent(new CustomEvent('userNameUpdated', { 
+            detail: nameToSave 
+          }));
         }
       }
       
@@ -722,7 +705,7 @@ export function ProfileSettings() {
       const pathBeforeVerification = window.location.pathname;
       
       // Usar o cliente supabaseNoPKCE que não cria uma sessão nova
-      const { data, error } = await getSupabaseNoPKCE().auth.signInWithPassword({
+      const { data, error } = await (getSupabaseNoPKCE() as SupabaseClient).auth.signInWithPassword({
         email: userEmail,
         password: userPassword
       });
@@ -867,7 +850,7 @@ export function ProfileSettings() {
     try {
       setSaving(true);
       
-      const { error: signInError } = await getSupabaseNoPKCE().auth.signInWithPassword({
+      const { error: signInError } = await (getSupabaseNoPKCE() as SupabaseClient).auth.signInWithPassword({
         email: user.email!,
         password: currentPassword
       });
@@ -877,7 +860,7 @@ export function ProfileSettings() {
         return;
       }
       
-      const { error } = await getSupabase().auth.updateUser({
+      const { error } = await (getSupabase() as SupabaseClient).auth.updateUser({
         password: newPassword
       });
       
@@ -919,7 +902,7 @@ export function ProfileSettings() {
       setAuthInProgress(true);
       setEmailError('');
 
-      const { error } = await getSupabase().auth.resetPasswordForEmail(confirmEmail, {
+      const { error } = await (getSupabase() as SupabaseClient).auth.resetPasswordForEmail(confirmEmail, {
         redirectTo: `${window.location.origin}/reset-password`
       });
 
@@ -1097,7 +1080,7 @@ export function ProfileSettings() {
       // Primeiro tentar usando a nova função RPC que usa userId diretamente
       try {
         console.log("🔧 Tentando nova função RPC com userId...");
-        const { data, error } = await getSupabase().rpc('update_display_name_by_id', {
+        const { data, error } = await (getSupabase() as SupabaseClient).rpc('update_display_name_by_id', {
           p_user_id: user.id,
           p_display_name: displayName.trim()
         });
@@ -1115,7 +1098,7 @@ export function ProfileSettings() {
       // Fallback: Tentar função RPC original
       try {
         console.log("🔧 Tentando função RPC original...");
-        const { data, error } = await getSupabase().rpc('update_current_user_display_name', {
+        const { data, error } = await (getSupabase() as SupabaseClient).rpc('update_current_user_display_name', {
           p_display_name: displayName.trim()
         });
         
@@ -1132,7 +1115,7 @@ export function ProfileSettings() {
       // Fallback: Atualizar diretamente na tabela user_profiles
       try {
         console.log("🔧 Tentando atualização direta na tabela...");
-        const { error: upsertError } = await getSupabase()
+        const { error: upsertError } = await (getSupabase() as SupabaseClient)
           .from('user_profiles')
           .upsert({
             user_id: user.id,
@@ -1158,7 +1141,7 @@ export function ProfileSettings() {
         console.log("🔧 Tentando com cliente admin...");
         const { getSupabaseAdmin } = await import('@/lib/supabase');
         
-        const { error: adminError } = await getSupabaseAdmin()
+        const { error: adminError } = await (getSupabaseAdmin() as SupabaseClient)
           .from('user_profiles')
           .upsert({
             user_id: user.id,

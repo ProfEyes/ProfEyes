@@ -24,6 +24,7 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from "@/lib/supabase";
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { Badge } from '@/components/ui/badge';
 import { ProfileMenu } from "@/components/ui/profile-menu";
 import { isBackgroundModeEnabled } from '../utils/visibilityManager';
@@ -59,9 +60,19 @@ export default function Layout({ children }: LayoutProps) {
   const navigate = useNavigate();
   const location = useLocation();
   const { t } = useLanguage();
+  const { isAdmin, user, loading: authLoading } = useAuth();
+  
+  // Debug: log do estado de autenticação e admin
+  useEffect(() => {
+    console.log('[Layout] Auth state:', { 
+      userId: user?.id?.substring(0, 8), 
+      email: user?.email,
+      isAdmin, 
+      authLoading 
+    });
+  }, [user, isAdmin, authLoading]);
   
   // Usando o contexto real de notificações
-  const { isAdmin } = useAuth();
   const { notifications, unreadCount } = useNotifications();
   const readCount = notifications.filter(n => n.read).length;
   
@@ -202,7 +213,7 @@ export default function Layout({ children }: LayoutProps) {
   useEffect(() => {
     const checkActiveStreams = async () => {
       try {
-        const { data, error } = await supabase
+        const { data, error } = await (supabase as SupabaseClient)
           .from('live_streams')
           .select('id')
           .eq('status', 'live');
@@ -407,18 +418,18 @@ export default function Layout({ children }: LayoutProps) {
                 <MessageSquare className="h-4 w-4 opacity-70" />
                 {t('nav.support') || "Suporte"}
               </Button>
-
-              {/* Item Admin — visível apenas para administradores */}
+              
+              {/* Aba Admin - última opção, visível apenas para administradores */}
               {isAdmin && (
-                <Button
-                  variant="ghost"
+                <Button 
+                  variant="ghost" 
                   className={cn(
                     "w-full justify-start gap-3 py-3 text-sm font-medium transition-all",
-                    "hover:bg-indigo-500/10 text-indigo-400/80 hover:text-indigo-300",
-                    isActive('/admin')
-                      ? "bg-indigo-500/10 text-indigo-300 border-l-2 border-indigo-400/60 pl-3"
+                    "hover:bg-white/5 text-white/80 hover:text-white",
+                    isActive('/admin') 
+                      ? "bg-white/5 text-white border-l-2 border-white/60 pl-3" 
                       : "pl-4"
-                  )}
+                  )} 
                   onClick={() => navigate('/admin')}
                 >
                   <Shield className="h-4 w-4 opacity-70" />
@@ -429,7 +440,7 @@ export default function Layout({ children }: LayoutProps) {
           </SidebarContent>
         </Sidebar>
         
-        <main className="flex-1 p-3 sm:p-4 md:p-5 overflow-y-auto relative min-w-0 overflow-x-hidden">
+        <main className="flex-1 p-3 sm:p-4 md:p-6 overflow-y-auto relative min-w-0">
           <div className="md:hidden flex items-center mb-4 gap-2">
             <SidebarTrigger className="h-9 w-9 shrink-0 border-white/10 bg-black/20" />
             <span className="ml-1 text-sm font-medium truncate">{location.pathname === '/' ? 'Dashboard' : location.pathname.substring(1).charAt(0).toUpperCase() + location.pathname.substring(2)}</span>

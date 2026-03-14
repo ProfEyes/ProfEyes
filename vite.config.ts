@@ -21,6 +21,12 @@ export default defineConfig(({ mode }) => ({
     fs: {
       strict: false
     },
+    hmr: {
+      protocol: 'ws',
+      host: '127.0.0.1',
+      port: 8090,
+      clientPort: 8090,
+    },
     headers: {
       'Accept-Ranges': 'bytes',
       'Cache-Control': 'public, max-age=31536000',

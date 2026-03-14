@@ -22,9 +22,9 @@ import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuIte
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { shouldShowStartLiveButton } from "@/utils/permissions";
 import { format } from "date-fns";
-import { toast } from "sonner";
 import { useLiveStreamPermission } from "@/components/LiveStreamPermissionProvider";
 import { useLiveStream } from "@/contexts/LiveStreamContext";
+import { useInAppNotification } from "@/hooks/useInAppNotification";
 import { useTrendingNotifications } from "@/contexts/TrendingNotificationContext";
 import { MeetingCard as MeetingCardComponent } from "@/components/MeetingCard";
 import { 
@@ -76,7 +76,6 @@ import {
   Tv,
   Trash
 } from "lucide-react";
-import { useToast } from "@/components/ui/use-toast";
 import { useForm } from "react-hook-form";
 import { FormField, FormItem, FormLabel, FormControl, FormMessage } from "@/components/ui/form";
 import { supabase } from "@/lib/supabase";
@@ -184,7 +183,7 @@ const MeetingModal: React.FC<MeetingModalProps> = ({ open, onOpenChange, onMeeti
   const { createStream, generateStreamKey } = useLiveStream();
   const navigate = useNavigate();
   const { canStartLive } = useLiveStreamPermission();
-  const { toast: showToast } = useToast(); // ✅ Renomeado para evitar conflito com toast do sonner
+  const { notify } = useInAppNotification();
   
   // Iniciar visualização da câmera
   const startPreview = async () => {
@@ -382,9 +381,10 @@ const MeetingModal: React.FC<MeetingModalProps> = ({ open, onOpenChange, onMeeti
     
     // Verificar se é uma imagem
     if (!file.type.match('image.*')) {
-      showToast({
+      notify({
         title: "Erro",
         description: "O arquivo deve ser uma imagem",
+        type: "error",
         variant: "destructive"
       });
       return;
@@ -392,9 +392,10 @@ const MeetingModal: React.FC<MeetingModalProps> = ({ open, onOpenChange, onMeeti
     
     // Verificar tamanho do arquivo (limite de 2MB)
     if (file.size > 2 * 1024 * 1024) {
-      showToast({
+      notify({
         title: "Erro",
         description: "A imagem deve ter no máximo 2MB",
+        type: "error",
         variant: "destructive"
       });
       return;
@@ -405,9 +406,10 @@ const MeetingModal: React.FC<MeetingModalProps> = ({ open, onOpenChange, onMeeti
     reader.onload = (loadEvent) => {
       if (loadEvent.target?.result) {
         setThumbnail(loadEvent.target.result as string);
-        showToast({
+        notify({
           title: "Sucesso",
           description: "Thumbnail carregada com sucesso!",
+          type: "live"
         });
       }
     };
@@ -434,22 +436,24 @@ const MeetingModal: React.FC<MeetingModalProps> = ({ open, onOpenChange, onMeeti
       
       // Verificar se é uma imagem
       if (!file.type.match('image.*')) {
-        showToast({
+        notify({
           title: "Erro",
           description: "O arquivo deve ser uma imagem",
+          type: "error",
           variant: "destructive"
         });
-      return;
-    }
+        return;
+      }
     
       // Carregar a imagem como data URL
     const reader = new FileReader();
       reader.onload = (loadEvent) => {
         if (loadEvent.target?.result) {
           setThumbnail(loadEvent.target.result as string);
-          showToast({
+          notify({
             title: "Sucesso",
             description: "Thumbnail carregada com sucesso!",
+            type: "live"
           });
       }
     };
@@ -459,35 +463,38 @@ const MeetingModal: React.FC<MeetingModalProps> = ({ open, onOpenChange, onMeeti
   
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="bg-black border border-zinc-800/30 text-white max-w-4xl rounded-xl shadow-2xl p-0 overflow-hidden max-h-[90vh] overflow-y-auto">
-        <div className="p-4 pb-3 border-b border-zinc-800/40 bg-gradient-to-r from-black to-zinc-950">
-          <DialogHeader className="pb-2">
-            <DialogTitle className="text-white text-xl font-semibold">
+      <DialogContent className="bg-[#0a0a0b] border border-zinc-900/50 text-white max-w-5xl rounded-2xl shadow-2xl p-0 overflow-hidden max-h-[85vh]">
+        {/* Header compacto com efeito de luz sutil */}
+        <div className="relative p-4 border-b border-zinc-900/40 bg-gradient-to-br from-[#0a0a0b] to-zinc-950">
+          <div className="absolute inset-0 bg-gradient-to-r from-zinc-600/[0.02] via-transparent to-zinc-600/[0.02]" />
+          <div className="relative">
+            <DialogTitle className="text-white text-lg font-semibold flex items-center gap-2.5">
+              <div className="p-1.5 bg-zinc-900/60 rounded-lg">
+                <Video className="h-4 w-4 text-zinc-400" />
+              </div>
               {texts.modalTitle}
             </DialogTitle>
-          </DialogHeader>
-          <DialogDescription className="text-zinc-400 text-sm mt-1 ml-[42px]">
-            {texts.modalDescription}
-          </DialogDescription>
+            <DialogDescription className="text-zinc-500 text-xs mt-1.5">
+              {texts.modalDescription}
+            </DialogDescription>
+          </div>
         </div>
         
-        <form onSubmit={handleSubmit} className="p-4">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            {/* Coluna esquerda */}
-            <div className="space-y-4">
-              {/* Configuração da câmera e visualização */}
-              <div className="bg-zinc-950/80 p-4 rounded-xl border border-zinc-800/30 shadow-md">
-                <h3 className="font-medium text-white mb-3 flex items-center gap-2 text-sm">
-                  <div className="p-1.5 bg-indigo-900/30 rounded-md">
-                    <Camera className="h-3.5 w-3.5 text-indigo-400" />
-                  </div>
-                  <span className="text-zinc-200">Configuração da Câmera</span>
+        <form onSubmit={handleSubmit} className="p-5 overflow-y-auto max-h-[calc(85vh-80px)]">
+          <div className="grid grid-cols-1 lg:grid-cols-[2fr,1fr] gap-4">
+            {/* Coluna esquerda - Preview da câmera GRANDE */}
+            <div className="space-y-3">
+              {/* Preview da câmera - GRANDE */}
+              <div className="bg-zinc-950/40 p-3 rounded-lg border border-zinc-900/40">
+                <h3 className="font-medium text-zinc-300 mb-2 flex items-center gap-2 text-xs">
+                  <Camera className="h-3.5 w-3.5 text-zinc-500" />
+                  Câmera
                 </h3>
                 
                 {streamPreview ? (
                   <div className="relative">
                     {mediaStream && mediaStream.getVideoTracks().length > 0 ? (
-                      <div className="video-container w-full aspect-video bg-black rounded-lg overflow-hidden group shadow-inner shadow-black/60" style={{maxHeight: "180px"}}>
+                      <div className="relative w-full aspect-video bg-black rounded-md overflow-hidden group">
                         <video
                           ref={videoPreviewRef}
                           autoPlay
@@ -497,196 +504,103 @@ const MeetingModal: React.FC<MeetingModalProps> = ({ open, onOpenChange, onMeeti
                           className="w-full h-full object-cover"
                           style={{ transform: isMirrored ? 'scaleX(-1)' : 'none' }}
                         />
-                        <div className="absolute top-2 left-2 bg-black/60 backdrop-blur-sm text-white px-2 py-1 rounded-lg text-xs font-medium flex items-center gap-1.5 border border-indigo-500/30">
-                          <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse"></span>
-                          Câmera ativa
+                        <div className="absolute top-2 right-2 bg-black/70 backdrop-blur-sm px-2 py-1 rounded text-[10px] flex items-center gap-1">
+                          <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+                          Ativa
                         </div>
-                        
-                        {/* Controles que aparecem no hover */}
-                        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 to-transparent p-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                          <div className="flex justify-between items-center">
-                            <div className="flex gap-1.5">
-                              <Button
-                                type="button"
-                                variant="outline"
-                                size="icon"
-                                className="h-7 w-7 bg-black/70 hover:bg-black/90 border-zinc-700/40 text-white"
-                                onClick={() => setIsMirrored(!isMirrored)}
-                                title={isMirrored ? "Desativar espelhamento" : "Ativar espelhamento"}
-                              >
-                                <RefreshCw className="h-3.5 w-3.5" />
-                              </Button>
-                            </div>
-                            
-                            <Button
-                              type="button"
-                              variant="destructive"
-                              size="sm"
-                              className="h-7 text-xs bg-black/70 hover:bg-black border-red-900/30 text-red-500 hover:text-red-400 gap-1"
-                              onClick={stopPreview}
-                            >
-                              <X className="h-3.5 w-3.5" />
-                              Parar
-                            </Button>
-                          </div>
+                        <div className="absolute bottom-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="icon"
+                            className="h-7 w-7 bg-black/70 hover:bg-black/90 border-zinc-800/50 text-white"
+                            onClick={() => setIsMirrored(!isMirrored)}
+                          >
+                            <RefreshCw className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="icon"
+                            className="h-7 w-7 bg-black/70 hover:bg-black/90 border-zinc-800/50 text-red-400"
+                            onClick={stopPreview}
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </Button>
                         </div>
                       </div>
                     ) : (
-                      <div className="w-full aspect-video bg-black rounded-lg flex items-center justify-center border border-zinc-800/30 shadow-inner shadow-black/60" style={{maxHeight: "180px"}}>
-                        <div className="text-center p-4">
+                      <div className="w-full aspect-video bg-black rounded-md flex items-center justify-center border border-zinc-900/40">
+                        <div className="text-center">
                           <VideoOff className="h-8 w-8 text-zinc-700 mx-auto mb-2" />
-                          <p className="text-xs text-zinc-400 font-medium">
-                            {mediaStream ? 
-                              "Transmissão apenas com áudio" : 
-                              "Transmissão sem áudio e vídeo"}
-                          </p>
+                          <p className="text-xs text-zinc-500">Apenas áudio</p>
                         </div>
                       </div>
                     )}
                   </div>
                 ) : (
                   <div 
-                    className="group w-full aspect-video border-[1.5px] border-dashed border-zinc-800/50 bg-zinc-900/20 hover:bg-zinc-900/30 rounded-lg flex flex-col items-center justify-center gap-2 transition-all duration-300 cursor-pointer shadow-sm"
+                    className="group w-full aspect-video border border-dashed border-zinc-900/50 bg-zinc-950/20 hover:bg-zinc-950/30 rounded-md flex flex-col items-center justify-center gap-2 transition-all cursor-pointer"
                     onClick={() => !isConfiguring && startPreview()}
-                    style={{maxHeight: "150px"}}
                   >
                     {isConfiguring ? (
                       <>
-                        <RefreshCw className="h-8 w-8 animate-spin text-indigo-500/70" />
-                        <p className="text-zinc-400 text-xs font-medium">Configurando câmera...</p>
+                        <RefreshCw className="h-8 w-8 animate-spin text-zinc-600" />
+                        <p className="text-zinc-500 text-xs">Configurando câmera...</p>
                       </>
                     ) : (
                       <>
-                        <div className="p-3 rounded-full bg-zinc-900/70 group-hover:bg-indigo-900/20 transition-colors duration-300">
-                          <Camera className="h-6 w-6 text-zinc-600 group-hover:text-indigo-400 transition-colors duration-300" />
-                        </div>
-                        <p className="text-zinc-300 text-sm font-medium group-hover:text-indigo-300 transition-colors">Configurar câmera</p>
-                        <p className="text-xs text-zinc-500 max-w-[80%] text-center">Clique para ativar sua câmera e microfone</p>
+                        <Camera className="h-8 w-8 text-zinc-700 group-hover:text-zinc-500" />
+                        <p className="text-zinc-500 text-xs">Clique para ativar a câmera</p>
+                        <p className="text-zinc-600 text-[10px]">Visualize sua transmissão antes de iniciar</p>
                       </>
                     )}
                   </div>
                 )}
               </div>
               
-              {/* Tipo de transmissão */}
-              <div className="bg-zinc-950/80 p-4 rounded-xl border border-zinc-800/30 shadow-md">
-                <h3 className="font-medium text-white mb-3 flex items-center gap-2 text-sm">
-                  <div className="p-1.5 bg-indigo-900/30 rounded-md">
-                    <Calendar className="h-3.5 w-3.5 text-indigo-400" />
-                  </div>
-                  <span className="text-zinc-200">Tipo de Transmissão</span>
-                </h3>
-                
-                <div className="flex gap-3 mt-1">
-                  <div 
-                    className={`flex-1 border rounded-lg p-2.5 cursor-pointer transition-all duration-300 ${
-                      streamType === 'live' 
-                        ? 'bg-indigo-950/30 border-indigo-800/40 shadow-sm shadow-indigo-900/20' 
-                        : 'bg-zinc-900/30 border-zinc-800/20 hover:bg-zinc-900/50 hover:border-zinc-700/30'
-                    }`}
-                    onClick={() => setStreamType('live')}
-                  >
-                    <div className="flex items-center gap-1.5 mb-1">
-                      <div className={`p-1 rounded-md ${streamType === 'live' ? 'bg-indigo-900/40' : 'bg-zinc-800/40'}`}>
-                        <Video className={`h-3 w-3 ${streamType === 'live' ? 'text-indigo-400' : 'text-zinc-400'}`} />
-                      </div>
-                      <span className={`font-medium text-xs ${streamType === 'live' ? 'text-indigo-300' : 'text-zinc-300'}`}>Ao Vivo</span>
-                    </div>
-                    <p className="text-[10px] text-zinc-500 ml-5">Iniciar transmissão imediatamente</p>
-                  </div>
-                  
-                  <div 
-                    className={`flex-1 border rounded-lg p-2.5 cursor-pointer transition-all duration-300 ${
-                      streamType === 'scheduled' 
-                        ? 'bg-indigo-950/30 border-indigo-800/40 shadow-sm shadow-indigo-900/20' 
-                        : 'bg-zinc-900/30 border-zinc-800/20 hover:bg-zinc-900/50 hover:border-zinc-700/30'
-                    }`}
-                    onClick={() => setStreamType('scheduled')}
-                  >
-                    <div className="flex items-center gap-1.5 mb-1">
-                      <div className={`p-1 rounded-md ${streamType === 'scheduled' ? 'bg-indigo-900/40' : 'bg-zinc-800/40'}`}>
-                        <Calendar className={`h-3 w-3 ${streamType === 'scheduled' ? 'text-indigo-400' : 'text-zinc-400'}`} />
-                      </div>
-                      <span className={`font-medium text-xs ${streamType === 'scheduled' ? 'text-indigo-300' : 'text-zinc-300'}`}>Agendar</span>
-                    </div>
-                    <p className="text-[10px] text-zinc-500 ml-5">Programar para uma data futura</p>
-                  </div>
-                </div>
-                
-                {streamType === 'scheduled' && (
-                  <div className="mt-3 pt-2 border-t border-zinc-800/30">
-                    <Label htmlFor="scheduled-date" className="text-zinc-400 text-xs mb-1 block">Data e hora</Label>
-                    <div className="relative">
-                      <input 
-                        type="datetime-local" 
-                        id="scheduled-date"
-                        title="Selecione a data e hora da transmissão"
-                        placeholder="Selecione data e hora"
-                        className="w-full bg-zinc-900/70 border border-zinc-800/50 rounded-md p-1.5 text-zinc-300 focus:border-zinc-700/60 focus:outline-none focus:ring-1 focus:ring-zinc-700/50 text-xs [color-scheme:dark]"
-                        min={new Date().toISOString().slice(0, 16)}
-                        onChange={(e) => setScheduledDate(e.target.value ? new Date(e.target.value) : undefined)}
-                      />
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Upload de Thumbnail */}
-              <div className="bg-zinc-950/80 p-4 rounded-xl border border-zinc-800/30 shadow-md">
-                <h3 className="font-medium text-white mb-3 flex items-center gap-2 text-sm">
-                  <div className="p-1.5 bg-indigo-900/30 rounded-md">
-                    <Image className="h-3.5 w-3.5 text-indigo-400" />
-                  </div>
-                  <span className="text-zinc-200">Thumbnail da Transmissão</span>
+              {/* Thumbnail - proporção 16:9 real */}
+              <div className="bg-zinc-950/40 p-3 rounded-lg border border-zinc-900/40">
+                <h3 className="font-medium text-zinc-300 mb-2 flex items-center gap-2 text-xs">
+                  <Image className="h-3.5 w-3.5 text-zinc-500" />
+                  Thumbnail
                 </h3>
                 
                 {thumbnail ? (
                   <div 
-                    className="relative border border-zinc-800/30 rounded-lg overflow-hidden shadow-inner shadow-black/60 aspect-video"
+                    className="relative border border-zinc-900/30 rounded-md overflow-hidden aspect-video"
                     onDragOver={handleDragOver}
                     onDragLeave={handleDragLeave}
                     onDrop={handleDrop}
                   >
-                    <img 
-                      src={thumbnail} 
-                      alt="Thumbnail" 
-                      className="w-full h-full object-cover"
-                    />
-                    <div className="absolute inset-0 bg-black/60 opacity-0 hover:opacity-100 flex items-center justify-center transition-opacity duration-300">
+                    <img src={thumbnail} alt="Thumbnail" className="w-full h-full object-cover" />
+                    <div className="absolute inset-0 bg-black/60 opacity-0 hover:opacity-100 flex items-center justify-center transition-opacity">
                       <Button
                         type="button"
                         variant="outline"
                         size="sm"
-                        className="bg-black/70 hover:bg-black border-red-900/30 text-red-500 hover:text-red-400 gap-1 text-xs"
+                        className="h-7 text-[10px] bg-black/70 border-zinc-800/50 text-red-400"
                         onClick={() => setThumbnail('')}
                       >
-                        <Trash className="h-3.5 w-3.5" />
+                        <Trash className="h-3 w-3 mr-1" />
                         Remover
                       </Button>
                     </div>
                   </div>
                 ) : (
                   <div 
-                    className="group relative w-full aspect-video border-[1.5px] border-dashed border-zinc-800/50 bg-zinc-900/20 hover:bg-zinc-900/30 rounded-lg flex flex-col items-center justify-center gap-1.5 transition-all duration-300 cursor-pointer shadow-sm"
+                    className="group w-full aspect-video border border-dashed border-zinc-900/50 bg-zinc-950/20 hover:bg-zinc-950/30 rounded-md flex flex-col items-center justify-center gap-1.5 transition-all cursor-pointer"
                     onDragOver={handleDragOver}
                     onDragLeave={handleDragLeave}
                     onDrop={handleDrop}
                     onClick={() => document.getElementById('thumbnail-upload')?.click()}
                   >
-                    <div className="p-2 rounded-full bg-zinc-900/70 group-hover:bg-indigo-900/20 transition-colors duration-300">
-                      <UploadCloud className="h-5 w-5 text-zinc-600 group-hover:text-indigo-400 transition-colors duration-300" />
-                    </div>
-                    <p className="text-zinc-300 text-xs font-medium group-hover:text-indigo-300 transition-colors">
-                      Arraste uma imagem ou clique para fazer upload
-                    </p>
-                    <p className="text-[10px] text-zinc-500 max-w-[90%] text-center">
-                      Tamanho recomendado: 1920 x 1080 pixels (16:9) • Máximo: 2MB
-                    </p>
-                    <Label htmlFor="thumbnail-upload" className="sr-only">Upload de miniatura</Label>
+                    <UploadCloud className="h-6 w-6 text-zinc-700 group-hover:text-zinc-500" />
+                    <p className="text-zinc-500 text-xs">Clique ou arraste imagem</p>
+                    <p className="text-zinc-600 text-[10px]">16:9 • Max 2MB</p>
                     <input
                       type="file"
                       id="thumbnail-upload"
-                      aria-label="Upload de miniatura"
                       accept="image/*"
                       onChange={handleFileUpload}
                       className="hidden"
@@ -697,138 +611,147 @@ const MeetingModal: React.FC<MeetingModalProps> = ({ open, onOpenChange, onMeeti
             </div>
             
             {/* Coluna direita */}
-            <div className="space-y-4">
-              {/* Detalhes da transmissão */}
-              <div className="bg-zinc-950/80 p-4 rounded-xl border border-zinc-800/30 shadow-md">
-                <h3 className="font-medium text-white mb-3 flex items-center gap-2 text-sm">
-                  <div className="p-1.5 bg-indigo-900/30 rounded-md">
-                    <Info className="h-3.5 w-3.5 text-indigo-400" />
+            <div className="space-y-3">
+              {/* Tipo de transmissão */}
+              <div className="bg-zinc-950/40 p-3 rounded-lg border border-zinc-900/40">
+                <h3 className="font-medium text-zinc-300 mb-2 text-xs">Tipo</h3>
+                <div className="flex gap-2">
+                  <div 
+                    className={`flex-1 border rounded-md p-2 cursor-pointer transition-all ${
+                      streamType === 'live' 
+                        ? 'bg-zinc-900/60 border-zinc-700/50' 
+                        : 'bg-zinc-950/20 border-zinc-900/30 hover:bg-zinc-900/40'
+                    }`}
+                    onClick={() => setStreamType('live')}
+                  >
+                    <div className="flex items-center gap-1.5">
+                      <Video className={`h-3 w-3 ${streamType === 'live' ? 'text-zinc-400' : 'text-zinc-600'}`} />
+                      <span className={`font-medium text-[11px] ${streamType === 'live' ? 'text-zinc-300' : 'text-zinc-500'}`}>Ao Vivo</span>
+                    </div>
                   </div>
-                  <span className="text-zinc-200">Detalhes da Transmissão</span>
-                </h3>
+                  <div 
+                    className={`flex-1 border rounded-md p-2 cursor-pointer transition-all ${
+                      streamType === 'scheduled' 
+                        ? 'bg-zinc-900/60 border-zinc-700/50' 
+                        : 'bg-zinc-950/20 border-zinc-900/30 hover:bg-zinc-900/40'
+                    }`}
+                    onClick={() => setStreamType('scheduled')}
+                  >
+                    <div className="flex items-center gap-1.5">
+                      <Calendar className={`h-3 w-3 ${streamType === 'scheduled' ? 'text-zinc-400' : 'text-zinc-600'}`} />
+                      <span className={`font-medium text-[11px] ${streamType === 'scheduled' ? 'text-zinc-300' : 'text-zinc-500'}`}>Agendar</span>
+                    </div>
+                  </div>
+                </div>
+                {streamType === 'scheduled' && (
+                  <input 
+                    type="datetime-local" 
+                    className="w-full bg-zinc-950/50 border border-zinc-900/50 rounded-md p-1.5 text-zinc-400 text-[11px] mt-2 [color-scheme:dark]"
+                    min={new Date().toISOString().slice(0, 16)}
+                    onChange={(e) => setScheduledDate(e.target.value ? new Date(e.target.value) : undefined)}
+                  />
+                )}
+              </div>
+              
+              {/* Detalhes */}
+              <div className="bg-zinc-950/40 p-3 rounded-lg border border-zinc-900/40 space-y-2">
+                <div>
+                  <Label htmlFor="title" className="text-zinc-500 text-[11px]">Título <span className="text-red-500">*</span></Label>
+                  <Input
+                    id="title"
+                    value={title}
+                    onChange={(e) => setTitle(e.target.value)}
+                    placeholder="Ex: Análise do Bitcoin"
+                    className="bg-zinc-950/50 border-zinc-900/50 text-zinc-300 h-7 text-xs mt-1 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white/20"
+                    required
+                  />
+                </div>
                 
-                <div className="space-y-3">
-                  <div className="space-y-1">
-                    <Label htmlFor="title" className="text-zinc-400 text-xs">Título <span className="text-red-500">*</span></Label>
-                    <Input
-                      id="title"
-                      value={title}
-                      onChange={(e) => setTitle(e.target.value)}
-                      placeholder="Ex: Análise técnica do Bitcoin"
-                      className="bg-zinc-900/70 border-zinc-800/50 text-zinc-300 focus:border-zinc-700/60 focus:ring-1 focus:ring-zinc-700/50 placeholder:text-zinc-600 text-xs h-8"
-                      required
-                    />
+                <div>
+                  <Label htmlFor="description" className="text-zinc-500 text-[11px]">Descrição</Label>
+                  <Textarea
+                    id="description"
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    placeholder="Descreva sua transmissão..."
+                    className="bg-zinc-950/50 border-zinc-900/50 text-zinc-300 text-xs min-h-[60px] resize-none mt-1"
+                  />
+                </div>
+                
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <Label htmlFor="category" className="text-zinc-500 text-[11px]">Categoria</Label>
+                    <Select value={category} onValueChange={setCategory}>
+                      <SelectTrigger className="bg-zinc-950/50 border-zinc-900/50 text-zinc-300 h-7 text-xs mt-1 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white/20">
+                        <SelectValue placeholder="Selecione" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-[#0a0a0b] border-zinc-900/50">
+                        <SelectItem value="all" className="text-zinc-400 text-xs">Todas</SelectItem>
+                        <SelectItem value="crypto" className="text-zinc-400 text-xs">Cripto</SelectItem>
+                        <SelectItem value="stocks" className="text-zinc-400 text-xs">Ações</SelectItem>
+                        <SelectItem value="forex" className="text-zinc-400 text-xs">Forex</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
                   
-                  <div className="space-y-1">
-                    <Label htmlFor="description" className="text-zinc-400 text-xs">Descrição</Label>
-                    <Textarea
-                      id="description"
-                      value={description}
-                      onChange={(e) => setDescription(e.target.value)}
-                      placeholder="Descreva o que você irá abordar na sua transmissão..."
-                      className="bg-zinc-900/70 border-zinc-800/50 text-zinc-300 focus:border-zinc-700/60 focus:ring-1 focus:ring-zinc-700/50 placeholder:text-zinc-600 min-h-[80px] text-xs resize-none"
-                    />
+                  <div>
+                    <Label htmlFor="language" className="text-zinc-500 text-[11px]">Idioma</Label>
+                    <Select value={language} onValueChange={setLanguage}>
+                      <SelectTrigger className="bg-zinc-950/50 border-zinc-900/50 text-zinc-300 h-7 text-xs mt-1 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white/20">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent className="bg-[#0a0a0b] border-zinc-900/50">
+                        <SelectItem value="pt" className="text-zinc-400 text-xs">Português</SelectItem>
+                        <SelectItem value="en" className="text-zinc-400 text-xs">Inglês</SelectItem>
+                        <SelectItem value="es" className="text-zinc-400 text-xs">Espanhol</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
-                  
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-1">
-                      <Label htmlFor="category" className="text-zinc-400 text-xs">Categoria</Label>
-                      <Select value={category} onValueChange={setCategory}>
-                        <SelectTrigger className="bg-zinc-900/70 border-zinc-800/50 text-zinc-300 focus:border-zinc-800/50 focus:ring-0 focus:ring-offset-0 focus:outline-none focus:shadow-none h-8 text-xs">
-                          <SelectValue placeholder="Selecione uma categoria" />
-                        </SelectTrigger>
-                        <SelectContent className="bg-black/90 backdrop-blur-md border-white/5 shadow-2xl">
-                          <SelectItem value="all" className="text-white/80 hover:bg-white/5 focus:outline-none focus:ring-0 focus:ring-offset-0 focus:border-transparent focus:shadow-none">{texts.allCategories}</SelectItem>
-                          <SelectItem value="crypto" className="text-white/80 hover:bg-white/5 focus:outline-none focus:ring-0 focus:ring-offset-0 focus:border-transparent focus:shadow-none">Criptomoedas</SelectItem>
-                          <SelectItem value="stocks" className="text-white/80 hover:bg-white/5 focus:outline-none focus:ring-0 focus:ring-offset-0 focus:border-transparent focus:shadow-none">Ações</SelectItem>
-                          <SelectItem value="forex" className="text-white/80 hover:bg-white/5 focus:outline-none focus:ring-0 focus:ring-offset-0 focus:border-transparent focus:shadow-none">Forex</SelectItem>
-                          <SelectItem value="education" className="text-white/80 hover:bg-white/5 focus:outline-none focus:ring-0 focus:ring-offset-0 focus:border-transparent focus:shadow-none">Educacional</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    
-                    <div className="space-y-1">
-                      <Label htmlFor="language" className="text-zinc-400 text-xs">Idioma</Label>
-                      <Select value={language} onValueChange={setLanguage}>
-                        <SelectTrigger className="bg-zinc-900/70 border-zinc-800/50 text-zinc-300 focus:border-zinc-800/50 focus:ring-0 focus:ring-offset-0 focus:outline-none focus:shadow-none h-8 text-xs">
-                          <SelectValue placeholder="Selecione um idioma" />
-                        </SelectTrigger>
-                        <SelectContent className="bg-black/90 backdrop-blur-md border-white/5 shadow-2xl">
-                          <SelectItem value="pt" className="text-white/80 hover:bg-white/5 focus:outline-none focus:ring-0 focus:ring-offset-0 focus:border-transparent focus:shadow-none">Português</SelectItem>
-                          <SelectItem value="en" className="text-white/80 hover:bg-white/5 focus:outline-none focus:ring-0 focus:ring-offset-0 focus:border-transparent focus:shadow-none">Inglês</SelectItem>
-                          <SelectItem value="es" className="text-white/80 hover:bg-white/5 focus:outline-none focus:ring-0 focus:ring-offset-0 focus:border-transparent focus:shadow-none">Espanhol</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-                  
-                  <div className="space-y-1">
-                    <Label htmlFor="tags" className="text-zinc-400 text-xs">Tags (separadas por vírgula)</Label>
-                    <Input
-                      id="tags"
-                      value={tags}
-                      onChange={(e) => setTags(e.target.value)}
-                      placeholder="Ex: bitcoin, análise técnica, trader"
-                      className="bg-zinc-900/70 border-zinc-800/50 text-zinc-300 focus:border-zinc-700/60 focus:ring-1 focus:ring-zinc-700/50 placeholder:text-zinc-600 text-xs h-8"
-                    />
-                    {tags && (
-                      <div className="flex flex-wrap gap-1 mt-1">
-                        {tags.split(',').map((tag, index) => (
-                          tag.trim() && (
-                            <div 
-                              key={index} 
-                              className="bg-indigo-950/30 border border-indigo-900/30 rounded-full px-1.5 py-0.5 text-[10px] text-zinc-400 flex items-center"
-                            >
-                              <Hash className="h-2.5 w-2.5 mr-0.5 text-indigo-500/70" />
-                              <span>{tag.trim()}</span>
-                            </div>
-                          )
-                        ))}
-                      </div>
-                    )}
-                  </div>
+                </div>
+                
+                <div>
+                  <Label htmlFor="tags" className="text-zinc-500 text-[11px]">Tags (separadas por vírgula)</Label>
+                  <Input
+                    id="tags"
+                    value={tags}
+                    onChange={(e) => setTags(e.target.value)}
+                    placeholder="Ex: bitcoin, trader"
+                    className="bg-zinc-950/50 border-zinc-900/50 text-zinc-300 h-7 text-xs mt-1 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white/20"
+                  />
                 </div>
               </div>
             </div>
           </div>
           
           {error && (
-            <div className="bg-red-950/20 text-red-400 text-xs px-3 py-2 rounded-lg border border-red-900/30 flex items-start gap-2 mt-4">
-              <AlertCircle className="h-4 w-4 text-red-500 shrink-0 mt-0.5" />
-              <div>
-                {error}
-                {error.includes('câmera/microfone') && (
-                  <div className="mt-1.5">
-                    <Button 
-                      type="button" 
-                      variant="outline"
-                      size="sm"
-                      className="bg-red-950/30 hover:bg-red-950/50 border-red-900/30 text-red-400 text-[10px] h-6 px-2" 
-                      onClick={() => setStreamPreview(true)}
-                    >
-                      Continuar sem câmera/microfone
-                    </Button>
-                  </div>
-                )}
-              </div>
+            <div className="bg-red-950/10 text-red-400 text-[11px] px-3 py-2 rounded-md border border-red-900/20 flex items-start gap-2 mt-3">
+              <AlertCircle className="h-3.5 w-3.5 text-red-500 shrink-0 mt-0.5" />
+              {error}
             </div>
           )}
           
-          <div className="mt-4 pt-3 border-t border-zinc-800/40 flex justify-end">
+          <div className="mt-4 pt-3 border-t border-zinc-900/40 flex justify-end gap-2">
+            <Button 
+              type="button"
+              variant="outline"
+              onClick={() => onOpenChange(false)}
+              className="h-8 text-xs bg-transparent border-zinc-800/50 text-zinc-400 hover:bg-zinc-900/40"
+            >
+              Cancelar
+            </Button>
             <Button 
               type="submit" 
               disabled={isSubmitting} 
-              className="bg-gradient-to-r from-indigo-700 to-indigo-600 hover:from-indigo-600 hover:to-indigo-700 text-white min-w-[140px] border-0 shadow-md h-9 text-sm"
+              className="bg-gradient-to-r from-zinc-800 to-zinc-700 hover:from-zinc-700 hover:to-zinc-600 text-white h-8 text-xs px-4 border-0"
             >
               {isSubmitting ? (
                 <>
-                  <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                  <Loader2 className="mr-1.5 h-3 w-3 animate-spin" />
                   Criando...
                 </>
               ) : (
                 <>
-                  <Tv className="mr-1.5 h-3.5 w-3.5" />
+                  <Tv className="mr-1.5 h-3 w-3" />
                   Criar transmissão
                 </>
               )}
@@ -892,7 +815,7 @@ const MeetingComponent: React.FC<{ stream: MeetingData }> = ({ stream }) => {
   const { language, t } = useLanguage();
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { toast: showToast } = useToast(); // ✅ Renomeado para evitar conflito com toast do sonner
+  const { notify } = useInAppNotification();
   
   // Definir as funções antes de usá-las no useEffect
   const initializeVideoConnection = async () => {
@@ -912,9 +835,10 @@ const MeetingComponent: React.FC<{ stream: MeetingData }> = ({ stream }) => {
     } catch (error) {
       console.error("Erro ao inicializar conexão de vídeo:", error);
       setConnectionStatus('error');
-      showToast({
+      notify({
         title: "Erro na conexão",
         description: "Não foi possível estabelecer a conexão de vídeo",
+        type: "error",
         variant: "destructive"
       });
     }
@@ -936,9 +860,10 @@ const MeetingComponent: React.FC<{ stream: MeetingData }> = ({ stream }) => {
     // Redirecionar para a página principal após finalizar
     navigate('/');
     
-    showToast({
+    notify({
       title: "Reunião finalizada",
       description: "Sua reunião foi encerrada com sucesso",
+      type: "live"
     });
   };
   
@@ -1058,9 +983,10 @@ const MeetingComponent: React.FC<{ stream: MeetingData }> = ({ stream }) => {
       }
     } catch (error) {
       console.error("Erro ao compartilhar tela:", error);
-      showToast({
+      notify({
         title: "Erro no compartilhamento",
         description: "Não foi possível compartilhar sua tela",
+        type: "error",
         variant: "destructive"
       });
     }
@@ -1071,14 +997,16 @@ const MeetingComponent: React.FC<{ stream: MeetingData }> = ({ stream }) => {
     setIsRecording(!isRecording);
     
     if (!isRecording) {
-      showToast({
+      notify({
         title: "Gravação iniciada",
         description: "Sua reunião está sendo gravada",
+        type: "live"
       });
       } else {
-      showToast({
+      notify({
         title: "Gravação finalizada",
         description: "A gravação da reunião foi salva",
+        type: "live"
       });
     }
   };
@@ -1236,64 +1164,191 @@ const MeetingComponent: React.FC<{ stream: MeetingData }> = ({ stream }) => {
           </div>
         </div>
             
-        {/* Painel de chat (sempre visível) */}
-        <div className="w-80 bg-zinc-700 border-l border-zinc-600 flex flex-col">
-          <div className="p-3 border-b border-zinc-600 flex justify-between items-center bg-zinc-800">
-            <h3 className="text-white font-medium">Chat da Transmissão</h3>
+        {/* Painel de chat inspirado em YouTube/Twitch */}
+        <div className="w-80 2xl:w-96 bg-[#0f0f0f] border-l border-zinc-800/50 flex flex-col shadow-2xl">
+          {/* Header do chat */}
+          <div className="px-4 py-3 border-b border-zinc-800/50 flex items-center justify-between bg-[#181818]/80 backdrop-blur-sm">
+            <div className="flex items-center gap-2">
+              <MessageSquare className="h-4 w-4 text-zinc-400" />
+              <h3 className="text-white font-semibold text-sm">Chat ao vivo</h3>
+            </div>
+            <div className="flex items-center gap-1">
+              <span className="flex items-center gap-1.5 text-xs text-zinc-500">
+                <Users className="h-3.5 w-3.5" />
+                {viewerCount}
+              </span>
+            </div>
           </div>
             
-          <div className="flex-1 overflow-y-auto p-3 space-y-4 bg-zinc-700">
-            {/* Implementar mensagens do chat aqui */}
-            <div className="flex items-start space-x-2">
-              <Avatar className="h-8 w-8">
-                <AvatarImage 
-                  src={currentHostAvatar || "/avatars/avatar-1.png"} 
-                  alt={currentHostName || "Anfitrião"} 
-                />
-                <AvatarFallback className="bg-zinc-700 text-white">
-                  {currentHostName ? currentHostName.charAt(0).toUpperCase() : 'A'}
-                </AvatarFallback>
-              </Avatar>
-              <div>
-                <div className="flex items-center space-x-2">
-                  <span className="text-white text-sm font-medium">
-                    {currentHostName || 'Anfitrião'} 
-                    <span className="text-indigo-400 ml-1 text-xs">(Host)</span>
-                  </span>
-                  <span className="text-zinc-400 text-xs">12:45</span>
+          {/* Mensagens do chat com scroll suave */}
+          <ScrollArea className="flex-1 px-3 py-2 bg-[#0f0f0f] custom-scrollbar">
+            <div className="space-y-3">
+              {/* Mensagem de boas-vindas do sistema */}
+              <div className="flex items-center justify-center py-2">
+                <div className="bg-zinc-900/50 backdrop-blur-sm border border-zinc-800/50 rounded-full px-3 py-1.5">
+                  <p className="text-[11px] text-zinc-500 font-medium">Bem-vindo ao chat!</p>
                 </div>
-                <p className="text-white text-sm bg-indigo-600 rounded-lg px-2 py-1 mt-1">Olá pessoal! Bem-vindos à minha transmissão!</p>
+              </div>
+
+              {/* Mensagem do Host */}
+              <div className="group hover:bg-zinc-900/30 rounded-lg p-2 -mx-2 transition-colors duration-150 animate-in fade-in slide-in-from-bottom-2">
+                <div className="flex items-start gap-2.5">
+                  <Avatar className="h-8 w-8 ring-2 ring-purple-500/50 shadow-lg shadow-purple-500/20">
+                    <AvatarImage 
+                      src={currentHostAvatar || "/avatars/avatar-1.png"} 
+                      alt={currentHostName || "Anfitrião"} 
+                    />
+                    <AvatarFallback className="bg-gradient-to-br from-purple-600 to-purple-800 text-white text-xs font-bold">
+                      {currentHostName ? currentHostName.charAt(0).toUpperCase() : 'A'}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5 mb-0.5">
+                      <span className="text-xs font-bold text-white truncate max-w-[120px]">
+                        {currentHostName || 'Anfitrião'}
+                      </span>
+                      <div className="flex items-center gap-1">
+                        <span className="bg-gradient-to-r from-purple-500 to-pink-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wide">
+                          Host
+                        </span>
+                        <Shield className="h-3 w-3 text-purple-400" />
+                      </div>
+                      <span className="text-[10px] text-zinc-600 ml-auto">12:45</span>
+                    </div>
+                    <p className="text-[13px] text-zinc-200 leading-relaxed break-words">
+                      Olá pessoal! Bem-vindos à minha transmissão! 🎉
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Mensagem de usuário comum */}
+              <div className="group hover:bg-zinc-900/30 rounded-lg p-2 -mx-2 transition-colors duration-150 animate-in fade-in slide-in-from-bottom-2">
+                <div className="flex items-start gap-2.5">
+                  <Avatar className="h-8 w-8 ring-1 ring-zinc-700/50">
+                    <AvatarImage src="https://i.pravatar.cc/150?img=12" alt="João" />
+                    <AvatarFallback className="bg-gradient-to-br from-blue-600 to-blue-800 text-white text-xs font-bold">
+                      JS
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5 mb-0.5">
+                      <span className="text-xs font-semibold text-zinc-300 truncate max-w-[140px]">
+                        João Santos
+                      </span>
+                      <span className="text-[10px] text-zinc-600 ml-auto">12:47</span>
+                    </div>
+                    <p className="text-[13px] text-zinc-200 leading-relaxed break-words">
+                      Olá! Obrigado pela transmissão! 👍
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Mensagem com badge de membro */}
+              <div className="group hover:bg-zinc-900/30 rounded-lg p-2 -mx-2 transition-colors duration-150 animate-in fade-in slide-in-from-bottom-2">
+                <div className="flex items-start gap-2.5">
+                  <Avatar className="h-8 w-8 ring-2 ring-amber-500/50 shadow-lg shadow-amber-500/20">
+                    <AvatarImage src="https://i.pravatar.cc/150?img=20" alt="Maria" />
+                    <AvatarFallback className="bg-gradient-to-br from-amber-600 to-amber-800 text-white text-xs font-bold">
+                      MC
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5 mb-0.5">
+                      <span className="text-xs font-semibold text-zinc-300 truncate max-w-[110px]">
+                        Maria Clara
+                      </span>
+                      <Crown className="h-3 w-3 text-amber-400" />
+                      <span className="text-[10px] text-zinc-600 ml-auto">12:48</span>
+                    </div>
+                    <p className="text-[13px] text-zinc-200 leading-relaxed break-words">
+                      Excelente análise como sempre! 💎
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Mensagem simples */}
+              <div className="group hover:bg-zinc-900/30 rounded-lg p-2 -mx-2 transition-colors duration-150 animate-in fade-in slide-in-from-bottom-2">
+                <div className="flex items-start gap-2.5">
+                  <Avatar className="h-8 w-8 ring-1 ring-zinc-700/50">
+                    <AvatarImage src="https://i.pravatar.cc/150?img=33" alt="Carlos" />
+                    <AvatarFallback className="bg-gradient-to-br from-green-600 to-green-800 text-white text-xs font-bold">
+                      CF
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5 mb-0.5">
+                      <span className="text-xs font-semibold text-zinc-300 truncate max-w-[140px]">
+                        Carlos Freitas
+                      </span>
+                      <span className="text-[10px] text-zinc-600 ml-auto">12:50</span>
+                    </div>
+                    <p className="text-[13px] text-zinc-200 leading-relaxed break-words">
+                      Qual timeframe você recomenda? 📊
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Mensagem de novo seguidor */}
+              <div className="flex items-center justify-center py-1.5 my-2">
+                <div className="bg-gradient-to-r from-pink-900/20 via-pink-800/30 to-pink-900/20 backdrop-blur-sm border border-pink-700/30 rounded-lg px-3 py-1.5 flex items-center gap-2">
+                  <Heart className="h-3.5 w-3.5 text-pink-400 fill-pink-400" />
+                  <p className="text-[11px] text-pink-300 font-semibold">
+                    Ana Silva começou a seguir
+                  </p>
+                </div>
+              </div>
+
+              {/* Mais mensagens para demonstrar scroll */}
+              <div className="group hover:bg-zinc-900/30 rounded-lg p-2 -mx-2 transition-colors duration-150 animate-in fade-in slide-in-from-bottom-2">
+                <div className="flex items-start gap-2.5">
+                  <Avatar className="h-8 w-8 ring-1 ring-zinc-700/50">
+                    <AvatarImage src="https://i.pravatar.cc/150?img=45" alt="Pedro" />
+                    <AvatarFallback className="bg-gradient-to-br from-indigo-600 to-indigo-800 text-white text-xs font-bold">
+                      PS
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5 mb-0.5">
+                      <span className="text-xs font-semibold text-zinc-300 truncate max-w-[140px]">
+                        Pedro Silva
+                      </span>
+                      <span className="text-[10px] text-zinc-600 ml-auto">12:52</span>
+                    </div>
+                    <p className="text-[13px] text-zinc-200 leading-relaxed break-words">
+                      Quanto de capital você sugere para começar?
+                    </p>
+                  </div>
+                </div>
               </div>
             </div>
-              
-            <div className="flex items-start space-x-2">
-              <Avatar className="h-8 w-8">
-                <AvatarImage src="/avatars/avatar-2.png" alt="João" />
-                <AvatarFallback className="bg-zinc-700 text-white">JS</AvatarFallback>
-              </Avatar>
-              <div>
-                <div className="flex items-center space-x-2">
-                  <span className="text-white text-sm font-medium">João Santos</span>
-                  <span className="text-zinc-400 text-xs">12:47</span>
-                </div>
-                <p className="text-white text-sm bg-zinc-600 rounded-lg px-2 py-1 mt-1">Olá! Obrigado pela transmissão!</p>
-              </div>
-            </div>
-          </div>
+          </ScrollArea>
         
-          <div className="p-3 border-t border-zinc-600 bg-zinc-800">
-            <div className="relative">
+          {/* Input de mensagem estilizado */}
+          <div className="p-3 border-t border-zinc-800/50 bg-[#181818]/80 backdrop-blur-sm">
+            <div className="relative group">
               <Input 
-                placeholder="Digite sua mensagem..." 
-                className="bg-zinc-600 border-zinc-500 text-white pr-10 focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400"
+                placeholder="Enviar mensagem..." 
+                className="bg-zinc-900/80 border-zinc-800/50 text-zinc-200 placeholder:text-zinc-600 pr-12 h-10 text-sm rounded-full focus:bg-zinc-900 focus:border-zinc-700 focus:ring-2 focus:ring-zinc-700/50 transition-all duration-200"
               />
               <Button
                 size="icon" 
                 variant="ghost"
-                className="absolute right-1 top-1/2 transform -translate-y-1/2 h-8 w-8 text-white/60 hover:text-white hover:bg-white/10"
+                className="absolute right-1 top-1/2 transform -translate-y-1/2 h-8 w-8 text-zinc-500 hover:text-white hover:bg-blue-600/80 rounded-full transition-all duration-200 group-hover:text-zinc-400"
               >
                 <Send className="h-4 w-4" />
               </Button>
+            </div>
+            
+            {/* Info do chat */}
+            <div className="mt-2 flex items-center justify-center">
+              <p className="text-[10px] text-zinc-600 flex items-center gap-1">
+                <Info className="h-3 w-3" />
+                Seja respeitoso com todos no chat
+              </p>
             </div>
           </div>
         </div>
@@ -1569,6 +1624,10 @@ export default function Live() {
   const { canStartLive } = useLiveStreamPermission();
   const { fetchStreams, createStream } = useLiveStream();
   const { sendLiveNotification } = useTrendingNotifications();
+  const { notify } = useInAppNotification();
+  
+  const fetchStreamsRef = useRef(fetchStreams);
+  useEffect(() => { fetchStreamsRef.current = fetchStreams; }, [fetchStreams]);
   
   // Função para obter textos traduzidos baseado no idioma atual
   const getTexts = () => {
@@ -1629,45 +1688,16 @@ export default function Live() {
 
   const texts = getTexts();
   
-  useEffect(() => {
-    loadMeetings();
-    
-    // Definir um timeout para parar o loading após 5 segundos
-    const timeoutId = setTimeout(() => {
-      setLoadingTimeout(true);
-    }, 5000);
-    
-    // ✅ NOVO: Atualizar streams a cada 10 segundos
-    const intervalId = setInterval(() => {
-      console.log('🔄 [Live] Atualizando lista de transmissões...');
-      loadMeetings();
-    }, 10000); // 10 segundos
-    
-    // ✅ NOVO: Atualizar quando a página recebe foco
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        console.log('👁️ [Live] Página visível, recarregando transmissões...');
-        loadMeetings();
-      }
-    };
-    
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    
-    return () => {
-      clearTimeout(timeoutId);
-      clearInterval(intervalId);
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-    };
-  }, []);
-  
-  const loadMeetings = async () => {
+  const loadMeetings = useCallback(async () => {
+    console.log('[Live] loadMeetings called, auth state:', { 
+      userId: auth.user?.id?.substring(0, 8), 
+      authLoading: auth.loading 
+    });
     setIsLoading(true);
     
     try {
-      // Carregando transmissões (silenciado)
-      
-      // Buscar transmissões usando o contexto
-      const streams = await fetchStreams();
+      const streams = await fetchStreamsRef.current();
+      console.log('[Live] fetchStreams returned:', streams?.length, 'streams');
       
       if (streams && Array.isArray(streams)) {
         // Converter streams para o formato MeetingData
@@ -1700,12 +1730,46 @@ export default function Live() {
       }
     } catch (error) {
       console.error('Erro ao carregar transmissões:', error);
-      toast("Erro ao carregar transmissões. Tente novamente mais tarde.");
+      notify({
+        title: "Erro",
+        description: "Erro ao carregar transmissões. Tente novamente mais tarde.",
+        type: "error",
+        variant: "destructive"
+      });
     } finally {
       setIsLoading(false);
       setLoadingTimeout(true);
     }
-  };
+  }, []);
+  
+  useEffect(() => {
+    if (auth.loading) return;
+    if (!auth.user) return;
+    
+    loadMeetings();
+    
+    const timeoutId = setTimeout(() => {
+      setLoadingTimeout(true);
+    }, 5000);
+    
+    const intervalId = setInterval(() => {
+      loadMeetings();
+    }, 10000);
+    
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        loadMeetings();
+      }
+    };
+    
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    
+    return () => {
+      clearTimeout(timeoutId);
+      clearInterval(intervalId);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [auth.loading, auth.user?.id, loadMeetings]);
   
   // Função para lidar com a criação de uma nova reunião
   const handleMeetingCreated = (meeting: MeetingData) => {
@@ -1721,7 +1785,11 @@ export default function Live() {
       });
     }
     
-    toast.success("Sucesso!", { description: "Sua transmissão foi criada com sucesso" });
+    notify({
+      title: "Sucesso!",
+      description: "Sua transmissão foi criada com sucesso",
+      type: "live"
+    });
   };
   
   // Função para selecionar uma reunião

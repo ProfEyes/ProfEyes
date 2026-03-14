@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { useAuth } from './AuthContext';
 import { useNotifications } from './NotificationContext';
 
@@ -301,7 +302,7 @@ export function FreeWebRTCProvider({ children }: { children: ReactNode }) {
     try {
       console.log('🔍 [FreeWebRTC] Buscando transmissões...');
       
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as SupabaseClient)
         .from('live_streams')
         .select(`
           *,
@@ -328,7 +329,7 @@ export function FreeWebRTCProvider({ children }: { children: ReactNode }) {
         startedAt: item.started_at,
         endedAt: item.ended_at,
         userId: item.user_id,
-        username: item.user_profiles?.display_name || 'Usuário',
+        username: (item.user_profiles?.display_name as string) || 'Usuário',
         viewerCount: item.viewer_count || 0,
         tags: item.tags || [],
         language: item.language || 'pt',
@@ -355,7 +356,7 @@ export function FreeWebRTCProvider({ children }: { children: ReactNode }) {
     try {
       console.log('🔍 [FreeWebRTC] Buscando stream:', streamId);
       
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as SupabaseClient)
         .from('live_streams')
         .select(`
           *,
@@ -388,7 +389,7 @@ export function FreeWebRTCProvider({ children }: { children: ReactNode }) {
         startedAt: data.started_at,
         endedAt: data.ended_at,
         userId: data.user_id,
-        username: data.user_profiles?.display_name || 'Usuário',
+        username: (data.user_profiles?.display_name as string) || 'Usuário',
         viewerCount: data.viewer_count || 0,
         tags: data.tags || [],
         language: data.language || 'pt',
@@ -434,7 +435,7 @@ export function FreeWebRTCProvider({ children }: { children: ReactNode }) {
       
       console.log('📤 [FreeWebRTC] Dados para inserção:', insertData);
       
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as SupabaseClient)
         .from('live_streams')
         .insert(insertData)
         .select()
@@ -445,7 +446,7 @@ export function FreeWebRTCProvider({ children }: { children: ReactNode }) {
         throw error;
       }
       
-      const newStream = {
+      const newStream: LiveStream = {
         id: data.id,
         title: data.title,
         description: data.description,
@@ -456,7 +457,7 @@ export function FreeWebRTCProvider({ children }: { children: ReactNode }) {
         startedAt: data.started_at,
         endedAt: data.ended_at,
         userId: data.user_id,
-        username: user.user_metadata?.display_name || user.email?.split('@')[0] || 'Usuário',
+        username: (user.user_metadata?.display_name as string) || user.email?.split('@')[0] || 'Usuário',
         viewerCount: data.viewer_count || 0,
         tags: data.tags || [],
         language: data.language || 'pt',
@@ -501,7 +502,7 @@ export function FreeWebRTCProvider({ children }: { children: ReactNode }) {
     try {
       console.log('📝 [FreeWebRTC] Atualizando stream:', streamId);
       
-      const { error } = await supabase
+      const { error } = await (supabase as SupabaseClient)
         .from('live_streams')
         .update({
           title: updateData.title,
@@ -548,7 +549,7 @@ export function FreeWebRTCProvider({ children }: { children: ReactNode }) {
     try {
       console.log('🗑️ [FreeWebRTC] Deletando stream:', streamId);
       
-      const { error } = await supabase
+      const { error } = await (supabase as SupabaseClient)
         .from('live_streams')
         .delete()
         .eq('id', streamId)
@@ -583,7 +584,7 @@ export function FreeWebRTCProvider({ children }: { children: ReactNode }) {
     try {
       console.log('▶️ [FreeWebRTC] Iniciando stream:', streamId);
       
-      const { error } = await supabase
+      const { error } = await (supabase as SupabaseClient)
         .from('live_streams')
         .update({
           status: 'live',
@@ -628,7 +629,7 @@ export function FreeWebRTCProvider({ children }: { children: ReactNode }) {
     try {
       console.log('⏹️ [FreeWebRTC] Finalizando stream:', streamId);
       
-      const { error } = await supabase
+      const { error } = await (supabase as SupabaseClient)
         .from('live_streams')
         .update({
           status: 'ended',
@@ -678,7 +679,7 @@ export function FreeWebRTCProvider({ children }: { children: ReactNode }) {
     try {
       console.log('💬 [FreeWebRTC] Buscando comentários para:', streamId);
       
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as SupabaseClient)
         .from('stream_comments')
         .select(`
           *,
@@ -720,7 +721,7 @@ export function FreeWebRTCProvider({ children }: { children: ReactNode }) {
     try {
       console.log('✍️ [FreeWebRTC] Adicionando comentário...');
       
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as SupabaseClient)
         .from('stream_comments')
         .insert({
           stream_id: streamId,
@@ -880,7 +881,7 @@ export function FreeWebRTCProvider({ children }: { children: ReactNode }) {
         console.log('✅ [FreeWebRTC] Viewer inicializado com sucesso');
         
         // Incrementar contador de viewers
-        const { error: updateError } = await supabase
+        const { error: updateError } = await (supabase as SupabaseClient)
           .from('live_streams')
           .update({
             viewer_count: (stream.viewerCount || 0) + 1

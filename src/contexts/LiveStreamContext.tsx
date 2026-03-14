@@ -132,10 +132,15 @@ export function LiveStreamProvider({ children }: { children: ReactNode }) {
 
   const { user } = useAuth();
   const { addNotification } = useNotifications();
+  
+  const userRef = React.useRef(user);
+  React.useEffect(() => { userRef.current = user; }, [user]);
 
   // Função para buscar todas as transmissões
   const fetchStreams = async () => {
-    if (!user) return [];
+    const currentUser = userRef.current || user;
+    console.log('[LiveStreamContext] fetchStreams called, user:', currentUser?.id?.substring(0, 8) || 'NULL');
+    if (!currentUser) return [];
     
     setIsLoadingStreams(true);
     setError(null);

@@ -9,6 +9,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Users, Clock, Video, MessageSquare, Share2, Bookmark, Shield, Lock, Globe, Calendar, Trash2 } from "lucide-react";
 import { getSupabase } from '@/lib/supabase';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLiveStream } from '@/contexts/LiveStreamContext';
 import { toast } from 'sonner';
@@ -60,7 +61,7 @@ export const LiveStreamCard: React.FC<LiveStreamCardProps> = ({
     
     // Buscar avatar inicial do streamer
     const fetchStreamerAvatar = async () => {
-      const { data: profile } = await supabase
+      const { data: profile } = await (supabase as SupabaseClient)
         .from('user_profiles')
         .select('avatar_url')
         .eq('user_id', stream.streamerId)
@@ -74,7 +75,7 @@ export const LiveStreamCard: React.FC<LiveStreamCardProps> = ({
     fetchStreamerAvatar();
     
     // Escutar por mudanças no avatar do streamer
-    const subscription = supabase
+    const subscription = (supabase as SupabaseClient)
       .channel('public:user_profiles')
       .on('postgres_changes', 
         { 

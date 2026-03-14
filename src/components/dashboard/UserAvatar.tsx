@@ -5,6 +5,7 @@ import { Camera, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { resizeImage } from "@/utils/imageUtils";
 import { supabase } from "@/lib/supabase";
+import type { SupabaseClient } from '@supabase/supabase-js';
 
 export function UserAvatar() {
   const { user, updateUser } = useUserStore();
@@ -119,7 +120,7 @@ export function UserAvatar() {
         });
         
         // Upload para o Supabase Storage
-        const { data, error } = await supabase
+        const { data, error } = await (supabase as SupabaseClient)
           .storage
           .from('avatars')
           .upload(fileName, resizedFile, {
@@ -132,7 +133,7 @@ export function UserAvatar() {
         }
         
         // Obter URL pública
-        const { data: urlData } = supabase
+        const { data: urlData } = (supabase as SupabaseClient)
           .storage
           .from('avatars')
           .getPublicUrl(data.path);

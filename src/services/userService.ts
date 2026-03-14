@@ -230,11 +230,6 @@ export const userService = {
       // loginTime (silenciado)
 
       if (error) {
-        console.error('Erro detalhado no login:', {
-          message: error.message,
-          status: error.status || 'N/A',
-          name: error.name
-        });
         
         // Tratamento específico para diferentes tipos de erro
         if (error.message.includes('Invalid login credentials')) {
@@ -669,15 +664,20 @@ export const userService = {
   async isAdmin(): Promise<boolean> {
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return false;
+      if (!user) {
+        console.log('[userService.isAdmin] No user found');
+        return false;
+      }
       const { data, error } = await supabase
         .from('user_profiles')
         .select('is_admin')
         .eq('user_id', user.id)
         .single();
+      console.log('[userService.isAdmin] Query result:', { data, error: error?.message, userId: user.id?.substring(0, 8) });
       if (error || !data) return false;
       return !!data.is_admin;
-    } catch {
+    } catch (err) {
+      console.error('[userService.isAdmin] Exception:', err);
       return false;
     }
   },
@@ -1143,9 +1143,9 @@ export const userService = {
   async updateTraderPreferences(preferences: {
     preferred_trader_link?: string;
     preferred_broker?: string;
+    supporter_code?: string;
   }): Promise<{ success: boolean; error: Error | null }> {
     try {
-      // Colunas não existem no banco — persistir no localStorage
       const existing: Record<string, unknown> = {};
       try {
         const stored = localStorage.getItem('trader_preferences');
@@ -1155,8 +1155,18 @@ export const userService = {
       const updated = {
         ...existing,
         ...(preferences.preferred_trader_link !== undefined && { preferred_trader_link: preferences.preferred_trader_link }),
-        ...(preferences.preferred_broker !== undefined && { preferred_broker: preferences.preferred_broker })
+        ...(preferences.preferred_broker !== undefined && { preferred_broker: preferences.preferred_broker }),
+        ...(preferences.supporter_code !== undefined && { supporter_code: preferences.supporter_code }),
       };
+
+      // Salvar/limpar data de ativação do código de apoiador (expira em 30 dias)
+      if (preferences.supporter_code !== undefined) {
+        if (preferences.supporter_code && preferences.supporter_code.trim()) {
+          updated.supporter_code_set_at = new Date().toISOString();
+        } else {
+          delete updated.supporter_code_set_at;
+        }
+      }
 
       localStorage.setItem('trader_preferences', JSON.stringify(updated));
       return { success: true, error: null };

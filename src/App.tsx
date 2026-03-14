@@ -85,6 +85,14 @@ const AppRouter = () => {
     // Monitoramento silencioso
   }, [user, loading, location.pathname]);
   
+  // ✅ PROTEÇÃO: Evitar loop de redirecionamento após login
+  useEffect(() => {
+    if (!loading && user && location.pathname === '/auth') {
+      // Usuário logado tentando acessar /auth, redirecionar para home
+      navigate('/', { replace: true });
+    }
+  }, [loading, user, location.pathname, navigate]);
+  
   // ✅ SIMPLIFICAÇÃO: Estados simples sem lógica de F5
   const [loadingProgress, setLoadingProgress] = useState(0);
   const [showLoadingScreen, setShowLoadingScreen] = useState(false);

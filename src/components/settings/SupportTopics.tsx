@@ -33,6 +33,7 @@ import {
 } from "lucide-react";
 import DOMPurify from 'dompurify';
 import { nanoid } from 'nanoid';
+import { supporterInfoService } from '@/services/supporterInfoService';
 
 // Interface para mensagem
 interface Message {
@@ -67,6 +68,18 @@ const SupportTopics: React.FC = () => {
   const [showScrollButton, setShowScrollButton] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
+  const [brokerLink, setBrokerLink] = useState('https://trade.avalonbroker.io/register?aff=385853&aff_model=revenue&afftrack=mesnagensfree');
+  const [brokerName, setBrokerName] = useState('Avalon');
+  
+  // Carregar informações do apoiador ao montar
+  useEffect(() => {
+    const loadSupporterInfo = async () => {
+      const info = await supporterInfoService.getActiveSupporterInfo();
+      setBrokerLink(info.link);
+      setBrokerName(info.displayName);
+    };
+    loadSupporterInfo();
+  }, []);
   
   // Função para obter tópicos traduzidos baseado no idioma atual
   const getTranslatedTopics = (): Topic[] => {
@@ -85,18 +98,30 @@ const SupportTopics: React.FC = () => {
         questions: [
           {
             id: "investment-1",
-            text: support.topic_investment?.q1?.question || "Quanto capital devo usar para operar?",
-            answer: support.topic_investment?.q1?.answer || "Para operar com o Trending, recomendamos começar com um capital mínimo de R$100. Embora seja possível iniciar com valores menores (a partir de R$60), um capital inicial de pelo menos R$100 permite realizar entradas com valores mais significativos e, consequentemente, obter resultados mais expressivos. Se possível, iniciar com R$200 ou R$1.000 é ainda melhor, pois quanto maior seu capital, maior será seu potencial de lucro. Nossos usuários com esses valores de capital conseguem resultados consistentes entre R$100 e R$500 diariamente. É importante lembrar que você deve investir apenas o que pode se permitir perder e seguir uma estratégia de gestão de risco adequada, especialmente ao implementar as estratégias de reentrada, que exigem dobrar o valor das entradas anteriores."
+            text: support.topic_investment?.q1?.question || (language === 'en' ? "What capital should I use to trade?" : language === 'es' ? "¿Qué capital debo usar para operar?" : "Quanto capital devo usar para operar?"),
+            answer: support.topic_investment?.q1?.answer || (language === 'en' ? 
+              "To trade with Trending, we recommend starting with a minimum capital of $100. While it's possible to start with lower amounts (from $60), an initial capital of at least $100 allows for more significant entries and consequently better results. If possible, starting with $200 or $1,000 is even better, as the larger your capital, the greater your profit potential. Our users with these capital amounts achieve consistent results between $100 and $500 daily. It's important to remember that you should only invest what you can afford to lose and follow an appropriate risk management strategy, especially when implementing re-entry strategies, which require doubling the values of previous entries." :
+              language === 'es' ?
+              "Para operar con Trending, recomendamos comenzar con un capital mínimo de $100. Aunque es posible iniciar con valores menores (desde $60), un capital inicial de al menos $100 permite realizar entradas más significativas y, por lo tanto, obtener mejores resultados. Si es posible, comenzar con $200 o $1,000 es aún mejor, ya que cuanto mayor sea su capital, mayor será su potencial de ganancia. Nuestros usuarios con estos valores de capital logran resultados consistentes entre $100 y $500 diarios. Es importante recordar que solo debe invertir lo que puede permitirse perder y seguir una estrategia de gestión de riesgo adecuada, especialmente al implementar estrategias de reentrada, que requieren duplicar los valores de las entradas anteriores." :
+              "Para operar com o Trending, recomendamos começar com um capital mínimo de R$100. Embora seja possível iniciar com valores menores (a partir de R$60), um capital inicial de pelo menos R$100 permite realizar entradas com valores mais significativos e, consequentemente, obter resultados mais expressivos. Se possível, iniciar com R$200 ou R$1.000 é ainda melhor, pois quanto maior seu capital, maior será seu potencial de lucro. Nossos usuários com esses valores de capital conseguem resultados consistentes entre R$100 e R$500 diariamente. É importante lembrar que você deve investir apenas o que pode se permitir perder e seguir uma estratégia de gestão de risco adequada, especialmente ao implementar as estratégias de reentrada, que exigem dobrar o valor das entradas anteriores.")
           },
           {
             id: "investment-2",
-            text: support.topic_investment?.q2?.question || "Quais criptomoedas são utilizadas nos trades?",
-            answer: support.topic_investment?.q2?.answer || "O aplicativo trabalha com uma variedade de criptomoedas e tokens, incluindo as principais como Bitcoin e Ethereum, mas também expandimos para tokens com alta volatilidade e potencial de lucro como TokenTrump, Celestia e outros tokens emergentes. Nossa equipe de analistas monitora constantemente o mercado para identificar os ativos com melhores oportunidades de entrada, levando em consideração liquidez, volatilidade e direção de tendência. Selecionamos sempre os ativos que apresentam padrões técnicos claros e oferecem as melhores chances de sucesso para nossas operações. As criptomoedas e tokens específicos podem variar diariamente, dependendo das condições de mercado, por isso é importante estar atento aos trades exibidos para saber exatamente qual ativo operar em cada momento."
+            text: support.topic_investment?.q2?.question || (language === 'en' ? "Which cryptocurrencies are used in trades?" : language === 'es' ? "¿Qué criptomonedas se utilizan en los Trades?" : "Quais criptomoedas são utilizadas nos Trades?"),
+            answer: support.topic_investment?.q2?.answer || (language === 'en' ?
+              "The app works with a variety of cryptocurrencies and tokens, including major ones like Bitcoin and Ethereum, but we also expand to tokens with high volatility and profit potential such as TokenTrump, Celestia and other emerging tokens. Our team of analysts constantly monitors the market to identify assets with the best entry opportunities, taking into account liquidity, volatility and trend direction. We always select assets that show clear technical patterns and offer the best chances of success for our operations. The specific cryptocurrencies and tokens may vary daily depending on market conditions, so it's important to pay attention to the Trades displayed to know exactly which asset to trade at each moment." :
+              language === 'es' ?
+              "La aplicación trabaja con una variedad de criptomonedas y tokens, incluyendo los principales como Bitcoin y Ethereum, pero también expandimos a tokens con alta volatilidad y potencial de ganancia como TokenTrump, Celestia y otros tokens emergentes. Nuestro equipo de analistas monitorea constantemente el mercado para identificar los activos con mejores oportunidades de entrada, teniendo en cuenta liquidez, volatilidad y dirección de tendencia. Seleccionamos siempre los activos que presentan patrones técnicos claros y ofrecen las mejores posibilidades de éxito para nuestras operaciones. Las criptomonedas y tokens específicos pueden variar diariamente dependiendo de las condiciones del mercado, por eso es importante estar atento a los Trades mostrados para saber exactamente qué activo operar en cada momento." :
+              "O aplicativo trabalha com uma variedade de criptomoedas e tokens, incluindo as principais como Bitcoin e Ethereum, mas também expandimos para tokens com alta volatilidade e potencial de lucro como TokenTrump, Celestia e outros tokens emergentes. Nossa equipe de analistas monitora constantemente o mercado para identificar os ativos com melhores oportunidades de entrada, levando em consideração liquidez, volatilidade e direção de tendência. Selecionamos sempre os ativos que apresentam padrões técnicos claros e oferecem as melhores chances de sucesso para nossas operações. As criptomoedas e tokens específicos podem variar diariamente, dependendo das condições de mercado, por isso é importante estar atento aos Trades exibidos para saber exatamente qual ativo operar em cada momento.")
           },
           {
             id: "investment-3",
-            text: support.topic_investment?.q3?.question || "Como fazer o depósito para operar?",
-            answer: support.topic_investment?.q3?.answer || "Para fazer um depósito e começar a operar com o Trending, siga estas etapas: 1) Crie sua conta na corretora <a href='https://trade.avalonbroker.io/register?aff=385853&aff_model=revenue&afftrack=mesnagensfree' target='_blank' rel='noopener noreferrer'>Avalon</a>, nossa parceira oficial 2) Após concluir o cadastro, você receberá acesso a uma conta demo com R$10.000 para testar a plataforma 3) Quando estiver pronto para operar com dinheiro real, clique na opção \"Depositar\" no menu principal da <a href='https://trade.avalonbroker.io/register?aff=385853&aff_model=revenue&afftrack=mesnagensfree' target='_blank' rel='noopener noreferrer'>Avalon</a> 4) Selecione seu método de pagamento preferido: PIX, boleto bancário, transferência ou criptomoedas 5) Para depósitos via PIX, informe o valor desejado (recomendamos iniciar com pelo menos R$100) e siga as instruções para completar o pagamento 6) O valor será creditado em sua conta em questão de minutos após a confirmação Com o saldo disponível, você já pode começar a executar as operações baseadas nos trades que são exibidos no aplicativo."
+            text: support.topic_investment?.q3?.question || (language === 'en' ? "How to deposit to start trading?" : language === 'es' ? "¿Cómo hacer el depósito para operar?" : "Como fazer o depósito para operar?"),
+            answer: support.topic_investment?.q3?.answer || (language === 'en' ?
+              `To make a deposit and start trading with Trending, follow these steps: 1) Create your account at the <a href='${brokerLink}' target='_blank' rel='noopener noreferrer'>${brokerName}</a> broker, our official partner 2) After completing registration, you will receive access to a demo account with $10,000 to test the platform 3) When ready to trade with real money, click on the \"Deposit\" option in the main menu of <a href='${brokerLink}' target='_blank' rel='noopener noreferrer'>${brokerName}</a> 4) Select your preferred payment method: PIX, bank slip, transfer or cryptocurrencies 5) For PIX deposits, enter the desired amount (we recommend starting with at least $100) and follow the instructions to complete the payment 6) The amount will be credited to your account within minutes after confirmation. With the available balance, you can start executing operations based on the Trades displayed in the app.` :
+              language === 'es' ?
+              `Para hacer un depósito y comenzar a operar con Trending, sigue estos pasos: 1) Crea tu cuenta en el bróker <a href='${brokerLink}' target='_blank' rel='noopener noreferrer'>${brokerName}</a>, nuestro socio oficial 2) Después de completar el registro, recibirás acceso a una cuenta demo con $10,000 para probar la plataforma 3) Cuando estés listo para operar con dinero real, haz clic en la opción \"Depositar\" en el menú principal de <a href='${brokerLink}' target='_blank' rel='noopener noreferrer'>${brokerName}</a> 4) Selecciona tu método de pago preferido: PIX, boleto bancario, transferencia o criptomonedas 5) Para depósitos vía PIX, informa el valor deseado (recomendamos iniciar con al menos $100) y sigue las instrucciones para completar el pago 6) El valor será acreditado en tu cuenta en cuestión de minutos después de la confirmación. Con el saldo disponible, ya puedes comenzar a ejecutar las operaciones basadas en los Trades que se muestran en la aplicación.` :
+              `Para fazer um depósito e começar a operar com o Trending, siga estas etapas: 1) Crie sua conta na corretora <a href='${brokerLink}' target='_blank' rel='noopener noreferrer'>${brokerName}</a>, nossa parceira oficial 2) Após concluir o cadastro, você receberá acesso a uma conta demo com R$10.000 para testar a plataforma 3) Quando estiver pronto para operar com dinheiro real, clique na opção \"Depositar\" no menu principal da <a href='${brokerLink}' target='_blank' rel='noopener noreferrer'>${brokerName}</a> 4) Selecione seu método de pagamento preferido: PIX, boleto bancário, transferência ou criptomoedas 5) Para depósitos via PIX, informe o valor desejado (recomendamos iniciar com pelo menos R$100) e siga as instruções para completar o pagamento 6) O valor será creditado em sua conta em questão de minutos após a confirmação. Com o saldo disponível, você já pode começar a executar as operações baseadas nos Trades que são exibidos no aplicativo.`)
           }
         ]
       },
@@ -108,33 +133,57 @@ const SupportTopics: React.FC = () => {
         questions: [
           {
             id: "platform-1",
-            text: support.topic_platform?.q1?.question || "Como funciona a aba Dashboard?",
-            answer: support.topic_platform?.q1?.answer || "A aba Dashboard fornece uma visão geral dos seus trades em tempo real. Aqui você pode visualizar os trades mais recentes e outras informações relevantes para o seu trading."
+            text: support.topic_platform?.q1?.question || (language === 'en' ? "How does the Dashboard tab work?" : language === 'es' ? "¿Cómo funciona la pestaña Dashboard?" : "Como funciona a aba Dashboard?"),
+            answer: support.topic_platform?.q1?.answer || (language === 'en' ?
+              "The Dashboard tab provides an overview of your trading activities in real-time. Here you can view the most recent Trades, monitor market trends, and access key information to make informed trading decisions. It's your central hub for tracking market opportunities and staying updated with the latest trading signals." :
+              language === 'es' ?
+              "La pestaña Dashboard proporciona una visión general de tus actividades de trading en tiempo real. Aquí puedes ver los Trades más recientes, monitorear las tendencias del mercado y acceder a información clave para tomar decisiones de trading informadas. Es tu centro central para rastrear oportunidades del mercado y mantenerte actualizado con las últimas señales de trading." :
+              "A aba Dashboard fornece uma visão geral das suas atividades de trading em tempo real. Aqui você pode visualizar os Trades mais recentes, acompanhar tendências de mercado e acessar informações-chave para tomar decisões de trading informadas. É o seu hub central para acompanhar oportunidades de mercado e manter-se atualizado com os últimos alertas de trading.")
           },
           {
             id: "platform-2",
-            text: support.topic_platform?.q2?.question || "Qual é o propósito da aba Trades?",
-            answer: support.topic_platform?.q2?.answer || "A aba Trades é onde você recebe alertas e operações de trading. Ela mostra operações de compra e venda para diferentes ativos, baseados em análises técnicas e tendências de mercado."
+            text: support.topic_platform?.q2?.question || (language === 'en' ? "What is the purpose of the Trades tab?" : language === 'es' ? "¿Cuál es el propósito de la pestaña Trades?" : "Qual é o propósito da aba Trades?"),
+            answer: support.topic_platform?.q2?.answer || (language === 'en' ?
+              "The Trades tab is where you receive alerts and trading operations in real-time. It displays buy and sell opportunities for different assets, based on technical analysis and market trends. Each Trade includes detailed information such as entry points, expiration times, and re-entry strategies. This is your main tool for executing profitable operations in the cryptocurrency market." :
+              language === 'es' ?
+              "La pestaña Trades es donde recibes alertas y operaciones de trading en tiempo real. Muestra oportunidades de compra y venta para diferentes activos, basadas en análisis técnico y tendencias del mercado. Cada Trade incluye información detallada como puntos de entrada, tiempos de expiración y estrategias de reentrada. Esta es tu herramienta principal para ejecutar operaciones rentables en el mercado de criptomonedas." :
+              "A aba Trades é onde você recebe alertas e operações de trading em tempo real. Ela mostra oportunidades de compra e venda para diferentes ativos, baseados em análises técnicas e tendências de mercado. Cada Trade inclui informações detalhadas como pontos de entrada, tempos de expiração e estratégias de reentrada. Esta é a sua ferramenta principal para executar operações lucrativas no mercado de criptomoedas.")
           },
           {
             id: "platform-3",
-            text: support.topic_platform?.q3?.question || "O que você encontra na aba Notícias?",
-            answer: support.topic_platform?.q3?.answer || "A aba Notícias apresenta as últimas atualizações e informações relevantes do mercado financeiro. Aqui você pode ficar por dentro de notícias que podem impactar seus investimentos."
+            text: support.topic_platform?.q3?.question || (language === 'en' ? "What do you find in the News tab?" : language === 'es' ? "¿Qué encuentras en la pestaña Noticias?" : "O que você encontra na aba Notícias?"),
+            answer: support.topic_platform?.q3?.answer || (language === 'en' ?
+              "The News tab presents the latest updates and relevant information from the financial market. Here you can stay informed about news that may impact your investments and trading decisions. We aggregate real-time news from reliable sources to help you understand market movements and make more informed trading choices." :
+              language === 'es' ?
+              "La pestaña Noticias presenta las últimas actualizaciones e información relevante del mercado financiero. Aquí puedes mantenerte informado sobre noticias que pueden impactar tus inversiones y decisiones de trading. Agregamos noticias en tiempo real de fuentes confiables para ayudarte a entender los movimientos del mercado y tomar decisiones de trading más informadas." :
+              "A aba Notícias apresenta as últimas atualizações e informações relevantes do mercado financeiro. Aqui você pode ficar por dentro de notícias que podem impactar seus investimentos e decisões de trading. Agregamos notícias em tempo real de fontes confiáveis para ajudá-lo a entender os movimentos do mercado e tomar decisões de trading mais informadas.")
           },
           {
             id: "platform-4",
-            text: support.topic_platform?.q4?.question || "Como a aba Instruções pode ajudar?",
-            answer: support.topic_platform?.q4?.answer || "A aba Instruções oferece guias e tutoriais sobre como usar o aplicativo Trending. Aqui você encontra dicas e instruções detalhadas para aproveitar ao máximo as funcionalidades da plataforma."
+            text: support.topic_platform?.q4?.question || (language === 'en' ? "How can the Instructions tab help?" : language === 'es' ? "¿Cómo puede ayudar la pestaña Instrucciones?" : "Como a aba Instruções pode ajudar?"),
+            answer: support.topic_platform?.q4?.answer || (language === 'en' ?
+              "The Instructions tab offers guides and tutorials on how to use the Trending app effectively. Here you'll find detailed tips and instructions to maximize the platform's features, from understanding how to interpret Trades to implementing risk management strategies and using advanced tools available in the app." :
+              language === 'es' ?
+              "La pestaña Instrucciones ofrece guías y tutoriales sobre cómo usar la aplicación Trending de manera efectiva. Aquí encontrarás consejos detallados e instrucciones para maximizar las funciones de la plataforma, desde comprender cómo interpretar los Trades hasta implementar estrategias de gestión de riesgo y usar las herramientas avanzadas disponibles en la aplicación." :
+              "A aba Instruções oferece guias e tutoriais sobre como usar o aplicativo Trending de forma eficaz. Aqui você encontra dicas e instruções detalhadas para aproveitar ao máximo as funcionalidades da plataforma, desde entender como interpretar os Trades até implementar estratégias de gestão de risco e usar as ferramentas avançadas disponíveis no app.")
           },
           {
             id: "platform-6",
-            text: support.topic_platform?.q5?.question || "Como gerenciar notificações na aba Notificações?",
-            answer: support.topic_platform?.q5?.answer || "A aba Notificações gerencia os alertas e mensagens que você recebe no aplicativo. Aqui você pode configurar quais tipos de notificações deseja receber e como deseja ser notificado."
+            text: support.topic_platform?.q5?.question || (language === 'en' ? "How to manage notifications in the Notifications tab?" : language === 'es' ? "¿Cómo gestionar notificaciones en la pestaña Notificaciones?" : "Como gerenciar notificações na aba Notificações?"),
+            answer: support.topic_platform?.q5?.answer || (language === 'en' ?
+              "The Notifications tab manages the alerts and messages you receive in the app. Here you can configure which types of notifications you want to receive, such as new Trade alerts, market updates, and important announcements. You can also choose how you want to be notified (push notifications, in-app alerts) and customize the notification settings to match your trading style and preferences." :
+              language === 'es' ?
+              "La pestaña Notificaciones gestiona las alertas y mensajes que recibes en la aplicación. Aquí puedes configurar qué tipos de notificaciones deseas recibir, como alertas de nuevos Trades, actualizaciones del mercado y anuncios importantes. También puedes elegir cómo deseas ser notificado (notificaciones push, alertas en la aplicación) y personalizar la configuración de notificaciones para que coincida con tu estilo de trading y preferencias." :
+              "A aba Notificações gerencia os alertas e mensagens que você recebe no aplicativo. Aqui você pode configurar quais tipos de notificações deseja receber, como alertas de novos Trades, atualizações de mercado e anúncios importantes. Você também pode escolher como deseja ser notificado (notificações push, alertas no app) e personalizar as configurações de notificação para combinar com seu estilo de trading e preferências.")
           },
           {
             id: "platform-7",
-            text: support.topic_platform?.q6?.question || "O que você pode ajustar na aba Configurações?",
-            answer: support.topic_platform?.q6?.answer || "A aba Configurações permite que você personalize as opções do aplicativo. Aqui você pode ajustar preferências de interface, segurança e outras configurações do seu perfil."
+            text: support.topic_platform?.q6?.question || (language === 'en' ? "What can you adjust in the Settings tab?" : language === 'es' ? "¿Qué puedes ajustar en la pestaña Configuraciones?" : "O que você pode ajustar na aba Configurações?"),
+            answer: support.topic_platform?.q6?.answer || (language === 'en' ?
+              "The Settings tab allows you to customize the app's options to your preferences. Here you can adjust interface preferences such as language and theme, configure security settings including password and two-factor authentication, manage your profile information, set your preferred broker and trading links, and customize notification preferences. It's your control center for personalizing the Trending experience to match your needs." :
+              language === 'es' ?
+              "La pestaña Configuraciones te permite personalizar las opciones de la aplicación según tus preferencias. Aquí puedes ajustar preferencias de interfaz como idioma y tema, configurar ajustes de seguridad incluyendo contraseña y autenticación de dos factores, gestionar tu información de perfil, establecer tu bróker preferido y enlaces de trading, y personalizar preferencias de notificación. Es tu centro de control para personalizar la experiencia Trending según tus necesidades." :
+              "A aba Configurações permite que você personalize as opções do aplicativo conforme suas preferências. Aqui você pode ajustar preferências de interface como idioma e tema, configurar definições de segurança incluindo senha e autenticação de dois fatores, gerenciar suas informações de perfil, definir sua corretora preferida e links de trading, e personalizar preferências de notificação. É o seu centro de controle para personalizar a experiência Trending de acordo com suas necessidades.")
           }
         ]
       },
@@ -329,7 +378,7 @@ const SupportTopics: React.FC = () => {
       y: 0,
       transition: { 
         duration: 0.25,
-        ease: "easeOut"
+        ease: [0.16, 1, 0.3, 1] as [number, number, number, number]
       } 
     }
   };
@@ -340,7 +389,7 @@ const SupportTopics: React.FC = () => {
       opacity: 1,
       transition: { 
         duration: 0.2,
-        ease: "easeIn"
+        ease: [0.42, 0, 1, 1] as [number, number, number, number]
       } 
     }
   };
@@ -353,19 +402,11 @@ const SupportTopics: React.FC = () => {
   const renderMessage = (message: Message) => {
     const isUser = message.sender === 'user';
     
-            // Processamento especial para o texto Avalon e links dinâmicos
-        const processAvalonLinks = (text: string) => {
-          // Primeiro, substituir o marcador AvalonLink com a URL apropriada com base no idioma
-      let processedText = text;
-      
-      // Link único do Avalon Broker
-      const linkURL = 'https://trade.avalonbroker.io/register?aff=385853&aff_model=revenue&afftrack=mesnagensfree';
-      
-      // Substituir o marcador pelo link real
-      processedText = processedText.replace(/AvalonLink/g, linkURL);
-      
-      // Depois, formatar a palavra Avalon sem transformá-la em um link
-      return processedText.replace(/Avalon(?!Link)/g, '<span style="color: #0088ff; font-weight: 600;">Avalon</span>');
+    // Processar o nome do broker para destaque visual
+    const processBrokerName = (text: string) => {
+      const escapedName = brokerName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const regex = new RegExp(`\\b${escapedName}\\b`, 'g');
+      return text.replace(regex, `<span style="color: #0088ff; font-weight: 600;">${brokerName}</span>`);
     };
     
     // Processamento de URLs em formato texto
@@ -441,7 +482,7 @@ const SupportTopics: React.FC = () => {
               <div 
                 className="prose prose-sm prose-invert max-w-none relative z-10 text-sm"
                 dangerouslySetInnerHTML={{ 
-                  __html: DOMPurify.sanitize(processAvalonLinks(processURLs(message.content)))
+                  __html: DOMPurify.sanitize(processBrokerName(processURLs(message.content)))
                 }}
               />
             )}

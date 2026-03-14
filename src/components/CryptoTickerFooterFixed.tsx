@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { ArrowUpRight, ArrowDownRight } from 'lucide-react';
 import { getSupabase } from '@/lib/supabase';
+import type { SupabaseClient } from '@supabase/supabase-js';
 
 // Interface para dados do banco de dados
 interface CryptoPriceDB {
@@ -130,7 +131,7 @@ const CryptoTickerFooterFixed: React.FC = () => {
       // Buscando preços (silenciado)
 
       // Buscar do banco de dados (já atualizado a cada 15min via cron)
-      const { data, error: dbError } = await supabase
+      const { data, error: dbError } = await (supabase as SupabaseClient)
         .from('crypto_prices')
         .select('*')
         .order('total_volume', { ascending: false });
@@ -180,7 +181,7 @@ const CryptoTickerFooterFixed: React.FC = () => {
 
     // Inscrever no Realtime para atualização automática
     // Conectando ao Realtime (silenciado)
-    const channel = supabase
+    const channel = (supabase as SupabaseClient)
       .channel('crypto-prices-changes')
       .on(
         'postgres_changes',
@@ -222,7 +223,7 @@ const CryptoTickerFooterFixed: React.FC = () => {
     return () => {
       mounted = false;
       // Desconectando do Realtime
-      supabase.removeChannel(channel);
+      (supabase as SupabaseClient).removeChannel(channel);
       window.removeEventListener('force-update-after-background', handleForceUpdate);
       window.removeEventListener('force-refresh-signals', handleForceRefresh);
     };

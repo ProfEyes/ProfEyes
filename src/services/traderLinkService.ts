@@ -1,6 +1,6 @@
 import { userService } from './userService';
+import { validateSupporterCode } from '@/lib/admin-api';
 
-// Lista de corretoras disponíveis
 export const AVAILABLE_BROKERS = [
   { id: 'avalon', name: 'Avalon' },
   { id: 'xxbroker', name: 'XXBroker' },
@@ -12,8 +12,10 @@ export const AVAILABLE_BROKERS = [
   { id: 'olymptrade', name: 'Olymp Trade' }
 ];
 
-// Links padrão por corretora
-const DEFAULT_BROKER_LINKS = {
+// Código de apoiador nunca expira
+const CODE_EXPIRY_DAYS = 999999;
+
+const DEFAULT_BROKER_LINKS: Record<string, string> = {
   avalon: 'https://trade.avalonbroker.io/register?aff=385853&aff_model=revenue&afftrack=mesnagensfree',
   xxbroker: 'https://xxbroker.com/ref/default',
   iqoption: 'https://iqoption.com/ref/default',
@@ -24,81 +26,113 @@ const DEFAULT_BROKER_LINKS = {
   olymptrade: 'https://olymptrade.com/ref/default'
 };
 
-// Serviço para gerenciar links de trader
+// Código de apoiador nunca expira
+function isCodeExpired(setAt: string | undefined | null): boolean {
+  return false;
+}
+
 export const traderLinkService = {
-  // Obter link do trader atual (preferido do usuário ou padrão)
   async getCurrentTraderLink(brokerId?: string): Promise<string> {
     try {
-      // Obter preferências do usuário - CORRIGIDO: Usando getTradingPreferences (correto)
       const { data: preferences, error } = await userService.getTradingPreferences();
-      
-            
+
       if (error || !preferences) {
         return this.getDefaultBrokerLink(brokerId || 'avalon');
       }
-      
-      // Se o usuário tem um link preferido, usá-lo
+
+      const supporterCode = String(preferences.supporter_code || '');
+      const codeSetAt = preferences.supporter_code_set_at as string | undefined;
+
+      if (supporterCode && supporterCode.trim()) {
+        // Verificar expiração de 30 dias
+        if (isCodeExpired(codeSetAt)) {
+          // Código expirado - limpar e voltar ao padrão
+          await userService.updateTraderPreferences({ supporter_code: '' });
+        } else {
+          const result = await validateSupporterCode(supporterCode.trim());
+          if (result.valid && result.link) {
+            return result.link;
+          }
+        }
+      }
+
       const preferredLink = String(preferences.preferred_trader_link || '');
       if (preferredLink && preferredLink.trim()) {
         return preferredLink.trim();
       }
-      
-      // Caso contrário, usar o link padrão da corretora preferida ou especificada
+
       const brokerToUse = brokerId || String(preferences.preferred_broker || 'avalon');
-      const defaultLink = this.getDefaultBrokerLink(brokerToUse);
-            return defaultLink;
+      return this.getDefaultBrokerLink(brokerToUse);
     } catch {
       return this.getDefaultBrokerLink(brokerId || 'avalon');
     }
   },
-  
-  // Obter link padrão para uma corretora
+
   getDefaultBrokerLink(brokerId: string): string {
-    return DEFAULT_BROKER_LINKS[brokerId as keyof typeof DEFAULT_BROKER_LINKS] || DEFAULT_BROKER_LINKS.avalon;
+    return DEFAULT_BROKER_LINKS[brokerId] || DEFAULT_BROKER_LINKS.avalon;
   },
-  
-  // Verificar se uma URL é válida
+
   isValidUrl(url: string): boolean {
     if (!url || !url.trim()) return false;
-    
     try {
       new URL(url);
       return true;
-    } catch (e) {
+    } catch {
       return false;
     }
   },
-  
-  // Obter a corretora preferida do usuário
+
   async getPreferredBroker(): Promise<string> {
     try {
       const { data: preferences, error } = await userService.getTradingPreferences();
-      
-      if (error || !preferences) {
-        return 'avalon';
-      }
-      
+      if (error || !preferences) return 'avalon';
       return String(preferences.preferred_broker || 'avalon');
     } catch {
       return 'avalon';
     }
   },
-  
-  // Obter todas as preferências do usuário relacionadas ao trader
+
   async getUserPreferences(): Promise<{ data: Record<string, unknown> | null; error: Error | null }> {
     return await userService.getTradingPreferences();
   },
-  
-  // Atualizar preferências do trader
-  async updateTraderPreferences(link?: string, broker?: string): Promise<boolean> {
+
+  async updateTraderPreferences(link?: string, broker?: string, supporterCode?: string): Promise<boolean> {
     try {
       const { success } = await userService.updateTraderPreferences({
         preferred_trader_link: link,
-        preferred_broker: broker
+        preferred_broker: broker,
+        supporter_code: supporterCode,
       });
       return success;
     } catch {
       return false;
     }
+  },
+
+  async getCodeExpiryInfo(): Promise<{ expired: boolean; daysRemaining: number | null; expiresAt: string | null }> {
+    try {
+      const { data: preferences } = await userService.getTradingPreferences();
+      if (!preferences) return { expired: true, daysRemaining: null, expiresAt: null };
+
+      const code = String(preferences.supporter_code || '');
+      if (!code || !code.trim()) return { expired: true, daysRemaining: null, expiresAt: null };
+
+      const setAt = preferences.supporter_code_set_at as string | undefined;
+      if (!setAt) return { expired: true, daysRemaining: null, expiresAt: null };
+
+      const setDate = new Date(setAt);
+      const expiresAt = new Date(setDate.getTime() + CODE_EXPIRY_DAYS * 24 * 60 * 60 * 1000);
+      const now = new Date();
+      const diffMs = expiresAt.getTime() - now.getTime();
+      const daysRemaining = Math.max(0, Math.ceil(diffMs / (1000 * 60 * 60 * 24)));
+
+      return {
+        expired: daysRemaining <= 0,
+        daysRemaining,
+        expiresAt: expiresAt.toISOString(),
+      };
+    } catch {
+      return { expired: true, daysRemaining: null, expiresAt: null };
+    }
   }
-}; 
+};
