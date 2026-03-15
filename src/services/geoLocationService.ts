@@ -233,36 +233,36 @@ class GeoLocationService {
 
       if (serviceUrl.includes('ipapi.co')) {
         normalized = {
-          country: data.country_name,
-          country_code: data.country_code,
-          region: data.region,
-          city: data.city,
-          timezone: data.timezone,
-          languages: data.languages?.split(',') || []
+          country: data.country_name as string,
+          country_code: data.country_code as string,
+          region: data.region as string,
+          city: data.city as string,
+          timezone: data.timezone as string,
+          languages: (data.languages as string)?.split(',') || []
         };
       } else if (serviceUrl.includes('ip-api.com')) {
         normalized = {
-          country: data.country,
-          country_code: data.countryCode,
-          region: data.regionName,
-          city: data.city,
-          timezone: data.timezone
+          country: data.country as string,
+          country_code: data.countryCode as string,
+          region: data.regionName as string,
+          city: data.city as string,
+          timezone: data.timezone as string
         };
       } else if (serviceUrl.includes('ipinfo.io')) {
         normalized = {
-          country: data.country,
-          country_code: data.country,
-          region: data.region,
-          city: data.city,
-          timezone: data.timezone
+          country: data.country as string,
+          country_code: data.country as string,
+          region: data.region as string,
+          city: data.city as string,
+          timezone: data.timezone as string
         };
       } else if (serviceUrl.includes('ipgeolocation.io')) {
         normalized = {
-          country: data.country_name,
-          country_code: data.country_code2,
-          region: data.state_prov,
-          city: data.city,
-          timezone: data.time_zone?.name
+          country: data.country_name as string,
+          country_code: data.country_code2 as string,
+          region: data.state_prov as string,
+          city: data.city as string,
+          timezone: (data.time_zone as { name?: string })?.name as string
         };
       }
 

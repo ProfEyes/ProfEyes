@@ -62,13 +62,15 @@ const fetchMarketNewsLegacy = async (options?: { language?: string, limit?: numb
     
     // Categorias suportadas pelo Finnhub: general, forex, crypto, merger
     const categories = ['general', 'forex', 'crypto', 'merger'];
-    let allNews: any[] = [];
+    // Array para armazenar todas as notícias coletadas
+    let allNews: MarketNews[] = [];
     
     // Buscar notícias de diferentes categorias
     for (const category of categories) {
       try {
         // ✅ Tentar proxy primeiro, depois fallback direto
-        let data: any = null;
+        // Dados podem vir do proxy ou da API direta
+        let data: MarketNews[] | null = null;
         
         // Tentar proxy (funciona no Vercel)
         try {
@@ -86,7 +88,7 @@ const fetchMarketNewsLegacy = async (options?: { language?: string, limit?: numb
           if (proxyResponse.ok) {
             const result = await proxyResponse.json();
             if (result.success && Array.isArray(result.news)) {
-              data = result.news;
+              data = result.news as MarketNews[];
               // Proxy funcionou (silenciado)
             }
           }
@@ -111,8 +113,8 @@ const fetchMarketNewsLegacy = async (options?: { language?: string, limit?: numb
               return source.includes('CNBC') || source.includes('COINDESK');
             });
             
-            // Converter para formato esperado
-            data = filtered.map((item) => ({
+            // Converter para formato esperado (MarketNews)
+            data = filtered.map((item): MarketNews => ({
               id: `finnhub-${item.id || Date.now()}`,
               title: item.headline || '',
               headline: item.headline || '',
@@ -121,7 +123,7 @@ const fetchMarketNewsLegacy = async (options?: { language?: string, limit?: numb
               content: item.summary || '',
               source: item.source || '',
               url: item.url || '',
-              publishedAt: item.datetime * 1000,
+              published_at: new Date(item.datetime * 1000).toISOString(),
               datetime: item.datetime * 1000,
               imageUrl: item.image || '',
               image: item.image || '',

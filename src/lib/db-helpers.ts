@@ -87,7 +87,8 @@ const tryAlternativeColumnCreation = async (tableName: string, columnName: strin
     // Tentar adicionar a coluna implicitamente através de uma inserção
     const generatedId = crypto.randomUUID();
     
-    const { error: insertError } = await getTypedSupabaseAdmin().from(tableName)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error: insertError } = await (getTypedSupabaseAdmin() as any).from(tableName)
       .upsert({
         id: generatedId,
         user_id: generatedId, // precisa ser um UUID válido
@@ -102,7 +103,8 @@ const tryAlternativeColumnCreation = async (tableName: string, columnName: strin
       return false;
     } else {
       // Limpar o registro temporário se a inserção funcionou
-      await getTypedSupabaseAdmin().from(tableName)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (getTypedSupabaseAdmin() as any).from(tableName)
         .delete()
         .eq('id', generatedId);
       
@@ -324,7 +326,8 @@ export const checkTableExists = async (tableName: string): Promise<boolean> => {
     
     // Para outras tabelas, tentar uma verificação simples sem exec_sql
     try {
-      const { error } = await getTypedSupabase().from(tableName)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { error } = await (getTypedSupabase() as any).from(tableName)
         .select('*')
         .limit(1);
       

@@ -10,6 +10,7 @@ interface TradingSignal {
   entry_time?: string;
   entry_price?: string;
   expiry?: string;
+  success_rate?: number; // Taxa de sucesso do sinal (0-1)
 }
 
 interface LiveStream {

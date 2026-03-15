@@ -128,7 +128,7 @@ export function useSignalNotifications(
       
       // Usar callback para acessar o estado atual sem dependência
       setNotifiedSignals(currentNotified => {
-        let newNotified = new Set(currentNotified);
+        const newNotified = new Set(currentNotified);
         
         signals.forEach((signal, index) => {
           // Criar ID único para o sinal
@@ -159,7 +159,7 @@ export function useSignalNotifications(
       });
       
       setFinalReminderSignals(currentFinal => {
-        let newFinal = new Set(currentFinal);
+        const newFinal = new Set(currentFinal);
         
         signals.forEach(signal => {
           const signalId = String(signal.id || `${signal.symbol || signal.pair || ''}-${signal.entry_time || signal.timestamp || ''}`);

@@ -113,17 +113,16 @@ export const deleteUser = async (userId: string): Promise<{
 export type ProfileData = {
   is_admin: boolean;
   display_name: string | null;
-  last_login_at: string | null;
 };
 
 export const getUserProfiles = async (): Promise<Record<string, ProfileData>> => {
   try {
     const { data } = await adminClient()
       .from('user_profiles')
-      .select('user_id, is_admin, display_name, last_login_at');
+      .select('user_id, is_admin, display_name');
     const map: Record<string, ProfileData> = {};
-    (data || []).forEach((p: { user_id: string; is_admin: boolean | null; display_name: string | null; last_login_at: string | null }) => {
-      map[p.user_id] = { is_admin: !!p.is_admin, display_name: p.display_name, last_login_at: p.last_login_at };
+    (data || []).forEach((p: { user_id: string; is_admin: boolean | null; display_name: string | null }) => {
+      map[p.user_id] = { is_admin: !!p.is_admin, display_name: p.display_name };
     });
     return map;
   } catch {
@@ -346,20 +345,13 @@ export const getAdminDashboardMetrics = async (
   try {
     const admin = adminClient();
 
-    // Total de usuários e contagem online (últimos 15 min)
-    const onlineThreshold = new Date(Date.now() - 15 * 60 * 1000).toISOString();
-    const { data: profilesData } = await admin
-      .from('user_profiles')
-      .select('user_id, last_login_at');
-
-    const allProfiles = profilesData || [];
-    const onlineNow = allProfiles.filter(
-      (p: { last_login_at: string | null }) => p.last_login_at && p.last_login_at > onlineThreshold
-    ).length;
-
     // Total de usuários via auth admin
     const { data: authData } = await admin.auth.admin.listUsers({ page: 1, perPage: 1 });
-    const totalUsers = (authData as { total?: number })?.total ?? allProfiles.length;
+    const totalUsers = (authData as { total?: number })?.total ?? 0;
+
+    // Para onlineNow, vamos usar 0 já que não temos a coluna last_login_at
+    // Essa métrica precisaria de uma tabela de sessões ativas ou similar
+    const onlineNow = 0;
 
     // Atividade diária (user_daily_activity) - dados de TODOS os membros
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

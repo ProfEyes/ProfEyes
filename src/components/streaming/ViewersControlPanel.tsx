@@ -20,6 +20,7 @@ export const ViewersControlPanel: React.FC<ViewersControlPanelProps> = ({
 
   useEffect(() => {
     loadAddedViewers();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [streamId]);
 
   const loadAddedViewers = async () => {
@@ -132,6 +133,7 @@ export const ViewersControlPanel: React.FC<ViewersControlPanelProps> = ({
           <button
             onClick={() => updateAddedViewers(0)}
             disabled={addedViewers === 0 || isLoading}
+            aria-label="Resetar espectadores adicionados"
             className="h-12 bg-white/[0.02] border border-white/[0.05] hover:bg-red-500/[0.06] hover:border-red-500/20 active:scale-95 rounded-2xl text-red-400/60 hover:text-red-400/90 disabled:opacity-10 disabled:cursor-not-allowed transition-all duration-200 flex items-center justify-center"
           >
             <RotateCcw className="h-3.5 w-3.5" strokeWidth={1.5} />

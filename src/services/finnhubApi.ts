@@ -84,6 +84,7 @@ export async function fetchCompanyNews(
 }
 
 // Função para buscar dados financeiros da empresa
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function fetchCompanyFinancials(symbol: string): Promise<any> {
   try {
     const url = `https://finnhub.io/api/v1/stock/metric?symbol=${symbol}&metric=all&token=${API_KEYS.FINNHUB.API_KEY}`;
@@ -109,6 +110,7 @@ export async function fetchCompanyFinancials(symbol: string): Promise<any> {
 }
 
 // Função para buscar recomendações de analistas
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function fetchAnalystRecommendations(symbol: string): Promise<any> {
   try {
     const url = `https://finnhub.io/api/v1/stock/recommendation?symbol=${symbol}&token=${API_KEYS.FINNHUB.API_KEY}`;

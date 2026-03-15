@@ -5,14 +5,45 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { CheckCircle, XCircle, AlertCircle, RefreshCw } from 'lucide-react';
 
+interface StreamData {
+  id: string;
+  title: string;
+  status: string;
+  user_id: string;
+  peer_id?: string;
+  started_at?: string;
+  created_at: string;
+  username?: string;
+}
+
+interface DiagnosticsData {
+  database: {
+    live_streams_exists?: boolean;
+    live_streams_error?: string;
+    peer_id_column_exists?: boolean;
+  };
+  permissions: {
+    authenticated?: boolean;
+    userId?: string;
+    myStreamsCount?: number;
+    myStreams?: StreamData[];
+  };
+  liveStreams: StreamData[];
+  activeStreams?: StreamData[];
+  activeStreamsCount?: number;
+  recommendations: string[];
+  peerjs_loaded?: boolean;
+  error?: string;
+}
+
 export default function StreamDebug() {
   const { user } = useAuth();
   const [checking, setChecking] = useState(false);
-  const [results, setResults] = useState<any>(null);
+  const [results, setResults] = useState<DiagnosticsData | null>(null);
 
   const runDiagnostics = async () => {
     setChecking(true);
-    const diagnostics: any = {
+    const diagnostics: DiagnosticsData = {
       database: {},
       permissions: {},
       liveStreams: [],
@@ -21,7 +52,8 @@ export default function StreamDebug() {
 
     try {
       // 1. Verificar se tabela live_streams existe
-      const { data: tableCheck, error: tableError } = await supabase
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: tableCheck, error: tableError } = await (supabase as any)
         .from('live_streams')
         .select('id')
         .limit(1);
@@ -33,7 +65,8 @@ export default function StreamDebug() {
 
       // 2. Verificar se coluna peer_id existe
       if (!tableError) {
-        const { data: streams } = await supabase
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { data: streams } = await (supabase as any)
           .from('live_streams')
           .select('id, title, status, user_id, peer_id, started_at, created_at')
           .order('created_at', { ascending: false })
@@ -50,7 +83,8 @@ export default function StreamDebug() {
       }
 
       // 3. Verificar streams ativas
-      const { data: activeStreams } = await supabase
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: activeStreams } = await (supabase as any)
         .from('live_streams')
         .select('*')
         .eq('status', 'live');
@@ -71,7 +105,8 @@ export default function StreamDebug() {
         diagnostics.permissions.authenticated = true;
         diagnostics.permissions.userId = user.id;
         
-        const { data: myStreams } = await supabase
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { data: myStreams } = await (supabase as any)
           .from('live_streams')
           .select('*')
           .eq('user_id', user.id)
@@ -87,7 +122,7 @@ export default function StreamDebug() {
 
       // 6. Verificar PeerJS availability
       try {
-        // @ts-ignore
+        // @ts-expect-error - PeerJS não tem tipos TypeScript
         if (typeof window.Peer !== 'undefined') {
           diagnostics.peerjs_loaded = true;
         } else {
@@ -103,9 +138,10 @@ export default function StreamDebug() {
         diagnostics.recommendations.push('✅ Tudo configurado corretamente!');
       }
 
-    } catch (error: any) {
-      diagnostics.error = error.message;
-      diagnostics.recommendations.push(`❌ Erro: ${error.message}`);
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido';
+      diagnostics.error = errorMessage;
+      diagnostics.recommendations.push(`❌ Erro: ${errorMessage}`);
     }
 
     setResults(diagnostics);
@@ -114,7 +150,8 @@ export default function StreamDebug() {
 
   useEffect(() => {
     runDiagnostics();
-  }, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // runDiagnostics é estável e não precisa estar nas dependências
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-zinc-900 to-black p-8">
@@ -173,7 +210,7 @@ export default function StreamDebug() {
                 <p className="text-zinc-400">Nenhuma stream ativa no momento</p>
               ) : (
                 <div className="space-y-3">
-                  {results.activeStreams.map((stream: any) => (
+                  {results.activeStreams?.map((stream) => (
                     <div key={stream.id} className="bg-zinc-900/50 border border-zinc-700 rounded-lg p-4">
                       <div className="flex justify-between items-start mb-2">
                         <div>
@@ -266,7 +303,7 @@ export default function StreamDebug() {
                       </tr>
                     </thead>
                     <tbody>
-                      {results.liveStreams.map((stream: any) => (
+                      {results.liveStreams.map((stream) => (
                         <tr key={stream.id} className="border-b border-zinc-800">
                           <td className="py-2 text-zinc-300">{stream.title}</td>
                           <td className="py-2">

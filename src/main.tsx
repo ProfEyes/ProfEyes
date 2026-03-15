@@ -1,6 +1,8 @@
 import React, { StrictMode } from "react";
 import { createRoot } from 'react-dom/client'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import type { SupabaseClient } from '@supabase/supabase-js';
+import type { Database } from '@/types/supabase';
 
 // Suprimir erros de HMR/stale-cache durante desenvolvimento
 if (import.meta.env.DEV) {
@@ -19,6 +21,7 @@ if (import.meta.env.DEV) {
 
 // 🔇 Suprimir avisos e logs de bibliotecas externas
 const originalWarn = console.warn;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 console.warn = (...args: any[]) => {
   const message = args[0]?.toString() || '';
   if (
@@ -36,6 +39,7 @@ console.warn = (...args: any[]) => {
 };
 
 const originalError = console.error;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 console.error = (...args: any[]) => {
   const message = args[0]?.toString() || '';
   if (
@@ -53,6 +57,7 @@ console.error = (...args: any[]) => {
 };
 
 const originalLog = console.log;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 console.log = (...args: any[]) => {
   const message = args[0]?.toString() || '';
   if (message.includes('Download the React DevTools')) {
@@ -240,6 +245,7 @@ const supabaseInstance = getSupabase();
 
 // Adicionar a instância do Supabase ao objeto window para facilitar depuração
 // e permitir acesso em outros módulos
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 (window as any).supabase = supabaseInstance;
 
 // Configurações do toast - Estilo Dark na parte inferior
@@ -377,7 +383,7 @@ createRoot(document.getElementById('root')!).render(
 import { signalNotificationService } from './services/signalNotifications';
 
 // Verificar se a API do Supabase está acessível
-supabaseInstance.auth.getSession().then(({ data, error }) => {
+(supabaseInstance as SupabaseClient<Database>).auth.getSession().then(({ data, error }) => {
   if (!error) {
     // Conexão estabelecida
     

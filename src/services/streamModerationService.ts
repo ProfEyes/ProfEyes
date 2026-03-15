@@ -1,4 +1,6 @@
 import { supabase } from '@/lib/supabase';
+import type { SupabaseClient } from '@supabase/supabase-js';
+import type { Database } from '@/types/supabase';
 
 export interface BlockedUser {
   id: string;
@@ -25,7 +27,8 @@ export const streamModerationService = {
    */
   async blockUser(streamerId: string, blockedUserId: string, reason?: string): Promise<{ success: boolean; error: string | null }> {
     try {
-      const { error } = await supabase
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { error } = await (supabase as any)
         .from('blocked_users')
         .insert({
           streamer_id: streamerId,
@@ -50,7 +53,8 @@ export const streamModerationService = {
    */
   async unblockUser(streamerId: string, blockedUserId: string): Promise<{ success: boolean; error: string | null }> {
     try {
-      const { error } = await supabase
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { error } = await (supabase as any)
         .from('blocked_users')
         .delete()
         .eq('streamer_id', streamerId)
@@ -69,11 +73,12 @@ export const streamModerationService = {
   },
 
   /**
-   * Verificar se um usuário está bloqueado
+   * Verificar se um usuário está bloqueado pelo streamer
    */
   async isUserBlocked(streamerId: string, userId: string): Promise<boolean> {
     try {
-      const { data, error } = await supabase
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data, error } = await (supabase as any)
         .from('blocked_users')
         .select('id')
         .eq('streamer_id', streamerId)
@@ -97,7 +102,8 @@ export const streamModerationService = {
    */
   async getBlockedUsers(streamerId: string): Promise<BlockedUser[]> {
     try {
-      const { data, error } = await supabase
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data, error } = await (supabase as any)
         .from('blocked_users')
         .select('*')
         .eq('streamer_id', streamerId)
@@ -120,7 +126,8 @@ export const streamModerationService = {
    */
   async getStreamSettings(streamId: string): Promise<StreamSettings | null> {
     try {
-      const { data, error } = await supabase
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data, error } = await (supabase as any)
         .from('stream_settings')
         .select('*')
         .eq('stream_id', streamId)
@@ -148,7 +155,8 @@ export const streamModerationService = {
 
       if (existing) {
         // Atualizar
-        const { error } = await supabase
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { error } = await (supabase as any)
           .from('stream_settings')
           .update({
             ...settings,
@@ -162,7 +170,8 @@ export const streamModerationService = {
         }
       } else {
         // Criar
-        const { error } = await supabase
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { error } = await (supabase as any)
           .from('stream_settings')
           .insert({
             stream_id: streamId,

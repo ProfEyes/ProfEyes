@@ -31,7 +31,7 @@ export const AuthProvider = React.memo<AuthProviderProps>(({ children }) => {
   const activityRecordedRef = useRef(false);
   
   // Buscar perfil e admin em background sem bloquear a UI
-  const fetchProfileInBackground = useCallback(async (user: any, session: any) => {
+  const fetchProfileInBackground = useCallback(async (user: User, session: Session) => {
     const supabase = getSupabase();
     
     let profile = null;
@@ -105,7 +105,7 @@ export const AuthProvider = React.memo<AuthProviderProps>(({ children }) => {
           const result = await Promise.race([
             sessionPromise,
             timeoutPromise
-          ]) as any;
+          ]) as { data: { session: Session | null } };
           session = result.data.session;
         } catch (timeoutError) {
           session = null;

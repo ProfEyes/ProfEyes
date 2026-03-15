@@ -235,18 +235,18 @@ export function validateLiveKitTokenAdvanced(token: string): {
 
       // Validar expiração
       const currentTime = Math.floor(Date.now() / 1000);
-      if (payload.exp <= currentTime) {
+      if ((payload.exp as number) <= currentTime) {
         errors.push('Token expirado');
       }
 
       // Validar issued at
-      if (payload.iat > currentTime + 300) { // 5 minutos de tolerância no futuro
+      if ((payload.iat as number) > currentTime + 300) { // 5 minutos de tolerância no futuro
         warnings.push('Token emitido no futuro (possível problema de sincronização de relógio)');
       }
 
       // Validar video grant
       if (payload.video) {
-        const video = payload.video;
+        const video = payload.video as { roomJoin?: boolean; room?: string; canPublish?: boolean; canSubscribe?: boolean };
         
         // roomJoin deve estar presente se há video grant
         if (video.roomJoin === undefined) {
@@ -339,18 +339,19 @@ export async function testLiveKitCredentials(): Promise<{
         tokenGenerated: true,
         validationPassed: true,
         issuer: payload.iss,
-        expiresIn: Math.round((payload.exp * 1000 - Date.now()) / 1000 / 60) + ' minutos',
+        expiresIn: Math.round(((payload.exp as number) * 1000 - Date.now()) / 1000 / 60) + ' minutos',
         warnings: validation.warnings
       }
     };
 
-  } catch (error: Record<string, unknown>) {
+  } catch (error: unknown) {
+    const err = error as { message?: string; stack?: string };
     return {
       success: false,
       message: 'Erro ao testar credenciais',
       details: {
-        error: error.message,
-        stack: error.stack
+        error: err.message,
+        stack: err.stack
       }
     };
   }
@@ -523,7 +524,7 @@ export class LiveKitManager {
    * Obtém todos os participantes remotos
    */
   getRemoteParticipants(): Map<string, RemoteParticipant> {
-    return this.room.participants;
+    return this.room.remoteParticipants;
   }
   
   /**

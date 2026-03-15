@@ -27,9 +27,9 @@ import type { UserData, ProfileData, ClickMetrics, AdminDashboardMetrics, Suppor
 const ONLINE_THRESHOLD_MS = 15 * 60 * 1000;
 
 function isUserOnline(profile: ProfileData | undefined, lastSignIn: string | null): boolean {
-  const lastActivity = profile?.last_login_at || lastSignIn;
-  if (!lastActivity) return false;
-  return Date.now() - new Date(lastActivity).getTime() < ONLINE_THRESHOLD_MS;
+  // Usar apenas lastSignIn do auth já que last_login_at não existe em user_profiles
+  if (!lastSignIn) return false;
+  return Date.now() - new Date(lastSignIn).getTime() < ONLINE_THRESHOLD_MS;
 }
 
 export default function Admin() {
@@ -431,6 +431,7 @@ export default function Admin() {
           </div>
           <button
             onClick={fetchUsers}
+            aria-label="Atualizar lista de membros"
             className="h-9 w-9 2xl:h-10 2xl:w-10 flex items-center justify-center rounded-lg text-white/20 hover:text-white/50 hover:bg-white/[0.03] transition-colors"
           >
             <RefreshCw className="h-3.5 w-3.5" />
@@ -504,6 +505,7 @@ export default function Admin() {
                         <div className="flex justify-end relative">
                           <button
                             onClick={() => setActionMenuId(actionMenuId === u.id ? null : u.id)}
+                            aria-label="Abrir menu de ações"
                             className="h-7 w-7 flex items-center justify-center rounded-md text-white/15 hover:text-white/40 hover:bg-white/[0.03] transition-colors"
                           >
                             <MoreHorizontal className="h-3.5 w-3.5" />
@@ -559,6 +561,7 @@ export default function Admin() {
               <button
                 disabled={currentPage === 1}
                 onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                aria-label="Página anterior"
                 className="h-7 w-7 flex items-center justify-center rounded-md text-white/20 hover:text-white/40 hover:bg-white/[0.03] disabled:opacity-20 disabled:pointer-events-none transition-colors"
               >
                 <ChevronLeft className="h-3.5 w-3.5" />
@@ -566,6 +569,7 @@ export default function Admin() {
               <button
                 disabled={currentPage === totalPages}
                 onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                aria-label="Próxima página"
                 className="h-7 w-7 flex items-center justify-center rounded-md text-white/20 hover:text-white/40 hover:bg-white/[0.03] disabled:opacity-20 disabled:pointer-events-none transition-colors"
               >
                 <ChevronRight className="h-3.5 w-3.5" />
@@ -628,6 +632,7 @@ export default function Admin() {
                       type="date"
                       value={customFrom}
                       onChange={e => setCustomFrom(e.target.value)}
+                      aria-label="Data inicial"
                       className="h-7 px-2 rounded-md bg-black/40 border border-white/[0.06] text-white/60 text-[11px] outline-none focus:border-white/[0.15] transition-colors [color-scheme:dark]"
                     />
                     <span className="text-white/20 text-[10px]">até</span>
@@ -635,6 +640,7 @@ export default function Admin() {
                       type="date"
                       value={customTo}
                       onChange={e => setCustomTo(e.target.value)}
+                      aria-label="Data final"
                       className="h-7 px-2 rounded-md bg-black/40 border border-white/[0.06] text-white/60 text-[11px] outline-none focus:border-white/[0.15] transition-colors [color-scheme:dark]"
                     />
                   </div>
@@ -838,12 +844,14 @@ export default function Admin() {
                               setCodeForm({ code: sc.code, link: sc.link, description: sc.description || '', special_message: sc.special_message || '', display_name: sc.display_name || '', broker_name: sc.broker_name || 'AVALON' });
                               setIsCodeDialogOpen(true);
                             }}
+                            aria-label="Editar código"
                             className="h-6 w-6 flex items-center justify-center rounded text-white/15 hover:text-white/40 hover:bg-white/[0.03] transition-colors"
                           >
                             <Pencil className="h-3 w-3" />
                           </button>
                           <button
                             onClick={() => handleDeleteCode(sc.id)}
+                            aria-label="Excluir código"
                             className="h-6 w-6 flex items-center justify-center rounded text-white/10 hover:text-red-400/50 hover:bg-white/[0.02] transition-colors"
                           >
                             <Trash2 className="h-3 w-3" />
@@ -1079,6 +1087,7 @@ export default function Admin() {
                 <select
                   value={codeForm.broker_name}
                   onChange={e => setCodeForm(p => ({ ...p, broker_name: e.target.value }))}
+                  aria-label="Selecionar corretora"
                   className="w-full bg-transparent text-white/80 text-[13px] border-0 border-b border-white/[0.05] focus:border-white/[0.12] outline-none pb-2.5 transition-colors cursor-pointer"
                 >
                   <option value="AVALON" className="bg-zinc-900 text-white">AVALON</option>

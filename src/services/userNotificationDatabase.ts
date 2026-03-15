@@ -1,5 +1,7 @@
 import { supabase } from '@/lib/supabase';
 import type { Notification } from '@/contexts/NotificationContext';
+import type { SupabaseClient } from '@supabase/supabase-js';
+import type { Database } from '@/types/supabase';
 
 /**
  * Serviço para gerenciar notificações dos usuários no banco de dados Supabase
@@ -11,7 +13,7 @@ export class UserNotificationDatabaseService {
   async saveNotification(notification: Notification): Promise<{ success: boolean; error?: Error }> {
     try {
       // Obter usuário atual
-      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      const { data: { user }, error: userError } = await (supabase as SupabaseClient<Database>).auth.getUser();
       
       if (userError || !user) {
         console.warn('Usuário não autenticado, não salvando notificação no banco');
@@ -33,7 +35,8 @@ export class UserNotificationDatabaseService {
       };
 
       // Inserir no banco de dados
-      const { error } = await supabase
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { error } = await (supabase as any)
         .from('user_notifications')
         .insert(notificationData);
 
@@ -58,7 +61,7 @@ export class UserNotificationDatabaseService {
   async saveNotificationWithId(notification: Notification): Promise<{ success: boolean; id?: string; error?: Error }> {
     try {
       // Obter usuário atual
-      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      const { data: { user }, error: userError } = await (supabase as SupabaseClient<Database>).auth.getUser();
       
       if (userError || !user) {
         console.warn('Usuário não autenticado, não salvando notificação no banco');
@@ -80,7 +83,8 @@ export class UserNotificationDatabaseService {
       };
 
       // ✅ Inserir e selecionar o ID retornado
-      const { data, error } = await supabase
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data, error } = await (supabase as any)
         .from('user_notifications')
         .insert(notificationData)
         .select('id')
@@ -111,7 +115,7 @@ export class UserNotificationDatabaseService {
   ): Promise<{ notifications: Notification[]; error?: Error }> {
     try {
       // Obter usuário atual
-      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      const { data: { user }, error: userError } = await (supabase as SupabaseClient<Database>).auth.getUser();
       
       if (userError || !user) {
         console.warn('Usuário não autenticado, não carregando notificações');
@@ -119,7 +123,8 @@ export class UserNotificationDatabaseService {
       }
 
       // Buscar notificações usando a função do banco
-      const { data, error } = await supabase.rpc('get_user_notifications', {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data, error } = await (supabase as any).rpc('get_user_notifications', {
         p_limit: limit,
         p_offset: offset,
         p_only_unread: onlyUnread
@@ -160,7 +165,8 @@ export class UserNotificationDatabaseService {
    */
   async markAsRead(notificationId: string): Promise<{ success: boolean; error?: Error }> {
     try {
-      const { error } = await supabase.rpc('mark_notification_as_read', {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { error } = await (supabase as any).rpc('mark_notification_as_read', {
         notification_id: notificationId
       });
 
@@ -184,7 +190,8 @@ export class UserNotificationDatabaseService {
    */
   async markAllAsRead(): Promise<{ success: boolean; error?: Error }> {
     try {
-      const { error } = await supabase.rpc('mark_all_notifications_as_read');
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { error } = await (supabase as any).rpc('mark_all_notifications_as_read');
 
       if (error) {
         console.error('Erro ao marcar todas as notificações como lidas:', error);
@@ -207,13 +214,14 @@ export class UserNotificationDatabaseService {
   async deleteNotification(notificationId: string): Promise<{ success: boolean; error?: Error }> {
     try {
       // Obter usuário atual
-      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      const { data: { user }, error: userError } = await (supabase as SupabaseClient<Database>).auth.getUser();
       
       if (userError || !user) {
         return { success: false, error: new Error('Usuário não autenticado') };
       }
 
-      const { error } = await supabase
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { error } = await (supabase as any)
         .from('user_notifications')
         .delete()
         .eq('id', notificationId)
@@ -221,7 +229,8 @@ export class UserNotificationDatabaseService {
 
       if (error) {
         console.error('Erro ao deletar notificação:', error);
-        return { success: false, error: new Error(error.message) };
+        const errorMsg = (error as { message?: string })?.message || String(error);
+        return { success: false, error: new Error(errorMsg) };
       }
 
       return { success: true };
@@ -240,13 +249,14 @@ export class UserNotificationDatabaseService {
   async deleteAllNotifications(): Promise<{ success: boolean; error?: Error }> {
     try {
       // Obter usuário atual
-      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      const { data: { user }, error: userError } = await (supabase as SupabaseClient<Database>).auth.getUser();
       
       if (userError || !user) {
         return { success: false, error: new Error('Usuário não autenticado') };
       }
 
-      const { error } = await supabase
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { error } = await (supabase as any)
         .from('user_notifications')
         .delete()
         .eq('user_id', user.id);
@@ -271,7 +281,8 @@ export class UserNotificationDatabaseService {
    */
   async getUnreadCount(): Promise<{ count: number; error?: Error }> {
     try {
-      const { data, error } = await supabase.rpc('get_unread_notifications_count');
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data, error } = await (supabase as any).rpc('get_unread_notifications_count');
 
       if (error) {
         console.error('Erro ao obter contagem de não lidas:', error);
@@ -295,7 +306,7 @@ export class UserNotificationDatabaseService {
   async syncLocalStorageToDatabase(): Promise<{ success: boolean; syncedCount: number; error?: Error }> {
     try {
       // Obter usuário atual
-      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      const { data: { user }, error: userError } = await (supabase as SupabaseClient<Database>).auth.getUser();
       
       if (userError || !user) {
         console.warn('Usuário não autenticado, não sincronizando');

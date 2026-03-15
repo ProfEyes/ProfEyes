@@ -75,7 +75,8 @@ export async function getDailySignalsFromDB(
     console.log(`📡 Buscando sinais do banco de dados para ${dateStr}...`);
     
     // Chamar função RPC do Supabase
-    const { data, error } = await (supabase as SupabaseClient<Database>).rpc('get_daily_signals', {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data, error } = await (supabase as any).rpc('get_daily_signals', {
       target_date: dateStr,
       limit_count: limit,
       offset_count: offset
@@ -86,15 +87,15 @@ export async function getDailySignalsFromDB(
       throw error;
     }
     
-    if (!data || data.length === 0) {
+    if (!data || (data as unknown[]).length === 0) {
       console.warn('⚠️ Nenhum sinal retornado do banco de dados');
       return [];
     }
     
-    console.log(`✅ ${data.length} sinais recebidos do banco de dados`);
+    console.log(`✅ ${(data as unknown[]).length} sinais recebidos do banco de dados`);
     
     // Converter para formato usado no frontend
-    const formattedSignals: DailySignalFormatted[] = data.map((signal: DailySignalFromDB) => ({
+    const formattedSignals: DailySignalFormatted[] = (data as DailySignalFromDB[]).map((signal: DailySignalFromDB) => ({
       id: signal.id,
       symbol: signal.symbol,
       exchange: signal.exchange,
@@ -163,7 +164,8 @@ export async function regenerateDailySignals(date: Date = new Date()): Promise<n
     
     console.log(`🔄 Regenerando sinais para ${dateStr}...`);
     
-    const { data, error } = await (supabase as SupabaseClient<Database>).rpc('generate_daily_signals', {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data, error } = await (supabase as any).rpc('generate_daily_signals', {
       target_date: dateStr
     });
     

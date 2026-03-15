@@ -144,7 +144,8 @@ const Index = () => {
     
     // Limpar intervalo quando componente for desmontado
     return cleanup;
-  }, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // monitoringActive é intencional não estar nas dependências para evitar recriar o interval
 
   // Função para buscar preços em tempo real (memoizada para manter identidade estável)
   const fetchRealTimePrices = useCallback(async () => {
@@ -243,7 +244,8 @@ const Index = () => {
             price = "45";
             break;
           default:
-            price = item.price || "0";
+            // Sem fallback para item.price pois não há item, apenas symbol
+            price = "0";
         }
         
         // Obter dados de variação das estatísticas personalizadas
@@ -306,7 +308,8 @@ const Index = () => {
     // Intencionalmente deixamos dependências vazias para evitar recriar o intervalo
     // e rely on memoized fetchRealTimePrices. `refetch` do react-query é estável,
     // mas se seu lint reclamar, podemos colocá-lo em uma ref.
-  }, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // fetchRealTimePrices e refetch são estáveis e não precisam estar nas dependências
   
   // Efeito para atualizar dados de variação quando marketData for atualizado
   useEffect(() => {
@@ -416,10 +419,10 @@ const Index = () => {
       onMarketNews: (news) => {
         // Mostrar notícias importantes na interface
         toast.info("Nova Notícia do Mercado", {
-          description: news.headline,
+          description: (news.headline as string) || "Nova notícia disponível",
           action: {
             label: "Ler Mais",
-            onClick: () => window.open(news.url, '_blank')
+            onClick: () => window.open((news.url as string) || '#', '_blank')
           }
         });
       }

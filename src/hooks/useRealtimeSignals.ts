@@ -192,11 +192,7 @@ export function useRealtimeSignals(
   }, []);
 
   const forceRotation = useCallback(async () => {
-    try {
-      await realtimeSignalsService.forceRotation();
-    } catch (err) {
-      throw err;
-    }
+    await realtimeSignalsService.forceRotation();
   }, []);
 
   const reinitialize = useCallback(async () => {

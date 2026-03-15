@@ -14,7 +14,8 @@ export const addedViewersService = {
    */
   async getAddedViewers(streamId: string): Promise<number> {
     try {
-      const { data, error } = await supabase
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data, error } = await (supabase as any)
         .from('stream_added_viewers')
         .select('added_count')
         .eq('stream_id', streamId)
@@ -41,7 +42,8 @@ export const addedViewersService = {
       const validCount = Math.max(0, Math.floor(count));
 
       // Verificar se já existe registro
-      const { data: existing } = await supabase
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: existing } = await (supabase as any)
         .from('stream_added_viewers')
         .select('id')
         .eq('stream_id', streamId)
@@ -49,7 +51,8 @@ export const addedViewersService = {
 
       if (existing) {
         // Atualizar
-        const { error } = await supabase
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { error } = await (supabase as any)
           .from('stream_added_viewers')
           .update({
             added_count: validCount,
@@ -63,7 +66,8 @@ export const addedViewersService = {
         }
       } else {
         // Inserir
-        const { error } = await supabase
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { error } = await (supabase as any)
           .from('stream_added_viewers')
           .insert({
             stream_id: streamId,
@@ -88,7 +92,8 @@ export const addedViewersService = {
    */
   async removeAddedViewers(streamId: string): Promise<{ success: boolean; error: string | null }> {
     try {
-      const { error } = await supabase
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { error } = await (supabase as any)
         .from('stream_added_viewers')
         .delete()
         .eq('stream_id', streamId);

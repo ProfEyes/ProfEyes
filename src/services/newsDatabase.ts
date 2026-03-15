@@ -24,15 +24,33 @@ export interface DatabaseNews {
   related_symbols: string[];
 }
 
+export interface ConvertedNews {
+  id: string;
+  title: string;
+  headline: string;
+  description: string;
+  summary: string;
+  content: string;
+  source: string;
+  url: string;
+  publishedAt: number;
+  datetime: number;
+  imageUrl: string;
+  image: string;
+  category: string;
+  relatedSymbols: string[];
+}
+
 /**
  * Busca notícias do banco de dados
  */
-export const fetchNewsFromDatabase = async (limit: number = 20): Promise<any[]> => {
+export const fetchNewsFromDatabase = async (limit: number = 20): Promise<ConvertedNews[]> => {
   try {
     // Buscando do banco (silenciado)
 
     // Chamar função RPC do Supabase
-    const { data, error } = await supabase
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data, error } = await (supabase as any)
       .rpc('get_latest_market_news', { news_limit: limit });
 
     if (error) {
@@ -77,11 +95,12 @@ export const fetchNewsFromDatabase = async (limit: number = 20): Promise<any[]> 
 };
 
 /**
- * Verifica se precisa atualizar as notícias
+ * Verifica se precisa atualizar as notícias do banco de dados
  */
 export const shouldUpdateNews = async (): Promise<boolean> => {
   try {
-    const { data, error } = await supabase.rpc('should_update_news');
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data, error } = await (supabase as any).rpc('should_update_news');
 
     if (error) {
       console.error('❌ [News DB] Erro ao verificar atualização:', error);
@@ -115,7 +134,7 @@ export const triggerNewsUpdate = async (): Promise<void> => {
 /**
  * Busca notícias com atualização automática se necessário
  */
-export const fetchNewsWithAutoUpdate = async (limit: number = 20): Promise<any[]> => {
+export const fetchNewsWithAutoUpdate = async (limit: number = 20): Promise<ConvertedNews[]> => {
   try {
     // Verificar se precisa atualizar
     const needsUpdate = await shouldUpdateNews();

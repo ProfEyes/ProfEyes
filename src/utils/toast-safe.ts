@@ -8,7 +8,7 @@
  * @param value - Valor a ser convertido para string
  * @returns Uma string segura para renderização
  */
-export function toastSafeString(value: Record<string, unknown>): string {
+export function toastSafeString(value: unknown): string {
   if (value === null || value === undefined) {
     return '';
   }
@@ -24,8 +24,9 @@ export function toastSafeString(value: Record<string, unknown>): string {
   // Se for um objeto, converter para JSON string
   if (typeof value === 'object') {
     // Se for um objeto com title e description, extrair estas propriedades
-    if (value.title && value.description) {
-      return `${value.title}: ${value.description}`;
+    const obj = value as Record<string, unknown>;
+    if (obj.title && obj.description) {
+      return `${obj.title}: ${obj.description}`;
     }
     
     try {
@@ -40,10 +41,10 @@ export function toastSafeString(value: Record<string, unknown>): string {
 
 /**
  * Wrapper seguro para a função toast que garante que todos os valores são strings
- * @param title - Título do toast
- * @param options - Opções do toast
+ * @param obj - Objeto a ser parseado
+ * @returns Objeto com valores seguros
  */
-export function safeParse(obj: Record<string, unknown>): Record<string, unknown> {
+export function safeParse(obj: unknown): unknown {
   if (obj === null || obj === undefined) {
     return obj;
   }
@@ -56,10 +57,11 @@ export function safeParse(obj: Record<string, unknown>): Record<string, unknown>
     }
     
     // Tratar objetos
-    const result: Record<string, any> = {};
-    for (const key in obj) {
-      if (Object.prototype.hasOwnProperty.call(obj, key)) {
-        result[key] = safeParse(obj[key]);
+    const result: Record<string, unknown> = {};
+    const objRecord = obj as Record<string, unknown>;
+    for (const key in objRecord) {
+      if (Object.prototype.hasOwnProperty.call(objRecord, key)) {
+        result[key] = safeParse(objRecord[key]);
       }
     }
     return result;

@@ -12,15 +12,25 @@ interface BlockedUsersManagerProps {
   streamId: string;
 }
 
+interface BlockedUser {
+  id: string;
+  blocked_user_id: string;
+  userName?: string;
+  avatar?: string;
+  reason?: string;
+  blocked_at: string;
+}
+
 export function BlockedUsersManager({ streamId }: BlockedUsersManagerProps) {
   const { user } = useAuth();
-  const [blockedUsers, setBlockedUsers] = useState<any[]>([]);
+  const [blockedUsers, setBlockedUsers] = useState<BlockedUser[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [unblockingUser, setUnblockingUser] = useState<string | null>(null);
 
   // Carregar lista de usuários bloqueados
   useEffect(() => {
     loadBlockedUsers();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [streamId, user]);
 
   const loadBlockedUsers = async () => {

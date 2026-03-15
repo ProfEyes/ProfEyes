@@ -269,7 +269,7 @@ const News = () => {
       const data = await response.json();
       
       // Google Translate retorna array com estrutura: [[[texto_traduzido, texto_original, ...]]]
-      const translated = data[0]?.map((item: any) => item[0]).join('') || text;
+      const translated = data[0]?.map((item: [string, string]) => item[0]).join('') || text;
       
       // ✅ Salvar no cache
       translationCache.current[cacheKey] = translated;
@@ -291,7 +291,7 @@ const News = () => {
   const NEWS_CATEGORIES = getNewsCategories(t);
   
   // Função para verificar se uma notícia pertence a uma categoria
-  const newsMatchesCategory = (newsItem: MarketNews, categoryId: string): boolean => {
+  const newsMatchesCategory = useCallback((newsItem: MarketNews, categoryId: string): boolean => {
     if (categoryId === 'all') return true;
     
     const category = NEWS_CATEGORIES.find(cat => cat.id === categoryId);
@@ -356,7 +356,7 @@ const News = () => {
     // Log para debug (silenciado)
     
     return matches && !containsExcludeKeyword;
-  };
+  }, [NEWS_CATEGORIES]);
   
   // Filtrar notícias baseado na categoria selecionada
   const filteredNews = useMemo(() => {
@@ -366,7 +366,7 @@ const News = () => {
     // Log para debug (silenciado)
     
     return filtered;
-  }, [newsWithImages, selectedCategory, NEWS_CATEGORIES, newsMatchesCategory]);
+  }, [newsWithImages, selectedCategory, newsMatchesCategory]);
   
   // Buscar notícias com React Query - Configuração idêntica à Dashboard
   const { data: news, isLoading, error, isFetching } = useQuery({
@@ -489,7 +489,7 @@ const News = () => {
   }, []);
 
   // Função para classificar automaticamente uma notícia
-  const classifyNews = (newsItem: MarketNews): string => {
+  const classifyNews = useCallback((newsItem: MarketNews): string => {
     const title = (newsItem.title || '').toLowerCase();
     const summary = (newsItem.summary || '').toLowerCase();
     const content = (newsItem.content || '').toLowerCase();
@@ -537,7 +537,7 @@ const News = () => {
     
     // Se não encontrou categoria específica, classificar como 'global'
     return 'global';
-  };
+  }, [NEWS_CATEGORIES]);
 
   // Efeito para processar as notícias recebidas da API Finnhub
   useEffect(() => {
@@ -603,7 +603,7 @@ const News = () => {
       setNewsWithImages(newsWithImagesOnly);
       setIsLoadingImages(false);
     }
-  }, [news]);
+  }, [news, classifyNews]);
 
   // Garantir que as notícias tenham formato adequado (removido - usando filteredNews)
 
@@ -816,7 +816,7 @@ const News = () => {
                         alt={item.headline || item.title || "Notícia"}
                           className="w-full h-full object-cover"
                           loading="lazy"
-                          fetchpriority="high"
+                          fetchPriority="high"
                           decoding="async"
                         onError={(e) => {
                             // Se a imagem falhar, esconder o elemento

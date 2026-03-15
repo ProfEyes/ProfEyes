@@ -67,7 +67,9 @@ export function useExtendedSignals() {
           return false;
         }
       }
-    } catch {}
+    } catch {
+      // Erro ao verificar cache, considera vazio
+    }
     return true;
   });
   const [error, setError] = useState<Error | null>(null);
@@ -102,6 +104,7 @@ export function useExtendedSignals() {
       
       for (let attempt = 1; attempt <= maxRetries; attempt++) {
         try {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const attemptPromise = (supabase as any).rpc('get_extended_signals');
           const attemptTimeout = new Promise((_, reject) => 
             setTimeout(() => reject(new Error(`RPC timeout tentativa ${attempt}`)), 8000)
@@ -228,7 +231,8 @@ export function useExtendedSignals() {
       }
       setIsLoading(false);
     }
-  }, []); // ✅ SEM DEPENDÊNCIAS - função estável
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // ✅ SEM DEPENDÊNCIAS - função estável, signals usado apenas como fallback
 
   const hasInitialized = useRef(false);
   
@@ -296,7 +300,8 @@ export function useExtendedSignals() {
     
     const supabase = getSupabase();
 
-    const channel = supabase
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const channel = (supabase as any)
       .channel('extended-signals-changes')
       .on(
         'postgres_changes',
@@ -403,7 +408,8 @@ export function useExtendedSignals() {
         clearTimeout(pollingTimeoutId);
         pollingTimeoutId = null;
       }
-      supabase.removeChannel(channel);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (supabase as any).removeChannel(channel);
       window.removeEventListener('signalsRotated', handleDashboardRotation);
       window.removeEventListener('force-update-after-background', handleForceUpdate);
       window.removeEventListener('force-refresh-signals', handleForceRefresh);

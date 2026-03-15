@@ -14,7 +14,8 @@ import { supabase, saveUserDisplayName } from '@/lib/supabase';
 export const migrateUserNamesToDatabase = async (): Promise<void> => {
   try {
     // Verificar se o usuário está autenticado
-    const { data } = await supabase.auth.getUser();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data } = await (supabase as any).auth.getUser();
     
     if (!data?.user?.id) {
       console.log('Usuário não autenticado, migração de nome ignorada');
@@ -33,7 +34,8 @@ export const migrateUserNamesToDatabase = async (): Promise<void> => {
     // Verificando migração de nome
     
     // Verificar se o nome já existe no banco de dados
-    const { data: profileData } = await supabase
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: profileData } = await (supabase as any)
       .from('user_profiles')
       .select('display_name')
       .eq('user_id', userId)

@@ -5,7 +5,7 @@ export interface TokenRequest {
   userId: string;
   userName: string;
   userType?: 'streamer' | 'viewer' | 'participant';
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 }
 
 export interface TokenResponse {
@@ -91,9 +91,10 @@ export async function getLiveKitToken(request: TokenRequest): Promise<TokenRespo
 
     return response;
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('❌ Erro ao gerar token:', error);
-    throw new Error(`Falha na geração do token: ${error.message}`);
+    const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido';
+    throw new Error(`Falha na geração do token: ${errorMessage}`);
   }
 }
 

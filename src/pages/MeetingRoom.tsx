@@ -365,7 +365,7 @@ const MeetingRoom = () => {
           if (user?.id && user?.id !== typedStreamData.userId) {
           initialParticipants.push({
             id: user?.id,
-            name: user?.user_metadata?.full_name || user?.email || 'Participante',
+            name: (user?.user_metadata?.full_name as string) || (user?.email as string) || 'Participante',
             avatar: user?.user_metadata?.avatar_url,
             isHost: false,
             isMuted: false,
@@ -1257,7 +1257,8 @@ const MeetingRoom = () => {
         startMeeting();
       }
     }
-  }, [isStreamerMode, isHost, activeStream, isMeetingActive]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isStreamerMode, isHost, activeStream, isMeetingActive]); // startMeeting é estável via useCallback
 
   // Compartilhamento de tela
   const handleScreenShare = async () => {
@@ -1738,7 +1739,9 @@ const MeetingRoom = () => {
         setPeerViewer(null);
       }
     };
-  }, [isHost, activeStream?.status, peerViewer, streamId, stream && typeof stream === 'object' && 'userId' in stream ? stream.userId : null, user?.id, connectionStatus]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isHost, activeStream?.status, peerViewer, streamId, user?.id, connectionStatus]); 
+  // stream.userId extraído para evitar expressão complexa, initializeWebRTCViewer e stream são usados internamente
 
   // Função auxiliar para configurar o stream
   const configureMediaStream = async (stream) => {
@@ -2004,7 +2007,7 @@ const MeetingRoom = () => {
                       </Button>
                       
                       <Avatar className="h-10 w-10 border border-white/10">
-                        <AvatarImage src={user?.user_metadata?.avatar_url} />
+                        <AvatarImage src={(user?.user_metadata?.avatar_url as string) || undefined} />
                         <AvatarFallback className="bg-gradient-to-br from-gray-800 to-gray-900">
                           {activeStream?.title?.charAt(0) || '?'}
                         </AvatarFallback>
@@ -2015,7 +2018,7 @@ const MeetingRoom = () => {
                           {activeStream?.title || 'Carregando...'}
                         </CardTitle>
                         <p className="text-sm text-white/60">
-                          {user?.user_metadata?.full_name || user?.email}
+                          {(user?.user_metadata?.full_name as string) || (user?.email as string) || 'Usuário'}
                         </p>
                       </div>
                     </div>

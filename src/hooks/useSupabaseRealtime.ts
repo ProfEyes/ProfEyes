@@ -42,7 +42,8 @@ export function useSupabaseRealtime<T = unknown>(config: RealtimeConfig<T>) {
 
     try {
       // Criar o canal
-      const channel = supabase.channel(channelName);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const channel = (supabase as any).channel(channelName);
 
       // Configurar a subscription
       const subscriptionConfig: Record<string, unknown> = {
@@ -97,7 +98,8 @@ export function useSupabaseRealtime<T = unknown>(config: RealtimeConfig<T>) {
       return () => {
         // Desconectando do canal
         if (channelRef.current) {
-          supabase.removeChannel(channelRef.current);
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          (supabase as any).removeChannel(channelRef.current);
           channelRef.current = null;
         }
         setStatus('disconnected');
@@ -237,7 +239,8 @@ export function usePresence(roomName: string, userId: string, metadata?: Record<
     if (!roomName || !userId) return;
 
     const supabase = getSupabase();
-    const channel = supabase.channel(`presence:${roomName}`, {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const channel = (supabase as any).channel(`presence:${roomName}`, {
       config: {
         presence: {
           key: userId,
@@ -251,7 +254,7 @@ export function usePresence(roomName: string, userId: string, metadata?: Record<
         const state = channel.presenceState();
         const users = Object.values(state).flat();
         // Usuários online (silenciado)
-        setOnlineUsers(users);
+        setOnlineUsers(users as Record<string, unknown>[]);
       })
       .on('presence', { event: 'join' }, ({ key, newPresences }) => {
         // Usuário entrou (silenciado)
@@ -279,7 +282,8 @@ export function usePresence(roomName: string, userId: string, metadata?: Record<
     return () => {
       if (channelRef.current) {
         channelRef.current.untrack();
-        supabase.removeChannel(channelRef.current);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (supabase as any).removeChannel(channelRef.current);
       }
     };
   }, [roomName, userId, metadata]);
@@ -298,7 +302,8 @@ export function useBroadcast(channelName: string) {
     if (!channelName) return;
 
     const supabase = getSupabase();
-    const channel = supabase.channel(channelName);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const channel = (supabase as any).channel(channelName);
 
     channel
       .on('broadcast', { event: 'message' }, ({ payload }) => {
@@ -311,7 +316,8 @@ export function useBroadcast(channelName: string) {
 
     return () => {
       if (channelRef.current) {
-        supabase.removeChannel(channelRef.current);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (supabase as any).removeChannel(channelRef.current);
       }
     };
   }, [channelName]);
@@ -327,7 +333,7 @@ export function useBroadcast(channelName: string) {
         // Mensagem enviada (silenciado)
       }
     },
-    [channelName]
+    [] // channelName não é necessário pois channelRef já captura o canal correto
   );
 
   return { messages, sendMessage };

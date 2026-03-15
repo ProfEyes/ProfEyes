@@ -314,6 +314,7 @@ export async function getHistoricalKlines(
   symbol: string,
   interval: '1m' | '3m' | '5m' | '15m' | '30m' | '1h' | '2h' | '4h' | '6h' | '8h' | '12h' | '1d' | '3d' | '1w' | '1M',
   limit: number = 500
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 ): Promise<any[]> {
   try {
     const params: Record<string, string> = {
@@ -322,6 +323,7 @@ export async function getHistoricalKlines(
       limit: limit.toString()
     };
     
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return await binancePublicCall<any[]>('/api/v3/klines', params);
   } catch (error) {
     console.error(`Erro ao obter klines para ${symbol}:`, error);
@@ -345,6 +347,7 @@ export async function getMarketDepth(symbol: string, limit: number = 100): Promi
 }
 
 // Obter trades recentes
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function getRecentTrades(symbol: string, limit: number = 500): Promise<any[]> {
   try {
     const params: Record<string, string> = {
@@ -362,6 +365,7 @@ export async function getRecentTrades(symbol: string, limit: number = 500): Prom
 // ===== FUNÇÕES AUTENTICADAS (Requerem API Key e Secret) =====
 
 // Obter informações da conta
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function getAccountInfo(): Promise<any> {
   try {
     return await binanceAuthenticatedCall('/api/v3/account', {}, 'GET');
@@ -372,8 +376,10 @@ export async function getAccountInfo(): Promise<any> {
 }
 
 // Obter histórico de ordens
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function getOrderHistory(symbol: string): Promise<any[]> {
   try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return await binanceAuthenticatedCall<any[]>('/api/v3/allOrders', { symbol }, 'GET');
   } catch (error) {
     console.error(`Erro ao obter histórico de ordens para ${symbol}:`, error);
@@ -389,6 +395,7 @@ export async function createOrder(
   quantity: string,
   price?: string,
   timeInForce?: 'GTC' | 'IOC' | 'FOK'
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 ): Promise<any> {
   try {
     const params: Record<string, string> = {
@@ -406,6 +413,7 @@ export async function createOrder(
       params.timeInForce = timeInForce || 'GTC';
     }
     
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return await binanceAuthenticatedCall<any>('/api/v3/order', params, 'POST');
   } catch (error) {
     console.error(`Erro ao criar ordem para ${symbol}:`, error);
@@ -507,7 +515,7 @@ export async function getBinanceHistoricalData(
     const formattedSymbol = symbol.includes('USDT') ? symbol : `${symbol}USDT`;
     
     // Determinar se o parâmetro é um limite ou número de dias
-    let params: Record<string, string> = {
+    const params: Record<string, string> = {
       symbol: formattedSymbol,
       interval
     };
@@ -556,6 +564,7 @@ export async function getBinanceHistoricalData(
 // Função para obter informações da conta (autenticada)
 export async function getBinanceAccountInfo() {
   try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return await binanceAuthenticatedCall<any>('/api/v3/account', {}, 'GET');
   } catch (error) {
     console.error('Erro ao buscar informações da conta:', error);
@@ -566,6 +575,7 @@ export async function getBinanceAccountInfo() {
 // Função para obter histórico de trades (autenticada)
 export async function getBinanceMyTrades(symbol: string) {
   try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return await binanceAuthenticatedCall<any>('/api/v3/myTrades', { symbol }, 'GET');
   } catch (error) {
     console.error(`Erro ao buscar trades para ${symbol}:`, error);
@@ -576,6 +586,7 @@ export async function getBinanceMyTrades(symbol: string) {
 // Função para obter ordens abertas (autenticada)
 export async function getBinanceOpenOrders() {
   try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return await binanceAuthenticatedCall<any>('/api/v3/openOrders', {}, 'GET');
   } catch (error) {
     console.error('Erro ao buscar ordens abertas:', error);
@@ -600,6 +611,7 @@ export async function getBinanceOrderBook(symbol: string, limit: number = 100) {
 // Função para obter todas as moedas disponíveis e suas informações
 export async function getBinanceAllCoins() {
   try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return await binanceAuthenticatedCall<any>('/sapi/v1/capital/config/getall', {}, 'GET');
   } catch (error) {
     console.error('Erro ao buscar todas as moedas:', error);

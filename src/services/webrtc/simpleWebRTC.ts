@@ -114,10 +114,12 @@ export class SimplePublisher {
     const channelName = `stream:${this.streamId}`;
     console.log('📡 [SimplePublisher] Configurando canal Realtime:', channelName);
 
-    this.realtimeChannel = supabase.channel(channelName);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    this.realtimeChannel = (supabase as any).channel(channelName);
 
     // Escutar ofertas de viewers (viewers enviam offer para o publisher)
     this.realtimeChannel
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       .on('broadcast', { event: 'viewer-offer' }, async ({ payload }: any) => {
         console.log('📞 [SimplePublisher] Recebendo offer de viewer:', {
           from: payload.from,
@@ -127,6 +129,7 @@ export class SimplePublisher {
         });
         await this.handleViewerOffer(payload.from, payload.offer, payload.iceCandidates || []);
       })
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       .on('broadcast', { event: 'renegotiate-answer' }, async ({ payload }: any) => {
         console.log('📥 [SimplePublisher] Evento renegotiate-answer recebido:', {
           from: payload.from,
@@ -145,7 +148,8 @@ export class SimplePublisher {
   private async registerStream(): Promise<void> {
     console.log('💾 [SimplePublisher] Registrando stream no banco...');
 
-    const { error } = await supabase
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error } = await (supabase as any)
       .from('live_streams')
       .update({
         status: 'live',
@@ -435,7 +439,8 @@ export class SimplePublisher {
 
     // Desinscrever do canal Realtime
     if (this.realtimeChannel) {
-      await supabase.removeChannel(this.realtimeChannel);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (supabase as any).removeChannel(this.realtimeChannel);
       this.realtimeChannel = null;
     }
 
@@ -446,7 +451,8 @@ export class SimplePublisher {
     }
 
     // Atualizar status no banco
-    await supabase
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await (supabase as any)
       .from('live_streams')
       .update({
         status: 'ended',
@@ -530,10 +536,12 @@ export class SimpleViewer {
     const channelName = `stream:${this.streamId}`;
     console.log('📡 [SimpleViewer] Configurando canal Realtime:', channelName);
 
-    this.realtimeChannel = supabase.channel(channelName);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    this.realtimeChannel = (supabase as any).channel(channelName);
 
     // Escutar answer do publisher
     this.realtimeChannel
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       .on('broadcast', { event: 'publisher-answer' }, async ({ payload }: any) => {
         console.log('📥 [SimpleViewer] Mensagem recebida:', { to: payload.to, myId: this.userId, match: payload.to === this.userId });
         if (payload.to === this.userId) {
@@ -541,12 +549,14 @@ export class SimpleViewer {
           await this.handlePublisherAnswer(payload.answer);
         }
       })
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       .on('broadcast', { event: 'publisher-ice' }, async ({ payload }: any) => {
         if (payload.to === this.userId) {
           console.log('🧊 [SimpleViewer] Recebendo ICE candidate do publisher');
           await this.handlePublisherIceCandidate(payload.candidate);
         }
       })
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       .on('broadcast', { event: 'renegotiate-offer' }, async ({ payload }: any) => {
         console.log('📥 [SimpleViewer] Evento renegotiate-offer recebido:', {
           to: payload.to,
@@ -847,7 +857,8 @@ export class SimpleViewer {
 
     // Desinscrever do canal Realtime
     if (this.realtimeChannel) {
-      await supabase.removeChannel(this.realtimeChannel);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (supabase as any).removeChannel(this.realtimeChannel);
       this.realtimeChannel = null;
     }
 

@@ -163,7 +163,7 @@ export default function AuthCallback() {
                 // Tentar inserção direta como fallback
                 console.log("Tentando inserção direta como fallback...");
                 
-                const profileData: Record<string, unknown> = {
+                const profileData: Database['public']['Tables']['user_profiles']['Insert'] = {
                   user_id: userId,
                   email: userEmail.trim().toLowerCase(),
                   created_at: new Date().toISOString(),
@@ -173,7 +173,6 @@ export default function AuthCallback() {
                 
                 // Adicionar dados extras se disponíveis
                 if (displayName) profileData.display_name = displayName;
-                if (birthdate) profileData.birthdate = birthdate;
                 
                 // Inserir na tabela user_profiles
                 const { error: upsertError } = await (supabase as SupabaseClient<Database>).from('user_profiles')

@@ -9,7 +9,7 @@ let _supabaseNoPKCEInstance: SupabaseClient<Database> | null = null;
 let _supabaseAdminInstance: SupabaseClient<Database> | null = null;
 
 // Flag para garantir que as instâncias sejam criadas apenas uma vez
-let _instancesInitialized = false;
+const _instancesInitialized = false;
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://arkrjextwpwqhrvcijyr.supabase.co';
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFya3JqZXh0d3B3cWhydmNpanlyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njg5MDM4OTUsImV4cCI6MjA4NDQ3OTg5NX0.qAmrahULxsyZsmwwSR1FbEclNMwLe-vnUeAvpxDTdkY';
@@ -155,7 +155,7 @@ function createLazySupabaseClient(type: 'regular' | 'admin' | 'noPKCE') {
         // Criando cliente Supabase
         try {
           switch (type) {
-            case 'regular':
+            case 'regular': {
               // Extrair o project ref da URL para usar no storageKey
               const projectRef = supabaseUrl.split('//')[1].split('.')[0];
               // Usando storageKey
@@ -180,6 +180,7 @@ function createLazySupabaseClient(type: 'regular' | 'admin' | 'noPKCE') {
                 _supabaseInstance = instance;
               }
               break;
+            }
               
             case 'admin': {
               const serviceRoleKey = import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY || 
@@ -237,7 +238,6 @@ function createLazySupabaseClient(type: 'regular' | 'admin' | 'noPKCE') {
       // Interceptar métodos específicos para adicionar tratamento de erros
       if (prop === 'auth' && instance[prop]) {
         // Proxy para métodos de autenticação
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         return new Proxy(instance[prop], {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           get(authTarget: any, authMethod: string) {
@@ -532,10 +532,10 @@ export const saveUserAvatar = async (userId: string, avatarUrl: string): Promise
       return { success: false, error: profileError };
     }
     
-    // Se chegou aqui, pelo menos uma das operações foi bem-sucedida
+    // Se chegou aqui, a operação foi bem-sucedida
     return { 
       success: true, 
-      error: authError ? "Avatar salvo parcialmente" : null 
+      error: null 
     };
   } catch (error) {
     console.error("Erro inesperado ao salvar avatar:", error);

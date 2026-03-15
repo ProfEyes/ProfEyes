@@ -157,7 +157,8 @@ export default function Auth() {
     // Verificar se acabou de se cadastrar ao inicializar o estado
     const justRegistered = sessionStorage.getItem('just-registered') === 'true';
     if (justRegistered) {
-          }
+      // Usuário acabou de se cadastrar
+    }
     return justRegistered;
   });
 
@@ -565,10 +566,10 @@ export default function Auth() {
   const traderLinkRef = useRef<HTMLInputElement>(null);
 
   // Limpar erro quando o usuário digita em qualquer campo
-  const clearError = () => {
+  const clearError = useCallback(() => {
     if (error) setError(null);
     if (displayNameError) setDisplayNameError(null);
-  };
+  }, [error, displayNameError]);
 
   // Validar nome de exibição
   const validateDisplayName = (name: string): boolean => {
@@ -1735,7 +1736,8 @@ export default function Auth() {
         </div>
       </motion.div>
     );
-  }, [password]); // Memorizar baseado apenas na senha, não no showPassword
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [password]); // Memorizar baseado apenas na senha, authT é estável via useLanguage
 
   // Componente de indicador de correspondência de senhas
   const PasswordMatchIndicator = ({ match }: { match: { isMatch: boolean; message: string } }) => (
@@ -2097,6 +2099,7 @@ export default function Auth() {
       )}
     </motion.div>
   );
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     passwordResetSent,
     showPassword,
@@ -2112,7 +2115,7 @@ export default function Auth() {
     error?.message,
     email,
     handleEmailChange
-  ]);
+  ]); // Outras dependências (authT, clearError, funções) são estáveis ou causariam re-renders desnecessários
 
   // Limpar erros quando mudar de aba
   useEffect(() => {
@@ -2243,10 +2246,7 @@ export default function Auth() {
               <img 
                 src="/profeyes-logo-removebg-preview.png" 
                 alt="Trending Logo" 
-                className="w-24 h-auto"
-                style={{ 
-                  filter: "drop-shadow(0 0 10px rgba(255, 255, 255, 0.1))"
-                }}
+                className="w-24 h-auto [filter:drop-shadow(0_0_10px_rgba(255,255,255,0.1))]"
               />
             </motion.div>
             <motion.h1 
@@ -2737,8 +2737,7 @@ export default function Auth() {
                                       {t('trader.support.link')}
                                     </Label>
                                     <div className="relative">
-                                      <div className="absolute inset-0 bg-gradient-to-r from-white/5 via-white/3 to-white/5 rounded-lg blur transition-opacity duration-300 pointer-events-none" 
-                                           style={{ opacity: preferredTraderLink ? 0.2 : 0 }}></div>
+                                      <div className={`absolute inset-0 bg-gradient-to-r from-white/5 via-white/3 to-white/5 rounded-lg blur transition-opacity duration-300 pointer-events-none ${preferredTraderLink ? 'opacity-20' : 'opacity-0'}`}></div>
                                     <Input
                                       id="trader-link"
                                       type="url"

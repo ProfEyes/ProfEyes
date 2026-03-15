@@ -92,7 +92,8 @@ export const traderLinkService = {
     }
   },
 
-  async getUserPreferences(): Promise<{ data: Record<string, unknown> | null; error: Error | null }> {
+  // Obter preferências do usuário
+  async getUserPreferences(): Promise<{ data: Record<string, unknown>; error: Record<string, unknown> }> {
     return await userService.getTradingPreferences();
   },
 

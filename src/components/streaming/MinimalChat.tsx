@@ -129,6 +129,7 @@ export const MinimalChat: React.FC<MinimalChatProps> = ({
           <button
             type="submit"
             disabled={!inputValue.trim()}
+            aria-label="Enviar mensagem"
             className="absolute right-2 top-1/2 -translate-y-1/2 h-8 w-8 rounded-xl bg-white/95 text-black disabled:opacity-15 disabled:cursor-not-allowed hover:bg-white hover:scale-105 active:scale-95 transition-all duration-200 flex items-center justify-center"
           >
             <Send className="h-3.5 w-3.5" strokeWidth={2} />

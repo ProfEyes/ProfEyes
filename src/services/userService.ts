@@ -663,12 +663,12 @@ export const userService = {
    */
   async isAdmin(): Promise<boolean> {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data: { user } } = await (supabase as SupabaseClient<Database>).auth.getUser();
       if (!user) {
         console.log('[userService.isAdmin] No user found');
         return false;
       }
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as SupabaseClient<Database>)
         .from('user_profiles')
         .select('is_admin')
         .eq('user_id', user.id)
@@ -1094,7 +1094,7 @@ export const userService = {
   async updateUserLanguage(userId: string, language: 'pt' | 'en' | 'es'): Promise<void> {
     try {
       // Atualizar na tabela user_profiles
-      const { error } = await supabase
+      const { error } = await (supabase as SupabaseClient<Database>)
         .from('user_profiles')
         .update({ 
           language,
@@ -1117,7 +1117,7 @@ export const userService = {
    */
   async getUserLanguage(userId: string): Promise<{ language: 'pt' | 'en' | 'es' }> {
     try {
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as SupabaseClient<Database>)
         .from('user_profiles')
         .select('language')
         .eq('user_id', userId)
@@ -1152,7 +1152,7 @@ export const userService = {
         if (stored) Object.assign(existing, JSON.parse(stored));
       } catch { /* ignorar */ }
 
-      const updated = {
+      const updated: Record<string, unknown> = {
         ...existing,
         ...(preferences.preferred_trader_link !== undefined && { preferred_trader_link: preferences.preferred_trader_link }),
         ...(preferences.preferred_broker !== undefined && { preferred_broker: preferences.preferred_broker }),

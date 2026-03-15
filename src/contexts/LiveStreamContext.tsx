@@ -1,12 +1,14 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { supabase } from '@/lib/supabase';
-import type { RealtimeChannel } from '@supabase/supabase-js';
+import type { RealtimeChannel, SupabaseClient } from '@supabase/supabase-js';
 import { useAuth } from './AuthContext';
 import { useNotifications } from './NotificationContext';
-import { WebRTCStreamingService } from '@/services/liveStreamService';
 // ✅ NOVO: Importar SimplePublisher e SimpleViewer ao invés do PeerService antigo
 import { SimplePublisher, SimpleViewer, ConnectionStatus as WebRTCConnectionStatus } from '@/services/webrtc/simpleWebRTC';
 import { checkLiveStreamTables } from '@/services/createLiveStreamTables';
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const supabaseClient = supabase as any;
 
 // Para compatibilidade temporária (remover depois)
 type PeerConnectionStatus = WebRTCConnectionStatus;
@@ -91,6 +93,8 @@ export interface LiveStreamContextType {
   endStream: (streamId: string) => Promise<boolean>;
   fetchComments: (streamId: string) => Promise<void>;
   addComment: (streamId: string, content: string) => Promise<boolean>;
+  deleteComment: (commentId: string, streamId: string) => Promise<boolean>;
+  canModerate: (streamId: string) => Promise<boolean>;
   generateStreamKey: () => string;
   checkUserPermissions: () => Promise<StreamPermission | null>;
   hasStreamingPermission: boolean;
@@ -119,7 +123,6 @@ export function LiveStreamProvider({ children }: { children: ReactNode }) {
   const [isProcessingAction, setIsProcessingAction] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [hasStreamingPermission, setHasStreamingPermission] = useState<boolean>(false);
-  const [webRTCService, setWebRTCService] = useState<WebRTCStreamingService | null>(null);
   // ✅ NOVO: Usar SimplePublisher e SimpleViewer
   const [simplePublisher, setSimplePublisher] = useState<SimplePublisher | null>(null);
   const [simpleViewer, setSimpleViewer] = useState<SimpleViewer | null>(null);
@@ -146,7 +149,7 @@ export function LiveStreamProvider({ children }: { children: ReactNode }) {
     setError(null);
     
     try {
-      const { data, error } = await supabase
+      const { data, error } = await supabaseClient
         .from('live_streams')
         .select('*')
         .order('created_at', { ascending: false });
@@ -176,7 +179,7 @@ export function LiveStreamProvider({ children }: { children: ReactNode }) {
         
         // Marcar como 'ended' em batch
         const ghostIds = ghostStreams.map(s => s.id);
-        const { error: cleanupError } = await supabase
+        const { error: cleanupError } = await supabaseClient
           .from('live_streams')
           .update({ 
             status: 'ended',
@@ -200,7 +203,7 @@ export function LiveStreamProvider({ children }: { children: ReactNode }) {
       
       // Buscar dados dos usuários (avatar e nome) para cada stream
       const userIds = [...new Set(data.map(item => item.user_id))];
-      const { data: userProfiles } = await supabase
+      const { data: userProfiles } = await supabaseClient
         .from('user_profiles')
         .select('user_id, display_name, avatar_url')
         .in('user_id', userIds);
@@ -264,7 +267,7 @@ export function LiveStreamProvider({ children }: { children: ReactNode }) {
     setError(null);
     
     try {
-      const { data, error } = await supabase
+      const { data, error } = await supabaseClient
         .from('live_streams')
         .select('*')
         .eq('id', streamId)
@@ -276,7 +279,7 @@ export function LiveStreamProvider({ children }: { children: ReactNode }) {
       }
       
       // Buscar dados do usuário (avatar e nome)
-      const { data: userProfile } = await supabase
+      const { data: userProfile } = await supabaseClient
         .from('user_profiles')
         .select('display_name, avatar_url')
         .eq('user_id', data.user_id)
@@ -349,7 +352,7 @@ export function LiveStreamProvider({ children }: { children: ReactNode }) {
         try {
           console.log('Verificando permissões no banco de dados para:', user.id);
           
-          const { data: permissionData, error: permissionError } = await supabase
+          const { data: permissionData, error: permissionError } = await supabaseClient
             .from('stream_permissions')
             .select('*')
             .eq('user_id', user.id)
@@ -375,7 +378,7 @@ export function LiveStreamProvider({ children }: { children: ReactNode }) {
       let username = user.email || 'Usuário';
       let userAvatar = '';
       try {
-        const { data: profile } = await supabase
+        const { data: profile } = await supabaseClient
           .from('user_profiles')
           .select('display_name, avatar_url')
           .eq('user_id', user.id)
@@ -423,7 +426,7 @@ export function LiveStreamProvider({ children }: { children: ReactNode }) {
       console.log('Inserindo dados com estrutura correta:', insertData);
       
       // Inserir no banco de dados
-      const { data, error } = await supabase
+      const { data, error } = await supabaseClient
         .from('live_streams')
         .insert([insertData])
         .select()
@@ -514,7 +517,7 @@ export function LiveStreamProvider({ children }: { children: ReactNode }) {
       
       // Se não for admin, verificar se a transmissão pertence ao usuário
       if (!isAdminUser) {
-        const { data: stream, error: fetchError } = await supabase
+        const { data: stream, error: fetchError } = await supabaseClient
           .from('live_streams')
           .select('user_id')
           .eq('id', streamId)
@@ -556,7 +559,7 @@ export function LiveStreamProvider({ children }: { children: ReactNode }) {
       if (updateData.category !== undefined) dbUpdateData.category = updateData.category;
       if (updateData.level !== undefined) dbUpdateData.level = updateData.level;
 
-      const { data, error } = await supabase
+      const { data, error } = await supabaseClient
         .from('live_streams')
         .update(dbUpdateData)
         .eq('id', streamId)
@@ -609,7 +612,7 @@ export function LiveStreamProvider({ children }: { children: ReactNode }) {
       
       // Se não for admin, verificar se a transmissão pertence ao usuário
       if (!isAdminUser) {
-        const { data: stream, error: fetchError } = await supabase
+        const { data: stream, error: fetchError } = await supabaseClient
           .from('live_streams')
           .select('user_id')
           .eq('id', streamId)
@@ -626,7 +629,7 @@ export function LiveStreamProvider({ children }: { children: ReactNode }) {
         }
       }
       
-      const { error } = await supabase
+      const { error } = await supabaseClient
         .from('live_streams')
         .delete()
         .eq('id', streamId);
@@ -671,7 +674,7 @@ export function LiveStreamProvider({ children }: { children: ReactNode }) {
       
       
       // Usar uma query simplificada sem joins para evitar erros 400
-      const { data, error } = await supabase
+      const { data, error } = await supabaseClient
         .from('stream_comments')
         .select('*')
         .eq('stream_id', streamId)
@@ -692,7 +695,7 @@ export function LiveStreamProvider({ children }: { children: ReactNode }) {
         for (const comment of data) {
           try {
             // Buscar dados do usuário para cada comentário
-            const { data: userData } = await supabase
+            const { data: userData } = await supabaseClient
               .from('user_profiles')
               .select('*')
               .eq('user_id', comment.user_id)
@@ -760,7 +763,7 @@ export function LiveStreamProvider({ children }: { children: ReactNode }) {
     
     
     // Criar novo canal para escuta de comentários em tempo real
-    const channel = supabase
+    const channel = supabaseClient
       .channel(`stream-comments-${streamId}-${instanceIdRef.current}`)
       .on(
         'postgres_changes',
@@ -777,7 +780,7 @@ export function LiveStreamProvider({ children }: { children: ReactNode }) {
             const newCommentData = payload.new;
             
             // Buscar dados do usuário que fez o comentário
-            const { data: userData } = await supabase
+            const { data: userData } = await supabaseClient
               .from('user_profiles')
               .select('*')
               .eq('user_id', newCommentData.user_id)
@@ -826,7 +829,7 @@ export function LiveStreamProvider({ children }: { children: ReactNode }) {
       .subscribe((status) => {
         
         if (status === 'SUBSCRIBED') {
-          
+          // Canal inscrito com sucesso
         }
       });
     
@@ -855,22 +858,14 @@ export function LiveStreamProvider({ children }: { children: ReactNode }) {
     if (!user) return false;
     
     try {
-      // Buscar username do usuário
-      const { data: userProfile } = await supabase
-        .from('user_profiles')
-        .select('display_name')
-        .eq('user_id', user.id)
-        .maybeSingle();
-
       const commentData = {
         stream_id: streamId,
         user_id: user.id,
-        username: userProfile?.display_name || user.user_metadata?.full_name || user.email?.split('@')[0] || 'Usuário',
         content: content,
         created_at: new Date().toISOString()
       };
       
-      const { data, error } = await supabase
+      const { data, error } = await supabaseClient
         .from('stream_comments')
         .insert([commentData])
         .select()
@@ -884,7 +879,7 @@ export function LiveStreamProvider({ children }: { children: ReactNode }) {
       console.log('Comentário adicionado:', data);
       
       // Buscar informações do usuário para incluir no comentário
-      const { data: userData, error: userError } = await supabase
+      const { data: userData, error: userError } = await supabaseClient
         .from('user_profiles')
         .select('*')
         .eq('user_id', user.id)
@@ -926,6 +921,83 @@ export function LiveStreamProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  // Função para deletar comentário (streamer ou moderador)
+  const deleteComment = async (commentId: string, streamId: string): Promise<boolean> => {
+    if (!user) return false;
+    
+    try {
+      // Verificar se o usuário pode moderar
+      const canMod = await canModerate(streamId);
+      if (!canMod) {
+        console.error('Usuário não tem permissão para deletar comentários');
+        return false;
+      }
+
+      const { error } = await supabaseClient
+        .from('stream_comments')
+        .delete()
+        .eq('id', commentId);
+      
+      if (error) {
+        console.error('Erro ao deletar comentário:', error);
+        throw error;
+      }
+      
+      // Remover do estado local
+      setComments(prev => prev.filter(c => c.id !== commentId));
+      
+      console.log('Comentário deletado:', commentId);
+      return true;
+    } catch (err: unknown) {
+      console.error('Erro ao deletar comentário:', err);
+      setError(err instanceof Error ? err.message : String(err));
+      return false;
+    }
+  };
+
+  // Função para verificar se o usuário pode moderar uma stream
+  const canModerate = async (streamId: string): Promise<boolean> => {
+    if (!user) return false;
+    
+    try {
+      // Buscar informações da stream
+      const { data: streamData, error: streamError } = await supabaseClient
+        .from('live_streams')
+        .select('user_id')
+        .eq('id', streamId)
+        .single();
+      
+      if (streamError || !streamData) {
+        console.error('Erro ao buscar stream:', streamError);
+        return false;
+      }
+      
+      // É o próprio streamer?
+      if (streamData.user_id === user.id) {
+        return true;
+      }
+      
+      // É moderador deste streamer?
+      const { data: modData, error: modError } = await supabaseClient
+        .from('streamer_moderators')
+        .select('id')
+        .eq('streamer_id', streamData.user_id)
+        .eq('moderator_id', user.id)
+        .eq('is_active', true)
+        .single();
+      
+      if (modError) {
+        // Pode ser que não seja moderador (erro esperado)
+        return false;
+      }
+      
+      return !!modData;
+    } catch (err) {
+      console.error('Erro ao verificar permissão de moderação:', err);
+      return false;
+    }
+  };
+
   // Função para gerar uma chave de stream única
   const generateStreamKey = (): string => {
     return `${user?.id}-${Date.now()}-${Math.random().toString(36).substring(2, 15)}`;
@@ -962,7 +1034,7 @@ export function LiveStreamProvider({ children }: { children: ReactNode }) {
       // Verificar na tabela stream_permissions
       console.log('Verificando permissões no banco de dados para:', user.id);
       
-      const { data: permissionData, error: permissionError } = await supabase
+      const { data: permissionData, error: permissionError } = await supabaseClient
         .from('stream_permissions')
         .select('*')
         .eq('user_id', user.id)
@@ -1045,7 +1117,7 @@ export function LiveStreamProvider({ children }: { children: ReactNode }) {
     const channelName = `streams-changes-${user.id}-${instanceIdRef.current}`;
     
     // Criar um novo canal
-    const channel = supabase.channel(channelName);
+    const channel = supabaseClient.channel(channelName);
     
     // Configurar o canal com os listeners necessários
     channel.on('postgres_changes', { 
@@ -1089,6 +1161,7 @@ export function LiveStreamProvider({ children }: { children: ReactNode }) {
     // Função de limpeza - executada quando o componente é desmontado
     return () => {
       // Capturar o instanceId atual para o cleanup
+      // eslint-disable-next-line react-hooks/exhaustive-deps
       const currentInstanceId = instanceIdRef.current;
       // Cancelar a inscrição e remover o canal
       if (channelRef.current) {
@@ -1130,7 +1203,7 @@ export function LiveStreamProvider({ children }: { children: ReactNode }) {
       }
       
       // Atualizar status da transmissão para 'live'
-      const { error } = await supabase
+      const { error } = await supabaseClient
         .from('live_streams')
         .update({
           status: 'live',
@@ -1203,7 +1276,7 @@ export function LiveStreamProvider({ children }: { children: ReactNode }) {
       }
       
       // Atualizar status da transmissão para 'ended'
-      const { error } = await supabase
+      const { error } = await supabaseClient
         .from('live_streams')
         .update({
           status: 'ended',
@@ -1228,10 +1301,10 @@ export function LiveStreamProvider({ children }: { children: ReactNode }) {
         setActiveStream(prev => prev ? { ...prev, status: 'ended', endedAt: new Date().toISOString() } : null);
       }
       
-      // Parar o serviço WebRTC se estiver ativo
-      if (webRTCService) {
-        await webRTCService.stop();
-        setWebRTCService(null);
+      // Parar o SimplePublisher se estiver ativo
+      if (simplePublisher) {
+        await simplePublisher.destroy();
+        setSimplePublisher(null);
       }
       
       // Notificar o usuário
@@ -1587,6 +1660,8 @@ export function LiveStreamProvider({ children }: { children: ReactNode }) {
     endStream,
     fetchComments,
     addComment,
+    deleteComment,
+    canModerate,
     generateStreamKey,
     checkUserPermissions,
     hasStreamingPermission,

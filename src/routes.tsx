@@ -20,6 +20,7 @@ const requireAuth = async () => {
       setTimeout(() => reject(new Error('Auth check timeout')), 5000)
     );
     
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const result = await Promise.race([sessionPromise, timeoutPromise]) as any;
     const session = result.data?.session;
     
@@ -42,6 +43,7 @@ const redirectIfAuthenticated = async () => {
       setTimeout(() => reject(new Error('Auth check timeout')), 3000)
     );
     
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const result = await Promise.race([sessionPromise, timeoutPromise]) as any;
     const session = result.data?.session;
     

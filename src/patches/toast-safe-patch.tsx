@@ -24,9 +24,9 @@ const safeToastOverrides = {
     isProcessingToast = true;
     try {
       if (typeof title === 'object') console.warn('toast.info called with object title:', title);
-      const safeTitle = toastSafeString(title);
+      const safeTitle = toastSafeString(title) as string;
       const safeOptions = options ? sanitizeOptions(options) : undefined;
-      return originalToast.info(safeTitle, safeOptions);
+      return originalToast.info(safeTitle, safeOptions as Record<string, unknown> | undefined);
     } finally {
       isProcessingToast = false;
     }
@@ -37,9 +37,9 @@ const safeToastOverrides = {
     isProcessingToast = true;
     try {
       if (typeof title === 'object') console.warn('toast.success called with object title:', title);
-      const safeTitle = toastSafeString(title);
+      const safeTitle = toastSafeString(title) as string;
       const safeOptions = options ? sanitizeOptions(options) : undefined;
-      return originalToast.success(safeTitle, safeOptions);
+      return originalToast.success(safeTitle, safeOptions as Record<string, unknown> | undefined);
     } finally {
       isProcessingToast = false;
     }
@@ -50,9 +50,9 @@ const safeToastOverrides = {
     isProcessingToast = true;
     try {
       if (typeof title === 'object') console.warn('toast.error called with object title:', title);
-      const safeTitle = toastSafeString(title);
+      const safeTitle = toastSafeString(title) as string;
       const safeOptions = options ? sanitizeOptions(options) : undefined;
-      return originalToast.error(safeTitle, safeOptions);
+      return originalToast.error(safeTitle, safeOptions as Record<string, unknown> | undefined);
     } finally {
       isProcessingToast = false;
     }
@@ -63,9 +63,9 @@ const safeToastOverrides = {
     isProcessingToast = true;
     try {
       if (typeof title === 'object') console.warn('toast.warning called with object title:', title);
-      const safeTitle = toastSafeString(title);
+      const safeTitle = toastSafeString(title) as string;
       const safeOptions = options ? sanitizeOptions(options) : undefined;
-      return originalToast.warning(safeTitle, safeOptions);
+      return originalToast.warning(safeTitle, safeOptions as Record<string, unknown> | undefined);
     } finally {
       isProcessingToast = false;
     }
@@ -76,9 +76,9 @@ const safeToastOverrides = {
     isProcessingToast = true;
     try {
       if (typeof title === 'object') console.warn('toast.message called with object title:', title);
-      const safeTitle = toastSafeString(title);
+      const safeTitle = toastSafeString(title) as string;
       const safeOptions = options ? sanitizeOptions(options) : undefined;
-      return originalToast.message(safeTitle, safeOptions);
+      return originalToast.message(safeTitle, safeOptions as Record<string, unknown> | undefined);
     } finally {
       isProcessingToast = false;
     }
@@ -89,9 +89,9 @@ const safeToastOverrides = {
     isProcessingToast = true;
     try {
       if (typeof title === 'object') console.warn('toast.loading called with object title:', title);
-      const safeTitle = toastSafeString(title);
+      const safeTitle = toastSafeString(title) as string;
       const safeOptions = options ? sanitizeOptions(options) : undefined;
-      return originalToast.loading(safeTitle, safeOptions);
+      return originalToast.loading(safeTitle, safeOptions as Record<string, unknown> | undefined);
     } finally {
       isProcessingToast = false;
     }
@@ -120,7 +120,7 @@ export function applyToastSafePatch() {
   // Preserva as outras funções do toast original que não foram substituídas
   Object.keys(toastProperties).forEach(key => {
     if (!(key in safeToastOverrides) && typeof toastProperties[key as keyof typeof toastProperties] === 'function') {
-      (toast as Record<string, unknown>)[key] = toastProperties[key as keyof typeof toastProperties];
+      (toast as unknown as Record<string, unknown>)[key] = toastProperties[key as keyof typeof toastProperties];
     }
   });
   
@@ -144,7 +144,7 @@ function sanitizeOptions(options: Record<string, unknown>): Record<string, unkno
   // Copia todas as propriedades, exceto description que precisa de tratamento especial
   Object.keys(options).forEach(key => {
     if (key === 'description') {
-      sanitized.description = toastSafeString(options.description);
+      sanitized.description = toastSafeString(options.description) as string;
     } else {
       sanitized[key] = options[key];
     }

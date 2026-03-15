@@ -419,24 +419,11 @@ export { getBinancePrice as getBinancePriceMarket };
  */
 export async function getBitstampPriceWithFallback(symbol: string): Promise<MarketPrice | undefined> {
   try {
-    const bitstampSymbol = convertToBitstampSymbol(symbol);
-    const price = await getBitstampPrice(bitstampSymbol);
-    
-    if (price) {
-      return {
-        symbol: symbol,
-        price: price.price,
-        change: price.change,
-        changePercent: price.changePercent,
-        timestamp: Date.now(),
-        source: 'bitstamp'
-      };
-    }
-    
-    // Fallback para simulação
+    // Como a função getBitstampPrice foi removida, usar diretamente Binance
+    // que é a fonte principal de dados do sistema
     return await getBinancePrice(symbol);
   } catch (error) {
-    console.error(`Erro ao obter preço do Bitstamp para ${symbol}:`, error);
+    console.error(`Erro ao obter preço para ${symbol}:`, error);
     return undefined;
   }
 }
@@ -637,34 +624,6 @@ function normalizeSymbol(symbol: string): string {
   }
   
   return symbol;
-}
-
-/**
- * Converte um símbolo da Binance para o formato do Bitstamp
- * @param binanceSymbol Símbolo no formato da Binance
- * @returns Símbolo no formato do Bitstamp
- */
-function convertToBitstampSymbol(binanceSymbol: string): string {
-  // Bitstamp usa minúsculas e underscore
-  const symbol = binanceSymbol.toLowerCase();
-  
-  // Mapear pares comuns
-  if (symbol === 'btcusdt') return 'btcusd';
-  if (symbol === 'ethusdt') return 'ethusd';
-  if (symbol === 'xrpusdt') return 'xrpusd';
-  if (symbol === 'ltcusdt') return 'ltcusd';
-  if (symbol === 'uniusdt') return 'uniusd';
-  if (symbol === 'linkusdt') return 'linkusd';
-  
-  // Para outros casos, tentar separar e substituir USDT por USD
-  if (symbol.endsWith('usdt')) {
-    return symbol.replace('usdt', 'usd');
-  }
-  
-  // Caso padrão: dividir o símbolo (por exemplo, BTCETH -> btc_eth)
-  const base = symbol.slice(0, -3);
-  const quote = symbol.slice(-3);
-  return `${base}_${quote}`;
 }
 
 // Implementar uma versão simulada de getOrderBook para manter compatibilidade com código existente

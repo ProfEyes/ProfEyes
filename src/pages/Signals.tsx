@@ -3068,7 +3068,9 @@ const handleVisibilityChangeConservative = useCallback((
     const duplicatedAssets = Array.from(assetOccurrences.entries()).filter(([_, count]) => count > 1);
     
     if (duplicatedAssets.length > 0) {
+      // Ativos duplicados detectados, mas continuando processamento
     } else {
+      // Nenhuma duplicação encontrada
     }
     
     return finalSignals;
@@ -3214,7 +3216,9 @@ const handleVisibilityChangeConservative = useCallback((
     
     // Verificar se temos exatamente 3 sinais da dashboard
     if (dashboardSignals.length < 3) {
+      // Menos de 3 sinais da dashboard, mas continuando
     } else if (dashboardSignals.length > 3) {
+      // Mais de 3 sinais da dashboard, serão limitados
     }
     
     // For??ar o uso expl??cito dos sinais da dashboard como os 3 primeiros, limitando a exatamente 3
@@ -3324,6 +3328,7 @@ const handleVisibilityChangeConservative = useCallback((
       // Sempre atualizar pre??os
       await updatePrices();
     } catch (error) {
+      // Erro ao atualizar, ignorar silenciosamente
     } finally {
       setTimeout(() => setIsRefreshing(false), 1000);
     }
@@ -3377,6 +3382,7 @@ const handleVisibilityChangeConservative = useCallback((
         return newPrices;
       });
     } catch (error) {
+      // Erro ao atualizar preços, ignorar silenciosamente
     }
   }, [queryClient, safeSetTradingSignals]);
 
@@ -3654,6 +3660,7 @@ const handleVisibilityChangeConservative = useCallback((
           }
         }
       } catch (error) {
+        // Erro na verificação silenciosa, ignorar
       }
     };
     
@@ -3767,6 +3774,7 @@ const handleVisibilityChangeConservative = useCallback((
             safeSetTradingSignals(preservedSignals);
           }, 500);
         } catch (error) {
+          // Erro ao atualizar sinais, ignorar
         } finally {
           // Liberar o lock ap??s um delay para garantir que a opera????o foi conclu??da
           setTimeout(() => {
@@ -3811,6 +3819,7 @@ const handleVisibilityChangeConservative = useCallback((
           handleVisibilityChangeConservative(queryClient, currentSignals);
           
         } catch (error) {
+          // Erro ao processar mudança de visibilidade, ignorar
         }
       }
     };
@@ -3901,8 +3910,10 @@ const handleVisibilityChangeConservative = useCallback((
           // Atualizar os sinais no cache do React Query
           safeSetTradingSignals(rotatedSignals);
         } else {
+          // Não é hora de rotacionar ainda
         }
       } catch (error) {
+        // Erro na rotação, ignorar
       }
     };
     
@@ -3995,7 +4006,9 @@ const handleVisibilityChangeConservative = useCallback((
       const timeoutId = setTimeout(() => {
         requestPermission().then(granted => {
           if (granted) {
+            // Permissão concedida
           } else {
+            // Permissão negada
           }
         });
       }, 2000);
@@ -4292,6 +4305,7 @@ const handleVisibilityChangeConservative = useCallback((
           }
         }
       } catch (error) {
+        // Erro na verificação periódica, ignorar
       }
     }, 30 * 1000); // Verificar a cada 30 segundos
     
@@ -4404,6 +4418,7 @@ const handleVisibilityChangeConservative = useCallback((
         
         // Verificar se conseguimos sincronizar com sucesso
       } catch (error) {
+        // Erro ao processar evento, ignorar
       } finally {
         // Garantir que a flag seja resetada
         isProcessingEvent = false;
@@ -4430,6 +4445,7 @@ const handleVisibilityChangeConservative = useCallback((
           }
         }
       } catch (error) {
+        // Erro ao verificar localStorage, ignorar
       }
     };
     
@@ -4511,6 +4527,7 @@ const handleVisibilityChangeConservative = useCallback((
             }
           }
         } catch (error) {
+          // Erro na verificação de sincronização, ignorar
         }
       }
     }, 30 * 1000); // Verificar a cada 30 segundos

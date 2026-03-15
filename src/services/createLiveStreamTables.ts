@@ -9,25 +9,29 @@ export async function checkLiveStreamTables(): Promise<boolean> {
     console.log('Verificando tabelas de live streaming...');
     
     // Verificar se a tabela live_streams existe
-    const { data: liveStreamsData, error: liveStreamsError } = await supabase
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: liveStreamsData, error: liveStreamsError } = await (supabase as any)
       .from('live_streams')
       .select('id')
       .limit(1);
     
     // Verificar se a tabela stream_comments existe
-    const { data: commentsData, error: commentsError } = await supabase
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: commentsData, error: commentsError } = await (supabase as any)
       .from('stream_comments')
       .select('id')
       .limit(1);
     
     // Verificar se a tabela stream_permissions existe
-    const { data: permissionsData, error: permissionsError } = await supabase
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: permissionsData, error: permissionsError } = await (supabase as any)
       .from('stream_permissions')
       .select('id')
       .limit(1);
     
     // Verificar se a tabela stream_viewers existe
-    const { data: viewersData, error: viewersError } = await supabase
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: viewersData, error: viewersError } = await (supabase as any)
       .from('stream_viewers')
       .select('id')
       .limit(1);

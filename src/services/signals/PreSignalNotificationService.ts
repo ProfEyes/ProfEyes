@@ -1,4 +1,4 @@
-import { TradingSignal } from '../types';
+import { TradingSignal, SignalType, SignalStrength } from '../types';
 import { toast } from 'sonner';
 
 // Cache para evitar duplicação de notificações (compartilhado entre abas via localStorage)
@@ -152,7 +152,7 @@ class PreSignalNotificationService {
       const activeSignals = signals.filter(signal => 
         signal.status === 'active' && (
           signal.timestamp > now || 
-          (signal.entry_time && this.parseEntryTimeToTimestamp(signal.entry_time) > now)
+          (signal.entry_time && this.parseEntryTimeToTimestamp(signal.entry_time as string) > now)
         )
       );
       
@@ -160,7 +160,7 @@ class PreSignalNotificationService {
       const fiveMinutesInMs = 5 * 60 * 1000;
       const approachingSignals = activeSignals.filter(signal => {
         const signalTimestamp = signal.entry_time ? 
-          this.parseEntryTimeToTimestamp(signal.entry_time) : 
+          this.parseEntryTimeToTimestamp(signal.entry_time as string) : 
           signal.timestamp;
         const timeUntilSignal = signalTimestamp - now;
         return timeUntilSignal <= fiveMinutesInMs && timeUntilSignal > 0;
@@ -168,14 +168,14 @@ class PreSignalNotificationService {
       
       // Enviar notificações para sinais próximos que ainda não foram notificados
       approachingSignals.forEach(signal => {
-        const signalId = signal.id || `${signal.symbol}-${signal.entry_time || signal.timestamp}`;
+        const signalId = signal.id || `${signal.symbol}-${(signal.entry_time as string) || signal.timestamp}`;
         
         // ✅ Verificar cache compartilhado entre abas
-        if (!this.wasRecentlyNotified(signalId)) {
+        if (!this.wasRecentlyNotified(signalId as string)) {
           this.sendPreSignalNotification(signal);
           
           // ✅ Marcar como notificado no cache compartilhado
-          this.markAsNotified(signalId);
+          this.markAsNotified(signalId as string);
         }
       });
     } catch (error) {
@@ -211,7 +211,7 @@ class PreSignalNotificationService {
   private sendPreSignalNotification(signal: TradingSignal): void {
     try {
       const signalTimestamp = signal.entry_time ? 
-        this.parseEntryTimeToTimestamp(signal.entry_time) : 
+        this.parseEntryTimeToTimestamp(signal.entry_time as string) : 
         signal.timestamp;
       const signalTime = new Date(signalTimestamp);
       const isBuy = signal.signal === 'BUY';
@@ -285,8 +285,8 @@ class PreSignalNotificationService {
       id: `test-${Date.now()}`,
       symbol: 'BTC/USD (OTC)',
       signal: 'BUY',
-      type: 'TECHNICAL',
-      strength: 'STRONG',
+      type: SignalType.TECHNICAL,
+      strength: SignalStrength.STRONG,
       timestamp: Date.now() + 5 * 60 * 1000, // 5 minutos no futuro
       price: 45000,
       entry_price: 45000,
@@ -297,7 +297,8 @@ class PreSignalNotificationService {
       expiry: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
       risk_reward: '1:2',
       status: 'active',
-      entry_time: new Date(Date.now() + 5 * 60 * 1000).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+      entry_time: new Date(Date.now() + 5 * 60 * 1000).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+      reason: 'Teste de notificação'
     };
 
     this.sendPreSignalNotification(testSignal);

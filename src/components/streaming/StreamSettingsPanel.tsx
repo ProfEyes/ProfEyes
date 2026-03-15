@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import { X, Circle, Users, MessageCircle, Clock, Eye, TrendingUp, AlertCircle, Check, Shield } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
-import { BlockedUsersManager } from '@/components/settings/BlockedUsersManager';
 import { ViewersControlPanel } from '@/components/streaming/ViewersControlPanel';
 import { ModeratorsManager } from '@/components/streaming/ModeratorsManager';
+import { ModerationPanel } from '@/components/streaming/ModerationPanel';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface StreamSettingsPanelProps {
   isOpen: boolean;
@@ -84,13 +85,13 @@ export const StreamSettingsPanel: React.FC<StreamSettingsPanelProps> = ({
   onSave,
   isSaving = false
 }) => {
+  // Estado local para controlar expansão de opções de links - DEVE estar antes de qualquer return
+  const [showLinkOptions, setShowLinkOptions] = useState(linksAllowed);
+  
   if (!isOpen) return null;
   
   // Calcular viewers adicionados
   const addedViewers = viewerCount - realViewers;
-  
-  // Estado local para controlar expansão de opções de links
-  const [showLinkOptions, setShowLinkOptions] = useState(linksAllowed);
 
   const formatDuration = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -111,6 +112,7 @@ export const StreamSettingsPanel: React.FC<StreamSettingsPanelProps> = ({
           </div>
           <button
             onClick={onClose}
+            aria-label="Fechar configurações"
             className="p-2.5 bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.05] rounded-xl transition-all duration-200 active:scale-95"
           >
             <X className="h-4 w-4 text-white/80" strokeWidth={1.5} />
@@ -168,6 +170,7 @@ export const StreamSettingsPanel: React.FC<StreamSettingsPanelProps> = ({
                     <select
                       value={streamLanguage}
                       onChange={(e) => setStreamLanguage(e.target.value)}
+                      aria-label="Idioma da transmissão"
                       className="w-full h-11 bg-white/[0.02] border border-white/[0.05] rounded-2xl px-4 text-[13px] font-light text-white/90 focus:outline-none focus:bg-white/[0.04] focus:border-white/[0.12] transition-all duration-300 appearance-none cursor-pointer"
                     >
                       {availableLanguages.map(lang => (
@@ -245,6 +248,7 @@ export const StreamSettingsPanel: React.FC<StreamSettingsPanelProps> = ({
                     step="5"
                     value={chatDelaySeconds}
                     onChange={(e) => setChatDelaySeconds(Number(e.target.value))}
+                    aria-label="Modo lento - Intervalo entre mensagens em segundos"
                     className="w-full h-1 bg-white/[0.05] rounded-full appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white/90 [&::-webkit-slider-thumb]:cursor-pointer"
                   />
                   <p className="text-[10px] text-white/30 font-extralight">Intervalo entre mensagens</p>
@@ -334,6 +338,11 @@ export const StreamSettingsPanel: React.FC<StreamSettingsPanelProps> = ({
               </div>
             </div>
 
+            {/* Painel de Moderação */}
+            {streamId && (
+              <ModerationPanel streamerId={streamId} />
+            )}
+
             {/* Estatísticas */}
             <div className="bg-white/[0.02] border border-white/[0.05] rounded-3xl p-7 space-y-6">
               <div className="flex items-center gap-2.5">
@@ -382,20 +391,6 @@ export const StreamSettingsPanel: React.FC<StreamSettingsPanelProps> = ({
                   </div>
                   <p className="text-3xl font-extralight text-white/95 tabular-nums">{totalMessages}</p>
                 </div>
-              </div>
-            </div>
-
-            {/* Usuários Bloqueados */}
-            <div className="bg-white/[0.02] border border-white/[0.05] rounded-3xl p-7 space-y-6">
-              <div className="flex items-center gap-2.5">
-                <AlertCircle className="h-3.5 w-3.5 text-red-400/80" strokeWidth={1.5} />
-                <h3 className="text-sm font-light text-white/80 tracking-wide">Bloqueados</h3>
-              </div>
-
-              <div className="h-[0.5px] bg-gradient-to-r from-transparent via-white/[0.05] to-transparent" />
-
-              <div className="max-h-[300px] overflow-y-auto minimal-scrollbar">
-                {streamId && <BlockedUsersManager streamId={streamId} />}
               </div>
             </div>
           </div>

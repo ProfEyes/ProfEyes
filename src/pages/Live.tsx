@@ -27,6 +27,9 @@ import { useLiveStream } from "@/contexts/LiveStreamContext";
 import { useInAppNotification } from "@/hooks/useInAppNotification";
 import { useTrendingNotifications } from "@/contexts/TrendingNotificationContext";
 import { MeetingCard as MeetingCardComponent } from "@/components/MeetingCard";
+import { StreamerSettingsModal } from "@/components/streaming/StreamerSettingsModal";
+import * as followService from "@/services/followService";
+import type { StreamerProfile } from "@/services/followService";
 import { 
   Play, 
   Calendar, 
@@ -74,7 +77,8 @@ import {
   Presentation as PresentationIcon,
   SendHorizonal,
   Tv,
-  Trash
+  Trash,
+  Settings
 } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { FormField, FormItem, FormLabel, FormControl, FormMessage } from "@/components/ui/form";
@@ -173,8 +177,6 @@ const MeetingModal: React.FC<MeetingModalProps> = ({ open, onOpenChange, onMeeti
   const [isMirrored, setIsMirrored] = useState(true);
   const [thumbnail, setThumbnail] = useState<string | null>(null);
   const [language, setLanguage] = useState("pt");
-  const [streamType, setStreamType] = useState<'live' | 'scheduled'>('live');
-  const [scheduledDate, setScheduledDate] = useState<Date | undefined>(undefined);
   
   const videoPreviewRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -501,8 +503,7 @@ const MeetingModal: React.FC<MeetingModalProps> = ({ open, onOpenChange, onMeeti
                           playsInline
                           muted
                           controls={false}
-                          className="w-full h-full object-cover"
-                          style={{ transform: isMirrored ? 'scaleX(-1)' : 'none' }}
+                          className={`w-full h-full object-cover ${isMirrored ? '-scale-x-100' : ''}`}
                         />
                         <div className="absolute top-2 right-2 bg-black/70 backdrop-blur-sm px-2 py-1 rounded text-[10px] flex items-center gap-1">
                           <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
@@ -603,6 +604,7 @@ const MeetingModal: React.FC<MeetingModalProps> = ({ open, onOpenChange, onMeeti
                       id="thumbnail-upload"
                       accept="image/*"
                       onChange={handleFileUpload}
+                      aria-label="Carregar imagem de thumbnail"
                       className="hidden"
                     />
                   </div>
@@ -612,47 +614,6 @@ const MeetingModal: React.FC<MeetingModalProps> = ({ open, onOpenChange, onMeeti
             
             {/* Coluna direita */}
             <div className="space-y-3">
-              {/* Tipo de transmissão */}
-              <div className="bg-zinc-950/40 p-3 rounded-lg border border-zinc-900/40">
-                <h3 className="font-medium text-zinc-300 mb-2 text-xs">Tipo</h3>
-                <div className="flex gap-2">
-                  <div 
-                    className={`flex-1 border rounded-md p-2 cursor-pointer transition-all ${
-                      streamType === 'live' 
-                        ? 'bg-zinc-900/60 border-zinc-700/50' 
-                        : 'bg-zinc-950/20 border-zinc-900/30 hover:bg-zinc-900/40'
-                    }`}
-                    onClick={() => setStreamType('live')}
-                  >
-                    <div className="flex items-center gap-1.5">
-                      <Video className={`h-3 w-3 ${streamType === 'live' ? 'text-zinc-400' : 'text-zinc-600'}`} />
-                      <span className={`font-medium text-[11px] ${streamType === 'live' ? 'text-zinc-300' : 'text-zinc-500'}`}>Ao Vivo</span>
-                    </div>
-                  </div>
-                  <div 
-                    className={`flex-1 border rounded-md p-2 cursor-pointer transition-all ${
-                      streamType === 'scheduled' 
-                        ? 'bg-zinc-900/60 border-zinc-700/50' 
-                        : 'bg-zinc-950/20 border-zinc-900/30 hover:bg-zinc-900/40'
-                    }`}
-                    onClick={() => setStreamType('scheduled')}
-                  >
-                    <div className="flex items-center gap-1.5">
-                      <Calendar className={`h-3 w-3 ${streamType === 'scheduled' ? 'text-zinc-400' : 'text-zinc-600'}`} />
-                      <span className={`font-medium text-[11px] ${streamType === 'scheduled' ? 'text-zinc-300' : 'text-zinc-500'}`}>Agendar</span>
-                    </div>
-                  </div>
-                </div>
-                {streamType === 'scheduled' && (
-                  <input 
-                    type="datetime-local" 
-                    className="w-full bg-zinc-950/50 border border-zinc-900/50 rounded-md p-1.5 text-zinc-400 text-[11px] mt-2 [color-scheme:dark]"
-                    min={new Date().toISOString().slice(0, 16)}
-                    onChange={(e) => setScheduledDate(e.target.value ? new Date(e.target.value) : undefined)}
-                  />
-                )}
-              </div>
-              
               {/* Detalhes */}
               <div className="bg-zinc-950/40 p-3 rounded-lg border border-zinc-900/40 space-y-2">
                 <div>
@@ -1620,6 +1581,10 @@ export default function Live() {
   const [openModal, setOpenModal] = useState(false);
   const [selectedMeeting, setSelectedMeeting] = useState<MeetingData | null>(null);
   const [showEndedMeetings, setShowEndedMeetings] = useState(false);
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [streamers, setStreamers] = useState<StreamerProfile[]>([]);
+  const [loadingStreamers, setLoadingStreamers] = useState(false);
+  const [followingInProgress, setFollowingInProgress] = useState<Set<string>>(new Set());
   const navigate = useNavigate();
   const { canStartLive } = useLiveStreamPermission();
   const { fetchStreams, createStream } = useLiveStream();
@@ -1637,7 +1602,7 @@ export default function Live() {
           title: 'Live Broadcasts',
           description: 'Share your knowledge, interact in real time and learn from financial market experts.',
           tabLive: 'Live',
-          tabScheduled: 'Scheduled',
+          tabStreamers: 'Streamers',
           allCategories: 'All categories',
           searchPlaceholder: 'Search broadcasts',
           loadingTitle: 'Loading broadcasts',
@@ -1645,7 +1610,6 @@ export default function Live() {
           noLiveTitle: 'No live broadcasts',
           noLiveMessage: 'There are no broadcasts happening at the moment.',
           startStreaming: 'Start Streaming',
-          noScheduledMessage: 'There are no scheduled broadcasts to happen soon.',
           modalTitle: 'New Broadcast',
           modalDescription: 'Configure your broadcast and share your knowledge live'
         };
@@ -1654,7 +1618,7 @@ export default function Live() {
           title: 'Transmisiones en Vivo',
           description: 'Comparte tu conocimiento, interactúa en tiempo real y aprende de expertos del mercado financiero.',
           tabLive: 'En Vivo',
-          tabScheduled: 'Programadas',
+          tabStreamers: 'Streamers',
           allCategories: 'Todas las categorías',
           searchPlaceholder: 'Buscar transmisiones',
           loadingTitle: 'Cargando transmisiones',
@@ -1662,7 +1626,6 @@ export default function Live() {
           noLiveTitle: 'No hay transmisiones en vivo',
           noLiveMessage: 'En este momento no hay transmisiones en curso.',
           startStreaming: 'Iniciar Transmisión',
-          noScheduledMessage: 'No hay transmisiones programadas para suceder pronto.',
           modalTitle: 'Nueva Transmisión',
           modalDescription: 'Configure su transmisión y comparta sus conocimientos en vivo'
         };
@@ -1671,7 +1634,7 @@ export default function Live() {
           title: 'Transmissões ao vivo',
           description: 'Compartilhe seu conhecimento, interaja em tempo real e aprenda com especialistas do mercado financeiro.',
           tabLive: 'Ao Vivo',
-          tabScheduled: 'Agendadas',
+          tabStreamers: 'Streamers',
           allCategories: 'Todas categorias',
           searchPlaceholder: 'Pesquisar transmissões',
           loadingTitle: 'Carregando transmissões',
@@ -1679,7 +1642,6 @@ export default function Live() {
           noLiveTitle: 'Nenhuma transmissão ao vivo',
           noLiveMessage: 'No momento não há transmissões acontecendo.',
           startStreaming: 'Iniciar Transmissão',
-          noScheduledMessage: 'Não há transmissões agendadas para acontecer em breve.',
           modalTitle: 'Nova Transmissão',
           modalDescription: 'Configure sua transmissão e compartilhe seus conhecimentos ao vivo'
         };
@@ -1771,6 +1733,87 @@ export default function Live() {
     };
   }, [auth.loading, auth.user?.id, loadMeetings]);
   
+  // Função para carregar lista de streamers
+  const loadStreamers = useCallback(async () => {
+    setLoadingStreamers(true);
+    try {
+      const allStreamers = await followService.getAllStreamers(auth.user?.id);
+      setStreamers(allStreamers);
+    } catch (error) {
+      console.error('Erro ao carregar streamers:', error);
+    } finally {
+      setLoadingStreamers(false);
+    }
+  }, [auth.user?.id]);
+
+  // Carregar streamers quando a aba streamers for acessada
+  useEffect(() => {
+    if (auth.user) {
+      loadStreamers();
+    }
+  }, [auth.user, loadStreamers]);
+
+  // Função para seguir/deixar de seguir
+  const handleToggleFollow = async (streamerId: string, currentlyFollowing: boolean) => {
+    if (!auth.user) {
+      notify({
+        title: "Autenticação necessária",
+        description: "Faça login para seguir streamers",
+        type: "error"
+      });
+      return;
+    }
+
+    setFollowingInProgress(prev => new Set(prev).add(streamerId));
+
+    try {
+      if (currentlyFollowing) {
+        const result = await followService.unfollowStreamer(auth.user.id, streamerId);
+        if (result.success) {
+          notify({
+            title: "Sucesso",
+            description: "Você deixou de seguir este streamer",
+            type: "success"
+          });
+          // Atualizar estado local
+          setStreamers(prev => prev.map(s => 
+            s.id === streamerId 
+              ? { ...s, is_following: false, followers_count: Math.max(0, s.followers_count - 1) }
+              : s
+          ));
+        }
+      } else {
+        const result = await followService.followStreamer(auth.user.id, streamerId);
+        if (result.success) {
+          notify({
+            title: "Sucesso",
+            description: "Agora você está seguindo este streamer",
+            type: "success"
+          });
+          // Atualizar estado local
+          setStreamers(prev => prev.map(s => 
+            s.id === streamerId 
+              ? { ...s, is_following: true, followers_count: s.followers_count + 1 }
+              : s
+          ));
+        }
+      }
+    } catch (error) {
+      console.error('Erro ao seguir/deixar de seguir:', error);
+      notify({
+        title: "Erro",
+        description: "Erro ao atualizar. Tente novamente.",
+        type: "error"
+      });
+    } finally {
+      setFollowingInProgress(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(streamerId);
+        return newSet;
+      });
+    }
+  };
+  
   // Função para lidar com a criação de uma nova reunião
   const handleMeetingCreated = (meeting: MeetingData) => {
     setMeetings(prev => [meeting, ...prev]);
@@ -1845,22 +1888,38 @@ export default function Live() {
             )}
             
             {/* Botão de iniciar transmissão deve aparecer apenas para usuários autorizados */}
-            {hasPermission() && (
-              <Dialog open={openModal} onOpenChange={setOpenModal}>
-                <DialogTrigger asChild>
-                  <Button size="lg" className="bg-gradient-to-r from-gray-900 to-black hover:from-gray-800 hover:to-gray-900 text-white border border-gray-700/50 rounded-xl shadow-2xl transition-all duration-300 hover:scale-105 hover:shadow-3xl backdrop-blur-sm">
-                    <Video className="h-5 w-5 mr-2" />
-                    {texts.startStreaming}
+            <div className="flex items-center gap-3">
+              {hasPermission() && (
+                <>
+                  {/* Botão de Configurações - Só para streamers */}
+                  <Button
+                    onClick={() => setShowSettingsModal(true)}
+                    size="lg"
+                    variant="outline"
+                    className="bg-white/[0.02] hover:bg-white/[0.05] border border-white/[0.08] hover:border-white/[0.15] text-white/80 hover:text-white/95 rounded-xl transition-all duration-200"
+                    title="Configurações de Live"
+                  >
+                    <Settings className="h-4 w-4" />
                   </Button>
-                </DialogTrigger>
-                
-                <MeetingModal 
-                  open={openModal}
-                  onOpenChange={setOpenModal}
-                  onMeetingCreated={handleMeetingCreated}
-                />
-              </Dialog>
-            )}
+
+                  {/* Botão de Iniciar Transmissão */}
+                  <Dialog open={openModal} onOpenChange={setOpenModal}>
+                    <DialogTrigger asChild>
+                      <Button size="lg" className="bg-gradient-to-r from-gray-900 to-black hover:from-gray-800 hover:to-gray-900 text-white border border-gray-700/50 rounded-xl shadow-2xl transition-all duration-300 hover:scale-105 hover:shadow-3xl backdrop-blur-sm">
+                        <Video className="h-5 w-5 mr-2" />
+                        {texts.startStreaming}
+                      </Button>
+                    </DialogTrigger>
+                    
+                    <MeetingModal 
+                      open={openModal}
+                      onOpenChange={setOpenModal}
+                      onMeetingCreated={handleMeetingCreated}
+                    />
+                  </Dialog>
+                </>
+              )}
+            </div>
           </div>
         
           {/* Elementos decorativos sutis */}
@@ -1882,9 +1941,9 @@ export default function Live() {
                 <Video className="h-4 w-4 mr-2" />
                 <span>{texts.tabLive}</span>
               </TabsTrigger>
-              <TabsTrigger value="scheduled" className="rounded-lg data-[state=active]:bg-black/80 data-[state=active]:text-gray-200 text-gray-500 hover:text-gray-300 px-4 py-2 transition-all duration-200">
-                <Calendar className="h-4 w-4 mr-2" />
-                <span>{texts.tabScheduled}</span>
+              <TabsTrigger value="streamers" className="rounded-lg data-[state=active]:bg-black/80 data-[state=active]:text-gray-200 text-gray-500 hover:text-gray-300 px-4 py-2 transition-all duration-200">
+                <Users className="h-4 w-4 mr-2" />
+                <span>{texts.tabStreamers}</span>
               </TabsTrigger>
             </TabsList>
             
@@ -2008,74 +2067,95 @@ export default function Live() {
               )}
               </TabsContent>
               
-              <TabsContent value="scheduled" className="space-y-4">
-                {meetings.filter(m => m.status === 'scheduled').length > 0 ? (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {meetings
-                      .filter(meeting => meeting.status === 'scheduled')
-                      .map(meeting => (
-                        <MeetingCard
-                          key={meeting.id}
-                          meeting={meeting}
-                          onClick={() => handleSelectMeeting(meeting)}
-                        />
-                      ))
-                    }
-            </div>
-                ) : (
-                  <div className="relative flex flex-col items-center justify-center py-24 px-12 text-center bg-black rounded-2xl border border-gray-900/30 backdrop-blur-md overflow-hidden min-h-80">
-                    {/* Efeitos de iluminação de fundo */}
-                    <div className="absolute inset-0 bg-gradient-to-br from-gray-950/40 via-black to-gray-950/40"></div>
-                    <div className="absolute top-0 left-1/4 w-72 h-72 bg-blue-500/5 rounded-full blur-3xl"></div>
-                    <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-teal-500/5 rounded-full blur-3xl"></div>
-                    <div className="absolute top-1/2 left-0 w-48 h-48 bg-cyan-500/3 rounded-full blur-2xl"></div>
-                    <div className="absolute top-1/2 right-0 w-64 h-64 bg-emerald-500/3 rounded-full blur-2xl"></div>
-                    
-                                        {/* Grade sutil de fundo */}
-                    <div className="absolute inset-0 bg-grid-white/[0.005] [mask-image:radial-gradient(ellipse_at_center,transparent_20%,black)]"></div>
-                    
-                    <div className="relative z-10 flex flex-col items-center">
-                      {/* Ícone sem glow */}
-                      <div className="relative mb-8">
-                        <div className="relative bg-gradient-to-br from-gray-900 to-black p-8 rounded-full border border-gray-800/50 shadow-2xl">
-                          <Calendar className="h-16 w-16 text-gray-600" />
+              <TabsContent value="streamers" className="space-y-4">
+                {loadingStreamers ? (
+                  <div className="flex items-center justify-center py-12">
+                    <Loader2 className="h-6 w-6 animate-spin text-gray-500" />
+                  </div>
+                ) : streamers.length > 0 ? (
+                  <div className="space-y-3">
+                    {streamers.map(streamer => (
+                      <div 
+                        key={streamer.id} 
+                        className="bg-black/20 border border-gray-900/30 rounded-lg p-4"
+                      >
+                        <div className="flex items-center gap-4">
+                          {/* Avatar */}
+                          <Avatar className="h-12 w-12 ring-1 ring-gray-800/50">
+                            <AvatarImage src={streamer.avatar_url || undefined} />
+                            <AvatarFallback className="bg-gray-900/50 text-gray-400 text-sm font-light">
+                              {streamer.display_name[0]?.toUpperCase() || 'S'}
+                            </AvatarFallback>
+                          </Avatar>
+
+                          {/* Info */}
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-1">
+                              <h3 className="text-sm font-normal text-gray-200 truncate">
+                                {streamer.display_name}
+                              </h3>
+                              <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4 bg-gray-900/50 text-gray-500 border-gray-800/50">
+                                Streamer
+                              </Badge>
+                            </div>
+                            
+                            {/* Stats em linha */}
+                            <div className="flex items-center gap-4 text-[11px] text-gray-500">
+                              <div className="flex items-center gap-1">
+                                <Users className="h-3 w-3" />
+                                <span>{streamer.followers_count}</span>
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <Heart className="h-3 w-3" />
+                                <span>{streamer.supporters_count}</span>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Botão Seguir */}
+                          {streamer.id !== auth.user?.id && (
+                            <button
+                              onClick={() => handleToggleFollow(streamer.id, streamer.is_following || false)}
+                              disabled={followingInProgress.has(streamer.id)}
+                              className={`px-3 py-1.5 rounded-lg text-[11px] font-normal transition-colors ${
+                                streamer.is_following
+                                  ? 'bg-gray-900/50 text-gray-400 border border-gray-800/50'
+                                  : 'bg-white/5 text-gray-300 border border-gray-800/30 hover:bg-white/10'
+                              } ${followingInProgress.has(streamer.id) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                            >
+                              {followingInProgress.has(streamer.id) ? (
+                                <Loader2 className="h-3 w-3 animate-spin mx-auto" />
+                              ) : streamer.is_following ? (
+                                'Seguindo'
+                              ) : (
+                                'Seguir'
+                              )}
+                            </button>
+                          )}
                         </div>
                       </div>
-                      
-                      {/* Título com gradiente */}
-                      <h3 className="text-4xl font-bold mb-6 bg-gradient-to-r from-white via-gray-200 to-gray-400 bg-clip-text text-transparent">
-                        Nenhuma transmissão agendada
-                      </h3>
-                      
-                      {/* Descrição */}
-                      <p className="text-gray-400 text-lg max-w-lg leading-relaxed mb-8">
-                        {texts.noScheduledMessage}
-                      </p>
-                      
-                      {/* Usando a nova função helper */}
-                      {hasPermission() && (
-                        <Dialog open={openModal} onOpenChange={setOpenModal}>
-                          <DialogTrigger asChild>
-                            <Button className="mt-8 bg-gradient-to-r from-blue-600 to-teal-600 hover:from-blue-700 hover:to-teal-700 text-white px-8 py-3 rounded-xl shadow-lg transition-all duration-300 hover:scale-105 hover:shadow-xl border border-blue-500/30">
-                              <Video className="h-5 w-5 mr-2" />
-                              {texts.startStreaming}
-                            </Button>
-                          </DialogTrigger>
-                        </Dialog>
-                      )}
-                    </div>
-                    
-                    {/* Borda com gradiente sutil */}
-                    <div className="absolute inset-0 rounded-2xl bg-gradient-to-r from-blue-600/5 via-transparent to-teal-600/5 p-px">
-                      <div className="w-full h-full bg-black/10 rounded-2xl"></div>
-                    </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center justify-center py-16 space-y-2">
+                    <Users className="h-10 w-10 text-gray-700" strokeWidth={1.5} />
+                    <p className="text-sm text-gray-500 font-light">Nenhum streamer encontrado</p>
                   </div>
                 )}
               </TabsContent>
             </>
           )}
         </Tabs>
-            </div>
+
+        {/* Modal de Configurações do Streamer */}
+        {auth?.user && (
+          <StreamerSettingsModal
+            isOpen={showSettingsModal}
+            onClose={() => setShowSettingsModal(false)}
+            streamerId={auth.user.id}
+          />
+        )}
+      </div>
     </Layout>
   );
 }

@@ -106,7 +106,7 @@ async function translateText(text: string, targetLang: string): Promise<string> 
     const data = await response.json();
     
     // Google Translate retorna array com estrutura: [[[texto_traduzido, texto_original, ...]]]
-    const translated = data[0]?.map((item: any) => item[0]).join('') || text;
+    const translated = data[0]?.map((item: [string, string]) => item[0]).join('') || text;
     
     // Tradução sucesso (silenciado)
     
